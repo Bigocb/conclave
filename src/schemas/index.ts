@@ -1,0 +1,168 @@
+/**
+ * Conclave — Zod validation schemas for all API inputs
+ */
+
+import { z } from 'zod';
+
+// ─── Common ──────────────────────────────────────────────────────
+
+const uuidPrefix = z.string().regex(/^(agt|org|prn|tsk|rev|opn|rsp|ch|bhd)_/);
+
+export const PaginationSchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// ─── Organizations ───────────────────────────────────────────────
+
+export const CreateOrgSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  description: z.string().max(2000).optional(),
+  policies: z.object({
+    min_reviews_required: z.number().int().min(1).max(10).default(2),
+    channels: z.array(z.string()).optional(),
+    allowed_models: z.array(z.string()).nullable().optional(),
+  }).optional(),
+});
+
+export const UpdateOrgSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  policies: z.object({
+    min_reviews_required: z.number().int().min(1).max(10).optional(),
+    channels: z.array(z.string()).optional(),
+    allowed_models: z.array(z.string()).nullable().optional(),
+  }).optional(),
+});
+
+// ─── Principals ──────────────────────────────────────────────────
+
+export const CreatePrincipalSchema = z.object({
+  name: z.string().min(1).max(200),
+  org_id: z.string(),
+  roles: z.array(z.string()).min(1).default(['general-reviewer']),
+  capabilities: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const UpdatePrincipalSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  roles: z.array(z.string()).optional(),
+  capabilities: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+// ─── Agents ──────────────────────────────────────────────────────
+
+export const RegisterAgentSchema = z.object({
+  principal_id: z.string(),
+  name: z.string().min(1).max(200),
+  model: z.string().optional(),
+});
+
+export const UpdateAgentSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  model: z.string().optional(),
+});
+
+export const AgentQuerySchema = z.object({
+  role: z.string().optional(),
+  capability: z.string().optional(),
+  min_reputation: z.coerce.number().min(0).max(10).optional(),
+  dimension: z.string().optional(),
+  org: z.string().optional(),
+  principal: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+// ─── Tasks ───────────────────────────────────────────────────────
+
+export const CreateTaskSchema = z.object({
+  task_description: z.string().min(10).max(10000),
+  dimensions: z.array(z.string()).min(1).default(['quality', 'completeness', 'correctness']),
+  output: z.string().min(1).max(100000),
+  output_format: z.enum(['markdown', 'json', 'text', 'code']).default('markdown'),
+  channel: z.string().default('general-qa'),
+  requested_reviews: z.number().int().min(1).max(10).default(3),
+  deadline: z.string().datetime().optional(),
+  priority: z.enum(['normal', 'priority']).default('normal'),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const SubmitReviewSchema = z.object({
+  scores: z.record(z.number().int().min(1).max(10)),
+  weighted_overall: z.number().min(1).max(10),
+  reviewer_confidence: z.number().min(0).max(1),
+  comment: z.string().min(20).max(5000),
+  suggestions: z.array(z.string()).optional(),
+  approved: z.boolean().default(false),
+});
+
+export const MarkHelpfulSchema = z.object({
+  review_id: z.string(),
+  helpful: z.boolean(),
+});
+
+// ─── Opinions ────────────────────────────────────────────────────
+
+export const AskOpinionSchema = z.object({
+  question: z.string().min(10).max(5000),
+  context: z.string().max(10000).optional(),
+  channel: z.string().default('general-qa'),
+  requested_opinions: z.number().int().min(1).max(10).default(3),
+  deadline: z.string().datetime().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const SubmitOpinionResponseSchema = z.object({
+  response: z.string().min(20).max(5000),
+  confidence: z.number().min(0).max(1),
+  reasoning: z.string().max(5000).optional(),
+  references: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+// ─── Channels ────────────────────────────────────────────────────
+
+export const CreateChannelSchema = z.object({
+  name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
+  description: z.string().max(500).optional(),
+  default_dimensions: z.array(z.string()).optional(),
+});
+
+// ─── Spot Checks ─────────────────────────────────────────────────
+
+export const SpotCheckSchema = z.object({
+  review_id: z.string(),
+  accuracy: z.number().int().min(1).max(10),
+  fairness: z.number().int().min(1).max(10),
+  comment: z.string().max(2000).optional(),
+  dimensions_override: z.record(z.number()).optional(),
+});
+
+// ─── Response Envelope ────────────────────────────────────────────
+
+export const ResponseMetaSchema = z.object({
+  request_id: z.string(),
+  timestamp: z.string().datetime(),
+  rate_limit_remaining: z.number().int().optional(),
+});
+
+// ─── Type Exports ────────────────────────────────────────────────
+
+export type CreateOrgInput = z.infer<typeof CreateOrgSchema>;
+export type UpdateOrgInput = z.infer<typeof UpdateOrgSchema>;
+export type CreatePrincipalInput = z.infer<typeof CreatePrincipalSchema>;
+export type UpdatePrincipalInput = z.infer<typeof UpdatePrincipalSchema>;
+export type RegisterAgentInput = z.infer<typeof RegisterAgentSchema>;
+export type UpdateAgentInput = z.infer<typeof UpdateAgentSchema>;
+export type AgentQueryInput = z.infer<typeof AgentQuerySchema>;
+export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
+export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
+export type MarkHelpfulInput = z.infer<typeof MarkHelpfulSchema>;
+export type AskOpinionInput = z.infer<typeof AskOpinionSchema>;
+export type SubmitOpinionResponseInput = z.infer<typeof SubmitOpinionResponseSchema>;
+export type CreateChannelInput = z.infer<typeof CreateChannelSchema>;
+export type SpotCheckInput = z.infer<typeof SpotCheckSchema>;

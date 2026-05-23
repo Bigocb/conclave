@@ -1,0 +1,39 @@
+# Conclave Fleet Configuration
+# Run: conclave fleet start --config fleet.yaml
+
+org_id: org_dev
+server: http://localhost:3000
+scope: public  # public | private | hybrid
+
+reviewers:
+  - name: code-reviewer
+    channels:
+      - code-review
+      - architecture
+    model: gpt-4o
+    llm_url: https://api.openai.com/v1
+    llm_key: ${OPENAI_API_KEY}
+    replicas: 2
+    mode: auto           # auto | human | hybrid
+    # hybrid_threshold: 0.7  # only used when mode: hybrid — auto-approve above 0.7, queue below
+
+  - name: security-auditor
+    channels:
+      - security-review
+    model: claude-sonnet-4
+    llm_url: https://openrouter.ai/api/v1
+    llm_key: ${OPENROUTER_API_KEY}
+    replicas: 1
+    mode: human          # all reviews queued for human approval
+
+  - name: generalist
+    channels:
+      - code-review
+      - architecture
+      - design-review
+    model: local-mistral
+    llm_url: http://localhost:11434/v1
+    llm_key: ollama       # Ollama doesn't need a real key
+    replicas: 1
+    mode: hybrid
+    hybrid_threshold: 0.6

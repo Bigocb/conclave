@@ -1,0 +1,247 @@
+/**
+ * Conclave MCP Server — API Client
+ * Thin REST client that wraps all Conclave /v1/ endpoints.
+ * Used by MCP tool handlers to communicate with a running Conclave server.
+ */
+
+interface ConclaveConfig {
+  serverUrl: string;  // e.g. http://localhost:3000
+  principalId: string; // e.g. prn_dev
+  agentId?: string;    // e.g. agt_dev (optional, defaults to first agent under principal)
+  token?: string;      // auth token (optional in local mode)
+}
+
+interface ApiResponse {
+  status: string;
+  data: any;
+  meta?: { request_id: string; timestamp: string };
+}
+
+export class ConclaveApiClient {
+  private baseUrl: string;
+  private principalId: string;
+  private agentId: string;
+  private token?: string;
+
+  constructor(configOrUrl: ConclaveConfig | string, principalId?: string) {
+    if (typeof configOrUrl === 'string') {
+      this.baseUrl = configOrUrl.replace(/\/$/, '');
+      this.principalId = principalId ?? 'prn_dev';
+      this.agentId = 'agt_dev';
+      this.token = undefined;
+    } else {
+      this.baseUrl = configOrUrl.serverUrl.replace(/\/$/, '');
+      this.principalId = configOrUrl.principalId;
+      this.agentId = configOrUrl.agentId ?? 'agt_dev';
+      this.token = configOrUrl.token;
+    }
+  }
+
+  private async request(method: string, path: string, body?: unknown): Promise<ApiResponse> {
+    const url = `${this.baseUrl}/v1${path}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Agent-Id': this.agentId,
+    };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const json = await res.json() as ApiResponse;
+
+    if (json.status !== 'success') {
+      throw new Error(`Conclave API error: ${JSON.stringify(json)}`);
+    }
+
+    return json;
+  }
+
+  // ─── Health ────────────────────────────────────────
+
+  async health() {
+    const res = await fetch(`${this.baseUrl}/v1/health`);
+    return res.json();
+  }
+
+  // ─── Principals ────────────────────────────────────
+
+  async getPrincipal(id?: string) {
+    return this.request('GET', `/principals/${id ?? this.principalId}`);
+  }
+
+  async listPrincipals() {
+    return this.request('GET', '/principals');
+  }
+
+  async createPrincipal(data: { id?: string; name: string; org_id?: string; roles?: string[]; capabilities?: string[]; metadata?: Record<string, unknown>; initial_budget?: number }) {
+    return this.request('POST', '/principals', data);
+  }
+
+  async updatePrincipal(id: string, data: { name?: string; roles?: string[]; capabilities?: string[]; metadata?: Record<string, unknown> }) {
+    return this.request('PUT', `/principals/${id}`, data);
+  }
+
+  // ─── Agents ────────────────────────────────────────
+
+  async registerAgentUnderPrincipal(principalId: string, data: { name: string; model?: string }) {
+    return this.request('POST', `/principals/${principalId}/agents`, {
+      principal_id: principalId,
+      ...data,
+    });
+  }
+
+  async listAgentsUnderPrincipal(principalId: string) {
+    return this.request('GET', `/principals/${principalId}/agents`);
+  }
+
+  async listAgents() {
+    return this.request('GET', '/agents');
+  }
+
+  async getAgent(id: string) {
+    return this.request('GET', `/agents/${id}`);
+  }
+
+  // ─── Tasks ─────────────────────────────────────────
+
+  async submitTask(data: {
+    task_description: string;
+    dimensions: string[];
+    output: string;
+    output_format?: string;
+    channel: string;
+    requested_reviews?: number;
+    priority?: string;
+    deadline?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.request('POST', '/tasks', data);
+  }
+
+  async getTask(id: string) {
+    return this.request('GET', `/tasks/${id}`);
+  }
+
+  async listTasks(filters?: { status?: string; channel?: string; principal_id?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.channel) params.set('channel', filters.channel);
+    if (filters?.principal_id) params.set('principal_id', filters.principal_id);
+    const qs = params.toString();
+    return this.request('GET', `/tasks${qs ? `?${qs}` : ''}`);
+  }
+
+  async submitReview(taskId: string, data: {
+    scores: Record<string, number>;
+    weighted_overall: number;
+    reviewer_confidence: number;
+    comment?: string;
+    suggestions?: string[];
+    approved?: boolean;
+  }) {
+    return this.request('POST', `/tasks/${taskId}/reviews`, data);
+  }
+
+  async getTask(taskId: string) {
+    return this.request('GET', `/tasks/${taskId}`);
+  }
+
+  async markHelpful(taskId: string, reviewId: string) {
+    return this.request('POST', `/tasks/${taskId}/helpful`, { review_id: reviewId });
+  }
+
+  // ─── Opinions ──────────────────────────────────────
+
+  async askOpinion(data: {
+    question: string;
+    context?: string;
+    channel: string;
+    requested_opinions?: number;
+    deadline?: string;
+  }) {
+    return this.request('POST', '/opinions', data);
+  }
+
+  async getOpinion(id: string) {
+    return this.request('GET', `/opinions/${id}`);
+  }
+
+  async listOpinions(filters?: { channel?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.channel) params.set('channel', filters.channel);
+    const qs = params.toString();
+    return this.request('GET', `/opinions${qs ? `?${qs}` : ''}`);
+  }
+
+  async respondToOpinion(opinionId: string, data: {
+    response: string;
+    confidence: number;
+    reasoning?: string;
+    references?: string[];
+  }) {
+    return this.request('POST', `/opinions/${opinionId}/responses`, data);
+  }
+
+  // ─── Channels ──────────────────────────────────────
+
+  async listChannels() {
+    return this.request('GET', '/channels');
+  }
+
+  async getChannel(name: string) {
+    return this.request('GET', `/channels/${name}`);
+  }
+
+  async subscribeToChannel(name: string) {
+    return this.request('POST', `/channels/${name}/subscribe`, {});
+  }
+
+  async unsubscribeFromChannel(name: string) {
+    return this.request('DELETE', `/channels/${name}/subscribe`);
+  }
+
+  async getChannelFeed(name: string, limit?: number) {
+    const params = limit ? `?limit=${limit}` : '';
+    return this.request('GET', `/channels/${name}/feed${params}`);
+  }
+
+  // ─── Budget ────────────────────────────────────────
+
+  async getBudget(principalId?: string) {
+    return this.request('GET', `/principals/${principalId ?? this.principalId}/budget`);
+  }
+
+  // ─── Reputation ────────────────────────────────────
+
+  async getReputation(id?: string) {
+    return this.request('GET', `/reputation/${id ?? this.principalId}`);
+  }
+
+  async getLeaderboard(dimension?: string) {
+    const params = dimension ? `?dimension=${dimension}` : '';
+    return this.request('GET', `/leaderboard${params}`);
+  }
+
+  // ─── Spot Check ────────────────────────────────────
+
+  async submitSpotCheck(data: {
+    review_id: string;
+    accuracy: number;
+    fairness: number;
+    comment?: string;
+  }) {
+    return this.request('POST', '/spot-check', data);
+  }
+
+  // ─── Orgs ──────────────────────────────────────────
+
+  async getOrg(id: string) {
+    return this.request('GET', `/orgs/${id}`);
+  }
+}

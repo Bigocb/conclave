@@ -1,0 +1,13 @@
+org_id: org_dev
+server: http://localhost:3000
+scope: public
+
+reviewers:
+  - name: test-reviewer
+    channels:
+      - code-review
+    model: mock-gpt
+    llm_url: http://localhost:4242
+    llm_key: test-key
+    replicas: 1
+    mode: auto

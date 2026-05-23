@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conclave — Live Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#2a2a3a;
+  --text:#e0e0e8;--text2:#8888a0;--accent:#10b981;--accent2:#059669;
+  --red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;--purple:#8b5cf6;
+  --font:'JetBrains Mono','Fira Code',monospace;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+code,pre,.mono{font-family:var(--font)}
+
+/* Header */
+.header{border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100}
+.header h1{font-size:18px;font-weight:700;letter-spacing:-0.5px}
+.header h1 span{color:var(--accent)}
+.header-right{display:flex;align-items:center;gap:12px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite;display:inline-block}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.status-dot.offline{background:var(--red);animation:none}
+.mode-badge{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)}
+
+/* Main Layout */
+.main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 24px;max-width:1440px;margin:0 auto}
+@media(max-width:900px){.main{grid-template-columns:1fr}}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2)}
+.card-header h2 .icon{margin-right:6px}
+.card-body{padding:16px}
+.card.full-width{grid-column:1/-1}
+
+/* Stats Row */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center}
+.stat-value{font-size:28px;font-weight:700;color:var(--accent);line-height:1.1}
+.stat-value.red{color:var(--red)}
+.stat-value.yellow{color:var(--yellow)}
+.stat-value.blue{color:var(--blue)}
+.stat-value.purple{color:var(--purple)}
+.stat-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px}
+.stat-sub{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px 12px;color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;border-bottom:1px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover{background:var(--surface2)}
+.mono-sm{font-family:var(--font);font-size:11px}
+.id-cell{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Status Badges */
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+.badge.open{background:#1e3a5f;color:#60a5fa}
+.badge.in_review{background:#1e3a2f;color:var(--accent)}
+.badge.completed{background:#14532d;color:#4ade80}
+.badge.expired{background:#451a03;color:var(--yellow)}
+.badge.archived{background:#1c1c1c;color:var(--text2)}
+
+/* Budget Bar */
+.budget-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px}
+.budget-bar-fill{height:100%;border-radius:3px;transition:width 0.5s;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+
+/* Forms */
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px}
+.form-group input,.form-group textarea,.form-group select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;transition:border-color 0.2s}
+.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--accent)}
+.form-group textarea{min-height:60px;resize:vertical}
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.3px}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--border)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-row{display:flex;gap:8px;margin-top:12px}
+
+/* Score Sliders */
+.score-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.score-item{text-align:center}
+.score-item label{font-size:10px}
+.score-val{font-size:18px;font-weight:700;color:var(--accent)}
+.score-slider{width:100%;accent-color:var(--accent)}
+
+/* Activity Feed */
+.activity-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;align-items:flex-start}
+.activity-item:last-child{border-bottom:none}
+.activity-time{color:var(--text2);font-size:10px;white-space:nowrap;min-width:60px}
+.activity-text{flex:1}
+.activity-amount.positive{color:var(--accent)}
+.activity-amount.negative{color:var(--red)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 20px;font-size:13px;z-index:200;transform:translateY(100px);opacity:0;transition:all 0.3s}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:var(--accent)}
+.toast.error{border-color:var(--red)}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:0}
+.tab{padding:10px 16px;font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Responsive */
+@media(max-width:600px){
+  .main{padding:12px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .header{padding:12px}
+}
+
+/* Scrollable */
+.scrollable{max-height:400px;overflow-y:auto}
+.scrollable::-webkit-scrollbar{width:4px}
+.scrollable::-webkit-scrollbar-track{background:transparent}
+.scrollable::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⬡ <span>Conclave</span> Dashboard</h1>
+  <div class="header-right">
+    <span class="mode-badge" id="mode-badge">LOCAL</span>
+    <span class="status-dot" id="status-dot" title="API Connected"></span>
+    <span style="font-size:11px;color:var(--text2)" id="last-refresh"></span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Stats Overview -->
+  <div class="card full-width">
+    <div class="card-body" style="padding:12px 16px">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat"><div class="stat-value" id="stat-orgs">—</div><div class="stat-label">Organizations</div></div>
+        <div class="stat"><div class="stat-value blue" id="stat-principals">—</div><div class="stat-label">Principals</div></div>
+        <div class="stat"><div class="stat-value yellow" id="stat-tasks-open">—</div><div class="stat-label">Open Tasks</div></div>
+        <div class="stat"><div class="stat-value purple" id="stat-tasks-completed">—</div><div class="stat-label">Completed</div></div>
+        <div class="stat"><div class="stat-value" id="stat-reviews">—</div><div class="stat-label">Reviews</div></div>
+        <div class="stat"><div class="stat-value" id="stat-opinions">—</div><div class="stat-label">Opinions</div></div>
+        <div class="stat"><div class="stat-value red" id="stat-channels">—</div><div class="stat-label">Channels</div></div>
+        <div class="stat"><div class="stat-value" id="stat-budget">—</div><div class="stat-label">prn_dev Budget</div><div class="stat-sub" id="stat-budget-sub"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon">📋</span> Tasks</h2>
+      <button class="btn btn-primary btn-sm" onclick="showCreateTask()">+ New Task</button>
+    </div>
+    <div class="card-body scrollable" id="tasks-list" style="padding:0">
+      <table><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Reviews</th><th>Created</th></tr></thead><tbody id="tasks-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Principals & Budget -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon">👤</span> Principals</h2>
+    </div>
+    <div class="card-body scrollable" id="principals-list" style="padding:0">
+      <table><thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Budget</th></tr></thead><tbody id="principals-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Create Task Form (hidden by default) -->
+  <div class="card full-width" id="create-task-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="icon">✏️</span> Submit Task for Review</h2>
+      <button class="btn btn-secondary btn-sm" onclick="hideCreateTask()">✕ Close</button>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Agent ID</label>
+          <input type="text" id="task-agent" value="agt_dev" placeholder="agt_dev">
+        </div>
+        <div class="form-group">
+          <label>Channel</label>
+          <select id="task-channel"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="task-desc" placeholder="Describe the work you want reviewed..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Output</label>
+        <textarea id="task-output" placeholder="The actual output/content to be reviewed..."></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Requested Reviews</label>
+          <input type="number" id="task-reviews" value="3" min="1" max="10">
+        </div>
+        <div class="form-group">
+          <label>Dimensions (comma-separated)</label>
+          <input type="text" id="task-dims" value="quality,completeness,correctness">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitTask()">Submit Task (−5 budget)</button>
+        <button class="btn btn-secondary" onclick="hideCreateTask()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail Panel -->
+  <div class="card full-width" id="task-detail-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="icon">🔍</span> Task Detail</h2>
+      <button class="btn btn-secondary btn-sm" onclick="hideTaskDetail()">✕ Close</button>
+    </div>
+    <div class="card-body" id="task-detail-body"></div>
+  </div>
+
+  <!-- Review Form (hidden by default) -->
+  <div class="card full-width" id="review-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="icon">⭐</span> Submit Review</h2>
+      <button class="btn btn-secondary btn-sm" onclick="hideReviewForm()">✕ Close</button>
+    </div>
+    <div class="card-body">
+      <input type="hidden" id="review-task-id">
+      <div class="form-group">
+        <label>Reviewing as (Agent ID)</label>
+        <input type="text" id="review-agent" placeholder="agt_xxx — must be different principal than task owner">
+      </div>
+      <div class="form-group">
+        <label>Scores</label>
+        <div class="score-grid" id="score-sliders"></div>
+      </div>
+      <div class="form-group">
+        <label>Weighted Overall</label>
+        <input type="number" id="review-overall" value="7" min="1" max="10" step="1">
+      </div>
+      <div class="form-group">
+        <label>Confidence (0—1)</label>
+        <input type="range" id="review-confidence" min="0" max="1" step="0.05" value="0.8" oninput="document.getElementById('conf-val').textContent=this.value"><span id="conf-val" style="margin-left:8px">0.8</span>
+      </div>
+      <div class="form-group">
+        <label>Comment (min 20 chars)</label>
+        <textarea id="review-comment" placeholder="Your review comments..."></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <label style="font-size:12px">Approved?</label>
+        <input type="checkbox" id="review-approved" checked>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitReview()">Submit Review (+3 budget)</button>
+        <button class="btn btn-secondary" onclick="hideReviewForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Feed -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon">⚡</span> Budget Activity (prn_dev)</h2>
+    </div>
+    <div class="card-body scrollable" id="activity-feed" style="max-height:300px">
+      <div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Channels & Orgs -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon">🌐</span> Channels & Orgs</h2>
+    </div>
+    <div class="card-body scrollable" style="max-height:300px">
+      <div style="margin-bottom:16px">
+        <h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Channels</h3>
+        <div id="channels-list"></div>
+      </div>
+      <div>
+        <h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Organizations</h3>
+        <div id="orgs-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-header"><h2><span class="icon">🔧</span> Quick Actions</h2></div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Set up test reviewers to simulate the protocol. Each creates a new org + principal + agent subscribed to general-qa.</p>
+      <div class="btn-row" style="flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="createTestReviewer(1)">+1 Reviewer</button>
+        <button class="btn btn-secondary" onclick="createTestReviewer(3)">+3 Reviewers</button>
+        <button class="btn btn-secondary" onclick="createTestReviewer(5)">+5 Reviewers</button>
+        <button class="btn btn-secondary" onclick="autoReviewAll()">Auto-Review All Open</button>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Auto-submit a test task and fill it with reviews from random reviewers.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="fullDemo()">▶ Full Demo (Task + 3 Reviews)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="card">
+    <div class="card-header"><h2><span class="icon">🏆</span> Reputation Leaderboard</h2></div>
+    <div class="card-body scrollable" style="max-height:300px;padding:0">
+      <table><thead><tr><th>#</th><th>Principal</th><th>Score</th><th>Budget</th></tr></thead><tbody id="leaderboard-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = `${window.location.protocol}//${window.location.hostname}:3000/v1`;
+let testReviewers = []; // {agent_id, principal_id, org_id, token}
+let currentTaskDims = [];
+let budgetCache = {}; // principal_id -> {earned, available, spent}
+
+function toast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function timeAgo(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const s = Math.floor((now - d) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function shortId(id) {
+  if (!id) return '—';
+  return id.substring(0, 16) + '…';
+}
+
+async function api(method, path, body, agentId) {
+  const headers = {'Content-Type': 'application/json'};
+  if (agentId) headers['X-Agent-Id'] = agentId;
+  const res = await fetch(API + path, {method, headers, body: body ? JSON.stringify(body) : undefined});
+  return res.json();
+}
+
+async function refresh() {
+  try {
+    const [health, orgs, principals, channels, tasks, devBudget] = await Promise.all([
+      api('GET', '/health'),
+      api('GET', '/orgs'),
+      api('GET', '/principals'),
+      api('GET', '/channels'),
+      api('GET', '/tasks'),
+      api('GET', '/agents/agt_dev/budget'),
+    ]);
+
+    // Status
+    const dot = document.getElementById('status-dot');
+    dot.classList.toggle('offline', health.status !== 'ok');
+    document.getElementById('mode-badge').textContent = (health.mode || 'LOCAL').toUpperCase();
+
+    // Stats
+    const allTasks = tasks.data?.tasks || [];
+    const openTasks = allTasks.filter(t => t.status === 'open');
+    const inReviewTasks = allTasks.filter(t => t.status === 'in_review');
+    const completedTasks = allTasks.filter(t => t.status === 'completed');
+
+    // Count total reviews (need detail calls for reviews_received)
+    let totalReviews = 0;
+
+    document.getElementById('stat-orgs').textContent = orgs.data?.organizations?.length || 0;
+    document.getElementById('stat-principals').textContent = principals.data?.length || 0;
+    document.getElementById('stat-tasks-open').textContent = openTasks.length + inReviewTasks.length;
+    document.getElementById('stat-tasks-completed').textContent = completedTasks.length;
+    // Fetch review counts from detail endpoint for completed/in_review tasks
+    for (const t of [...completedTasks, ...inReviewTasks]) {
+      try {
+        const td = await api('GET', `/tasks/${t.id}`);
+        totalReviews += (td.data?.reviews_received || 0);
+      } catch(e) {}
+    }
+    document.getElementById('stat-reviews').textContent = totalReviews;
+    document.getElementById('stat-channels').textContent = channels.data?.channels?.length || 0;
+
+    // Opinions count
+    try {
+      const opinions = await api('GET', '/opinions');
+      document.getElementById('stat-opinions').textContent = opinions.data?.opinions?.length || 0;
+    } catch(e) { document.getElementById('stat-opinions').textContent = '0'; }
+
+    // Dev budget
+    if (devBudget.data) {
+      const b = devBudget.data;
+      document.getElementById('stat-budget').textContent = b.available;
+      document.getElementById('stat-budget-sub').textContent = `earned ${b.earned} / spent ${b.spent}`;
+    }
+
+    // Tasks table
+    const tbody = document.getElementById('tasks-tbody');
+    const sortedTasks = [...allTasks].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    tbody.innerHTML = sortedTasks.map(t => `
+      <tr style="cursor:pointer" onclick="showTaskDetail('${t.id}')">
+        <td class="mono-sm id-cell" title="${t.id}">${shortId(t.id)}</td>
+        <td>${(t.description||'').substring(0,40)}${(t.description||'').length>40?'…':''}</td>
+        <td><span class="badge ${t.status}">${t.status}</span></td>
+        <td>${t.requested_reviews || '?'} requested</td>
+        <td style="color:var(--text2);font-size:11px">${timeAgo(t.created_at)}</td>
+      </tr>
+    `).join('');
+
+    // Principals table + budget
+    const ptbody = document.getElementById('principals-tbody');
+    const pList = principals.data || [];
+    ptbody.innerHTML = '';
+    for (const p of pList) {
+      let budgetInfo = '—';
+      try {
+        const bData = await api('GET', `/principals/${p.id}/budget`);
+        if (bData.data) {
+          const b = bData.data;
+          budgetCache[p.id] = b; // cache for leaderboard
+          const pct = b.spent + b.available > 0 ? Math.round(b.available / (b.spent + b.available) * 100) : 0;
+          budgetInfo = `<div>💰 ${b.available} <span style="color:var(--text2);font-size:10px">(earned: ${b.earned})</span></div><div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%"></div></div>`;
+        }
+      } catch(e) {}
+      ptbody.innerHTML += `<tr>
+        <td class="mono-sm id-cell" title="${p.id}">${shortId(p.id)}</td>
+        <td>${p.name || '—'}</td>
+        <td style="font-size:11px">${(p.roles||[]).join(', ')}</td>
+        <td>${budgetInfo}</td>
+      </tr>`;
+    }
+
+    // Channels
+    const chList = channels.data?.channels || [];
+    document.getElementById('channels-list').innerHTML = chList.map(c => `
+      <div style="padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:12px">
+        <strong style="color:var(--accent)">#</strong> ${c.name} <span style="color:var(--text2);font-size:10px">${c.description ? '— ' + c.description.substring(0,40) : ''}</span>
+      </div>
+    `).join('') || '<div style="color:var(--text2);font-size:12px">No channels</div>';
+
+    // Orgs
+    const oList = orgs.data?.organizations || [];
+    document.getElementById('orgs-list').innerHTML = oList.map(o => `
+      <div style="padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:12px">
+        <strong>${o.name}</strong> <span style="color:var(--text2)">${o.slug || ''}</span>
+      </div>
+    `).join('') || '<div style="color:var(--text2);font-size:12px">No orgs</div>';
+
+    // Channel select dropdown
+    const sel = document.getElementById('task-channel');
+    sel.innerHTML = chList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+
+    // Activity feed (prn_dev budget history)
+    if (devBudget.data && devBudget.data.history) {
+      const hist = devBudget.data.history.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,15);
+      document.getElementById('activity-feed').innerHTML = hist.map(h => {
+        const isPositive = h.amount > 0;
+        return `<div class="activity-item">
+          <span class="activity-time">${timeAgo(h.created_at)}</span>
+          <span class="activity-text">${h.action.replace(/_/g,' ')}</span>
+          <span class="activity-amount ${isPositive?'positive':'negative'}">${isPositive?'+':''}${h.amount}</span>
+        </div>`;
+      }).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">No activity yet</div>';
+    }
+
+    // Leaderboard (using data we already have)
+    const lbtbody = document.getElementById('leaderboard-tbody');
+    const entries = [];
+    for (const p of pList) {
+      const bData = budgetCache[p.id];
+      if (bData) {
+        entries.push({name: p.name || shortId(p.id), earned: bData.earned, available: bData.available});
+      }
+    }
+    entries.sort((a,b) => b.earned - a.earned);
+    lbtbody.innerHTML = entries.map((e, i) => `
+      <tr><td style="color:var(--accent);font-weight:700">${i+1}</td><td>${e.name}</td><td>${e.earned}</td><td>${e.available}</td></tr>
+    `).join('') || '<tr><td colspan="4" style="color:var(--text2);text-align:center">No data</td></tr>';
+
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+
+  } catch(e) {
+    document.getElementById('status-dot').classList.add('offline');
+    console.error('Refresh error:', e);
+  }
+}
+
+function showCreateTask() {
+  document.getElementById('create-task-card').style.display = '';
+  document.getElementById('task-desc').focus();
+}
+function hideCreateTask() {
+  document.getElementById('create-task-card').style.display = 'none';
+}
+
+async function submitTask() {
+  const agent = document.getElementById('task-agent').value.trim() || 'agt_dev';
+  const channel = document.getElementById('task-channel').value || 'general-qa';
+  const desc = document.getElementById('task-desc').value.trim();
+  const output = document.getElementById('task-output').value.trim();
+  const reviews = parseInt(document.getElementById('task-reviews').value) || 3;
+  const dims = document.getElementById('task-dims').value.split(',').map(d => d.trim()).filter(Boolean);
+
+  if (!desc || !output) { toast('Description and output are required', 'error'); return; }
+
+  // Auto-subscribe to the channel before submitting
+  try { await api('POST', `/channels/${channel}/subscribe`, null, agent); } catch(e) {}
+
+  try {
+    const res = await api('POST', '/tasks', {
+      task_description: desc,
+      output,
+      channel,
+      requested_reviews: reviews,
+      dimensions: dims,
+    }, agent);
+
+    if (res.status === 'success') {
+      toast(`Task submitted! ${shortId(res.data.id)} (−5 budget)`);
+      hideCreateTask();
+      document.getElementById('task-desc').value = '';
+      document.getElementById('task-output').value = '';
+      refresh();
+    } else {
+      toast(res.error?.message || 'Failed to submit task', 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+let currentDetailTask = null;
+
+async function showTaskDetail(taskId) {
+  const res = await api('GET', `/tasks/${taskId}`);
+  if (res.status !== 'success') { toast('Task not found', 'error'); return; }
+  const t = res.data;
+  currentDetailTask = t;
+
+  const reviewsHtml = (t.reviews || []).map(r => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="mono-sm" style="color:var(--text2)">${shortId(r.principal_id)}</span>
+        <span style="color:var(--accent);font-weight:700">★ ${r.weighted_overall}</span>
+      </div>
+      <div style="font-size:11px;margin-top:4px">${(r.scores ? Object.entries(r.scores).map(([k,v]) => `${k}: ${v}`).join(' · ') : '—')}</div>
+      <div style="font-size:12px;margin-top:4px;color:var(--text2)">${(r.comment||'').substring(0,100)}</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--text2)">${r.approved ? '✅ Approved' : '❌ Rejected'} · confidence ${r.reviewer_confidence || '?'} · ${timeAgo(r.created_at)}</div>
+    </div>
+  `).join('') || '<div style="color:var(--text2);font-size:12px">No reviews yet</div>';
+
+  document.getElementById('task-detail-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div class="mono-sm" style="color:var(--text2);margin-bottom:4px">${t.id}</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:8px">${(t.description||'').substring(0,120)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Channel: <span style="color:var(--accent)">#${t.channel}</span> · Created ${timeAgo(t.created_at)}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge ${t.status}">${t.status}</span>
+          <span style="font-size:12px;color:var(--text2)">${t.reviews_received||0}/${t.requested_reviews||'?'} reviews</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Output</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;max-height:150px;overflow-y:auto;font-family:var(--font);white-space:pre-wrap">${(t.output||'').substring(0,500)}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 style="font-size:13px;font-weight:600">Reviews (${t.reviews_received||0}/${t.requested_reviews||'?'})</h3>
+        ${t.status === 'open' || t.status === 'in_review' ? `<button class="btn btn-primary btn-sm" onclick="showReviewForm('${t.id}', [${(t.dimensions||[]).map(d=>`'${d}'`).join(',')}])">+ Submit Review</button>` : ''}
+      </div>
+      ${reviewsHtml}
+    </div>
+  `;
+  document.getElementById('task-detail-card').style.display = '';
+}
+
+function hideTaskDetail() {
+  document.getElementById('task-detail-card').style.display = 'none';
+}
+
+function showReviewForm(taskId, dimensions) {
+  currentTaskDims = dimensions;
+  document.getElementById('review-task-id').value = taskId;
+  const sliders = document.getElementById('score-sliders');
+  sliders.innerHTML = dimensions.map(d => `
+    <div class="score-item">
+      <label>${d}</label>
+      <input type="range" class="score-slider" min="1" max="10" value="7" data-dim="${d}" oninput="this.nextElementSibling.textContent=this.value">
+      <div class="score-val" style="font-size:14px">7</div>
+    </div>
+  `).join('');
+
+  // Default to first test reviewer if available
+  if (testReviewers.length > 0) {
+    document.getElementById('review-agent').value = testReviewers[0].agent_id;
+  }
+  document.getElementById('review-card').style.display = '';
+}
+
+function hideReviewForm() {
+  document.getElementById('review-card').style.display = 'none';
+}
+
+async function submitReview() {
+  const taskId = document.getElementById('review-task-id').value;
+  const agentId = document.getElementById('review-agent').value.trim();
+  const overall = parseInt(document.getElementById('review-overall').value);
+  const confidence = parseFloat(document.getElementById('review-confidence').value);
+  const comment = document.getElementById('review-comment').value.trim();
+  const approved = document.getElementById('review-approved').checked;
+
+  if (!agentId) { toast('Agent ID required', 'error'); return; }
+  if (comment.length < 20) { toast('Comment must be at least 20 characters', 'error'); return; }
+
+  const scores = {};
+  document.querySelectorAll('#score-sliders .score-slider').forEach(s => {
+    scores[s.dataset.dim] = parseInt(s.value);
+  });
+
+  try {
+    const res = await api('POST', `/tasks/${taskId}/reviews`, {
+      scores,
+      weighted_overall: overall,
+      reviewer_confidence: confidence,
+      comment,
+      approved,
+    }, agentId);
+
+    if (res.status === 'success') {
+      toast(`Review submitted! ${shortId(res.data.id)} (+3 budget)`);
+      hideReviewForm();
+      hideTaskDetail();
+      refresh();
+    } else {
+      toast(res.error?.message || 'Review failed', 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function createTestReviewer(count) {
+  for (let i = 0; i < count; i++) {
+    const num = testReviewers.length + 1;
+    try {
+      const org = await api('POST', '/orgs', {name: `DashOrg${num}`, slug: `dash-org-${num}-${Date.now()}`});
+      if (org.status !== 'success') { toast(`Org creation failed: ${org.error?.message || 'unknown'}`, 'error'); continue; }
+      const orgId = org.data.id;
+
+      const prn = await api('POST', '/principals', {org_id: orgId, name: `DashRev${num}`, roles: ['general-reviewer']});
+      if (prn.status !== 'success') { toast(`Principal creation failed: ${prn.error?.message || 'unknown'}`, 'error'); continue; }
+      const prnId = prn.data.id;
+
+      const agt = await api('POST', `/principals/${prnId}/agents`, {principal_id: prnId, name: `DashAgt${num}`});
+      if (agt.status !== 'success') { toast(`Agent creation failed: ${agt.error?.message || 'unknown'}`, 'error'); continue; }
+      const agtId = agt.data.id;
+
+      await api('POST', '/channels/general-qa/subscribe', null, agtId);
+
+      testReviewers.push({agent_id: agtId, principal_id: prnId, org_id: orgId, token: agt.data.token});
+      toast(`Reviewer ${num} created: ${shortId(agtId)}`);
+    } catch(e) {
+      toast(`Failed creating reviewer ${num}: ${e.message}`, 'error');
+    }
+  }
+  refresh();
+}
+
+async function autoReviewAll() {
+  // Ensure agt_dev is subscribed
+  try { await api('POST', '/channels/general-qa/subscribe', null, 'agt_dev'); } catch(e) {}
+
+  const tasksRes = await api('GET', '/tasks');
+  const openTasks = (tasksRes.data?.tasks || []).filter(t => t.status === 'open' || t.status === 'in_review');
+
+  if (testReviewers.length === 0) {
+    toast('Create reviewers first! (click +1/+3/+5)', 'error');
+    return;
+  }
+  if (openTasks.length === 0) {
+    toast('No open/in_review tasks to review', 'error');
+    return;
+  }
+
+  for (const task of openTasks) {
+    const taskDetail = await api('GET', `/tasks/${task.id}`);
+    if (taskDetail.status !== 'success') continue;
+    const ownerPrn = taskDetail.data.principal_id;
+    const requestedReviews = taskDetail.data.requested_reviews || 3;
+    const reviewsReceived = taskDetail.data.reviews_received || 0;
+    const reviewsNeeded = Math.max(0, requestedReviews - reviewsReceived);
+
+    const eligible = testReviewers.filter(r => r.principal_id !== ownerPrn);
+    if (eligible.length === 0) continue;
+
+    for (const reviewer of eligible.slice(0, reviewsNeeded)) {
+      const scores = {};
+      const dims = taskDetail.data.dimensions || ['quality', 'completeness', 'correctness'];
+      dims.forEach(d => { scores[d] = Math.floor(Math.random() * 3) + 7; });
+
+      try {
+        const res = await api('POST', `/tasks/${task.id}/reviews`, {
+          scores,
+          weighted_overall: Math.floor(Math.random() * 3) + 7,
+          reviewer_confidence: 0.7 + Math.random() * 0.3,
+          comment: `Automated dashboard review: this submission demonstrates solid work across the evaluated dimensions and meets the quality bar for approval`,
+          approved: true,
+        }, reviewer.agent_id);
+        if (res.status === 'success') {
+          toast(`Auto-reviewed ${shortId(task.id)} from ${shortId(reviewer.agent_id)}`);
+        } else {
+          toast(`Review failed: ${res.error?.message || 'unknown'}`, 'error');
+        }
+      } catch(e) {
+        // May already be reviewed by this principal
+      }
+    }
+  }
+  refresh();
+}
+
+async function fullDemo() {
+  toast('Starting full demo...');
+
+  // Ensure agt_dev is subscribed to general-qa
+  try { await api('POST', '/channels/general-qa/subscribe', null, 'agt_dev'); } catch(e) {}
+
+  // Ensure we have at least 3 reviewers
+  if (testReviewers.length < 3) {
+    await createTestReviewer(3 - testReviewers.length);
+  }
+
+  // Create task as agt_dev
+  const taskRes = await api('POST', '/tasks', {
+    task_description: 'Dashboard demo: test task with auto-generated reviews',
+    output: 'This is a demo submission showcasing Conclave peer review, consensus alignment, and high-score budget bonuses in action',
+    channel: 'general-qa',
+    requested_reviews: 3,
+    dimensions: ['quality', 'completeness', 'correctness'],
+  }, 'agt_dev');
+
+  if (taskRes.status !== 'success') {
+    toast('Failed to create task: ' + (taskRes.error?.message || 'unknown'), 'error');
+    return;
+  }
+
+  const taskId = taskRes.data.id;
+  toast(`Task created: ${shortId(taskId)}`);
+
+  // Get task detail to find owner principal
+  const taskDetail = await api('GET', `/tasks/${taskId}`);
+  const ownerPrn = taskDetail.data.principal_id;
+
+  // Submit reviews from the first 3 eligible reviewers
+  const eligible = testReviewers.filter(r => r.principal_id !== ownerPrn);
+  for (let i = 0; i < Math.min(3, eligible.length); i++) {
+    const reviewer = eligible[i];
+    const dims = taskDetail.data.dimensions || ['quality', 'completeness', 'correctness'];
+    const scores = {};
+    dims.forEach(d => { scores[d] = [8, 9, 9][i] || 8; });
+
+    await new Promise(r => setTimeout(r, 500)); // stagger reviews
+
+    try {
+      await api('POST', `/tasks/${taskId}/reviews`, {
+        scores,
+        weighted_overall: [8, 9, 9][i] || 8,
+        reviewer_confidence: 0.85 + i * 0.05,
+        comment: `Demo review ${i+1} from dashboard: high quality submission that demonstrates excellent craftsmanship and attention to detail across all evaluated dimensions`,
+        approved: true,
+      }, reviewer.agent_id);
+      toast(`Review ${i+1}/3 submitted!`);
+    } catch(e) {
+      toast(`Review ${i+1} failed: ${e.message}`, 'error');
+    }
+  }
+
+  refresh();
+}
+
+// Auto-refresh every 10 seconds
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

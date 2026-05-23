@@ -1,0 +1,168 @@
+/**
+ * Conclave — Agent Peer Protocol & Reputation System
+ * Main server entry point. Starts the Fastify HTTP API server.
+ * Local mode uses SQLite, self-hosted/cloud uses PostgreSQL.
+ */
+
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import jwt from '@fastify/jwt';
+import { initDb, createDb, type ConclaveDb } from '../db/index.js';
+
+import { principalRoutes } from '../routes/principals.js';
+import { agentRoutes } from '../routes/agents.js';
+import { taskRoutes } from '../routes/tasks.js';
+import { opinionRoutes } from '../routes/opinions.js';
+import { channelRoutes } from '../routes/channels.js';
+import { reputationRoutes } from '../routes/reputation.js';
+import { budgetRoutes } from '../routes/budget.js';
+import { spotCheckRoutes } from '../routes/spot-check.js';
+import { orgRoutes } from '../routes/orgs.js';
+import { healthRoutes } from '../routes/health.js';
+import { fleetRoutes } from '../routes/fleet.js';
+import type { FleetManager } from '../fleet/manager.js';
+
+export interface ConclaveConfig {
+  mode: 'local' | 'self-hosted' | 'cloud';
+  port: number;
+  host: string;
+  database: {
+    type: 'sqlite' | 'postgres';
+    url: string;
+  };
+  jwtSecret: string;
+  rateLimit?: {
+    max: number;
+    timeWindow: string;
+  };
+}
+
+const DEFAULT_CONFIG: ConclaveConfig = {
+  mode: 'local',
+  port: 3000,
+  host: '0.0.0.0',
+  database: {
+    type: 'sqlite',
+    url: './conclave-local.db',
+  },
+  jwtSecret: 'conclave-dev-secret-change-in-production',
+};
+
+export async function createServer(config: Partial<ConclaveConfig> = {}, fleetManager?: FleetManager) {
+  const fullConfig: ConclaveConfig = { ...DEFAULT_CONFIG, ...config };
+
+  // Initialize database (delete old DB to get fresh schema with principals)
+  const fs = await import('fs');
+  if (fs.existsSync(fullConfig.database.url)) {
+    fs.unlinkSync(fullConfig.database.url);
+  }
+  const db: ConclaveDb = initDb(fullConfig.database.url);
+
+  const fastify = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info',
+      transport: process.env.NODE_ENV !== 'production'
+        ? { target: 'pino-pretty' }
+        : undefined,
+    },
+  });
+
+  // Decorate fastify with db instance
+  fastify.decorate('db', db);
+  fastify.decorate('config', fullConfig);
+
+  // CORS
+  await fastify.register(cors, { origin: true });
+
+  // Rate limiting (skip in local mode for development)
+  if (fullConfig.mode !== 'local') {
+    await fastify.register(rateLimit, {
+      max: fullConfig.rateLimit?.max || 60,
+      timeWindow: fullConfig.rateLimit?.timeWindow || '1 minute',
+    });
+  }
+
+  // JWT auth (skip verification in local mode)
+  await fastify.register(jwt, {
+    secret: fullConfig.jwtSecret,
+  });
+
+  // Auth hook — extract agent ID from JWT or use dev default
+  // In local mode, supports X-Agent-Id header to simulate different agents
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (fullConfig.mode === 'local') {
+      // Allow X-Agent-Id header to simulate different agents in local mode
+      const overrideAgentId = request.headers['x-agent-id'] as string | undefined;
+      (request as any).agentId = overrideAgentId || 'agt_dev';
+      (request as any).principalId = 'prn_dev';
+      (request as any).adminId = 'admin_dev';
+      return;
+    }
+
+    try {
+      // Public routes that don't need auth
+      const publicPaths = ['/health', '/v1/health'];
+      if (publicPaths.includes(request.url)) return;
+
+      await request.jwtVerify();
+      const payload = request.user as any;
+      (request as any).agentId = payload.agentId || payload.sub;
+      (request as any).principalId = payload.principalId;
+      (request as any).adminId = payload.adminId;
+    } catch {
+      // Allow unauthenticated requests for now (v1)
+      (request as any).agentId = 'agt_anon';
+      (request as any).principalId = 'prn_anon';
+    }
+  });
+
+  // Health check (no prefix)
+  await fastify.register(healthRoutes);
+
+  // API routes (path-based versioning: /v1/)
+  await fastify.register(principalRoutes, { prefix: '/v1' });
+  await fastify.register(agentRoutes, { prefix: '/v1' });
+  await fastify.register(taskRoutes, { prefix: '/v1' });
+  await fastify.register(opinionRoutes, { prefix: '/v1' });
+  await fastify.register(channelRoutes, { prefix: '/v1' });
+  await fastify.register(reputationRoutes, { prefix: '/v1' });
+  await fastify.register(budgetRoutes, { prefix: '/v1' });
+  await fastify.register(spotCheckRoutes, { prefix: '/v1' });
+  await fastify.register(orgRoutes, { prefix: '/v1' });
+
+  // Fleet routes (only when fleet manager is provided)
+  if (fleetManager) {
+    await fastify.register(async (instance) => fleetRoutes(instance, fleetManager), { prefix: '/v1' });
+  }
+
+  return { fastify, config: fullConfig };
+}
+
+export async function startServer(config: Partial<ConclaveConfig> = {}) {
+  const { fastify, config: fullConfig } = await createServer(config);
+
+  await fastify.listen({ port: fullConfig.port, host: fullConfig.host });
+
+  console.log('');
+  console.log('  ╔══════════════════════════════════════╗');
+  console.log('  ║         🔮 CONCLAVE v0.1.0           ║');
+  console.log('  ║   Agent Peer Protocol & Reputation   ║');
+  console.log('  ╚══════════════════════════════════════╝');
+  console.log('');
+  console.log(`  Mode:     ${fullConfig.mode}`);
+  console.log(`  Database: ${fullConfig.database.type} @ ${fullConfig.database.url}`);
+  console.log(`  Listen:   http://${fullConfig.host}:${fullConfig.port}`);
+  console.log(`  Health:   http://${fullConfig.host}:${fullConfig.port}/v1/health`);
+  console.log('');
+
+  return fastify;
+}
+
+// Augment FastifyRequest
+declare module 'fastify' {
+  interface FastifyInstance {
+    db: ConclaveDb;
+    config: ConclaveConfig;
+  }
+}
