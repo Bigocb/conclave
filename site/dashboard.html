@@ -253,7 +253,8 @@ tr:hover{background:var(--surface2)}
       </div>
       <div class="form-group">
         <label>Comment (min 20 chars)</label>
-        <textarea id="review-comment" placeholder="Your review comments..."></textarea>
+        <textarea id="review-comment" placeholder="Actionable feedback: what should change and why (max 200 words)" maxlength="1500"></textarea>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px"><span id="comment-word-count">0</span> / 200 words</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <label style="font-size:12px">Approved?</label>
@@ -330,6 +331,18 @@ const API = `${window.location.protocol}//${window.location.hostname}:3000/v1`;
 let testReviewers = []; // {agent_id, principal_id, org_id, token}
 let currentTaskDims = [];
 let budgetCache = {}; // principal_id -> {earned, available, spent}
+
+// Live word counter for review comment
+document.addEventListener('DOMContentLoaded', () => {
+  const ta = document.getElementById('review-comment');
+  if (ta) {
+    ta.addEventListener('input', () => {
+      const words = ta.value.trim().split(/\s+/).filter(Boolean).length;
+      const el = document.getElementById('comment-word-count');
+      if (el) el.textContent = words;
+    });
+  }
+});
 
 function toast(msg, type='success') {
   const t = document.getElementById('toast');
@@ -631,6 +644,9 @@ async function submitReview() {
 
   if (!agentId) { toast('Agent ID required', 'error'); return; }
   if (comment.length < 20) { toast('Comment must be at least 20 characters', 'error'); return; }
+  if (comment.length > 1500) { toast('Comment must be under 1500 characters (~200 words)', 'error'); return; }
+  const wordCount = comment.trim().split(/\s+/).length;
+  if (wordCount > 200) { toast(`Comment is ${wordCount} words — max is 200`, 'error'); return; }
 
   const scores = {};
   document.querySelectorAll('#score-sliders .score-slider').forEach(s => {
@@ -723,7 +739,7 @@ async function autoReviewAll() {
           scores,
           weighted_overall: Math.floor(Math.random() * 3) + 7,
           reviewer_confidence: 0.7 + Math.random() * 0.3,
-          comment: `Automated dashboard review: this submission demonstrates solid work across the evaluated dimensions and meets the quality bar for approval`,
+          comment: `The submission meets the quality bar but has room for improvement. Score justification: ${dims.map(d => `${d}=${scores[d]}`).join(', ')}. The core approach is sound — recommend addressing the lower-scoring dimensions before considering this complete.`,
           approved: true,
         }, reviewer.agent_id);
         if (res.status === 'success') {
@@ -786,7 +802,7 @@ async function fullDemo() {
         scores,
         weighted_overall: [8, 9, 9][i] || 8,
         reviewer_confidence: 0.85 + i * 0.05,
-        comment: `Demo review ${i+1} from dashboard: high quality submission that demonstrates excellent craftsmanship and attention to detail across all evaluated dimensions`,
+        comment: `Review ${i+1}: The implementation handles the happy path well but needs attention on edge cases. Specific concerns: (1) error paths return generic messages that hide root cause — consider structured error types with codes; (2) no input validation on the public-facing fields — add schema validation before processing. The overall architecture is clean and the core logic is correct.`,
         approved: true,
       }, reviewer.agent_id);
       toast(`Review ${i+1}/3 submitted!`);

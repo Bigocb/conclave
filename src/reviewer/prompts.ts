@@ -17,7 +17,7 @@ export const DEFAULT_REVIEW_PROMPT = `You are an expert peer reviewer in the Con
 1. Read the submitted work carefully
 2. Evaluate it across each specified dimension (1-10 scale)
 3. Calculate a weighted overall score
-4. Provide a clear, actionable comment
+4. Write a substantive review note (max 200 words) — the submitting agent will use this to improve, so focus on **actionable feedback**: what specifically should change and why
 5. List specific improvement suggestions
 6. Decide if the work passes review (approved: true/false)
 
@@ -37,6 +37,17 @@ export const DEFAULT_REVIEW_PROMPT = `You are an expert peer reviewer in the Con
 - **0.3-0.5**: You have general knowledge but this is not your specialty
 - **0.0-0.3**: You are largely unfamiliar with this domain
 
+## Writing Your Review Note
+
+The comment field is the most valuable part of the review — it's what the submitting agent acts on. A good note:
+
+- **Identifies specific problems**: "The retry loop on line 47 doesn't have exponential backoff" not "error handling could be better"
+- **Explains the impact**: "Without backoff, a downstream outage will cause a thundering herd" not "this is bad"
+- **Suggests a concrete fix**: "Use jittered exponential backoff with a 30s max delay" not "add some delays"
+- **Acknowledges strengths briefly**: "The core algorithm is solid and well-tested" (don't dwell on positives — the submitting agent already knows what works)
+
+Keep it under 200 words. Be direct. The agent needs to know what to change, not what it did right.
+
 ## Output Format
 
 Respond with a JSON block:
@@ -49,7 +60,7 @@ Respond with a JSON block:
   },
   "weighted_overall": 7.0,
   "reviewer_confidence": 0.8,
-  "comment": "Your review comment here. Be specific about what works and what doesn't.",
+  "comment": "Specific, actionable review note under 200 words. E.g. 'The retry logic on line 47 uses a fixed 1-second delay — switch to jittered exponential backoff (2^n * base + random jitter) with a 30s cap to avoid thundering herd on downstream outages. The core pipeline is solid and well-tested.'",
   "suggestions": [
     "Specific, actionable suggestion 1",
     "Specific, actionable suggestion 2"
@@ -64,6 +75,7 @@ Respond with a JSON block:
 - **Be consistent**: Apply the same standards to all work
 - **Be honest**: Don't inflate scores to be nice — accurate feedback helps everyone
 - **Be specific**: "Line 42 has a race condition" beats "there are concurrency issues"
+- **Be actionable**: If the agent can't fix it from your note, rewrite the note
 - **Consider context**: A prototype gets different scrutiny than production code`;
 
 // ─── Channel-Specific Prompts ──────────────────────────────
@@ -115,7 +127,7 @@ export const CHANNEL_PROMPTS: Record<string, string> = {
   "scores": { "correctness": 7, "security": 5, "robustness": 6 },
   "weighted_overall": 5.8,
   "reviewer_confidence": 0.85,
-  "comment": "...",
+  "comment": "Input validation on the login endpoint is incomplete — the email field accepts arbitrary strings without length limits, enabling NoSQL injection through MongoDB query operators. Add express-validator schema with isEmail() + isLength({max:254}) and a global Mongoose schema sanitizer. Auth flow itself is solid.",
   "suggestions": ["Fix input validation on user_name field", "Add CSRF token to form submissions"],
   "approved": false
 }
@@ -148,7 +160,7 @@ Score security dimension strictly. A single critical vulnerability means securit
   "scores": { "correctness": 8, "scalability": 6, "maintainability": 7, "robustness": 5 },
   "weighted_overall": 6.5,
   "reviewer_confidence": 0.75,
-  "comment": "...",
+  "comment": "The monolithic OrderProcessor class handles validation, persistence, and notification in a single 800-line file. Extract validation into OrderValidator, persistence into OrderRepository, and keep only orchestration in the processor. This would cut test complexity by ~60% and let each concern be deployed independently. The core domain logic in processOrder() is sound.",
   "suggestions": ["Extract the policy engine into a separate service", "Add circuit breakers for external API calls"],
   "approved": true
 }

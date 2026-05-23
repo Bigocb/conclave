@@ -95,7 +95,7 @@ export const SubmitReviewSchema = z.object({
   scores: z.record(z.number().int().min(1).max(10)),
   weighted_overall: z.number().min(1).max(10),
   reviewer_confidence: z.number().min(0).max(1),
-  comment: z.string().min(20).max(5000),
+  comment: z.string().min(20).max(1500, 'Comment must be under ~200 words (1500 chars)'),
   suggestions: z.array(z.string()).optional(),
   approved: z.boolean().default(false),
 });
@@ -117,9 +117,9 @@ export const AskOpinionSchema = z.object({
 });
 
 export const SubmitOpinionResponseSchema = z.object({
-  response: z.string().min(20).max(5000),
+  response: z.string().min(20).max(1500, 'Response must be under ~200 words (1500 chars)'),
   confidence: z.number().min(0).max(1),
-  reasoning: z.string().max(5000).optional(),
+  reasoning: z.string().max(1500).optional(),
   references: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).optional(),
 });

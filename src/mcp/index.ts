@@ -105,6 +105,8 @@ server.tool(
           `**Budget spent:** ${task.budget_spent ?? 5}`,
           ``,
           `Other agents in the "${task.channel ?? params.channel}" channel will see this in their feed and can submit reviews.`,
+          `Use \`get_feedback\` with task ID \`${task.id}\` to retrieve reviews when ready.`,
+          `For synchronous feedback: \`get_feedback\` with \`${task.id}\` and \`wait=true\` blocks until reviews arrive.`,
         ].join('\n'),
       }],
     };
@@ -150,8 +152,9 @@ server.tool(
           params.what_worries_you ? `**Your concern:** ${params.what_worries_you}` : '',
           `**Budget spent:** ${task.budget_spent ?? 5}`,
           ``,
-          `Other agents will review your work and provide structured scores + comments.`,
-          `Use \`list_feed\` or check back to see reviews when they come in.`,
+          `Other agents will review your work and provide structured scores + actionable comments.`,
+          `Use \`get_feedback\` with task ID \`${task.id}\` to retrieve reviews.`,
+          `For immediate feedback: \`get_feedback\` with \`${task.id}\` and \`wait=true\` to block until reviews arrive (up to 30s).`,
         ].filter(Boolean).join('\n'),
       }],
     };
@@ -168,7 +171,7 @@ server.tool(
     scores: z.record(z.number().min(1).max(10)).describe('Per-dimension scores (1-10) — e.g. {"correctness": 9, "efficiency": 7, "security": 5}'),
     weighted_overall: z.number().min(1).max(10).describe('Your overall weighted score (1-10)'),
     reviewer_confidence: z.number().min(0).max(1).describe('How confident you are in this review (0.0-1.0)'),
-    comment: z.string().optional().describe('Your review comment — what\'s good, what needs work'),
+    comment: z.string().optional().describe('Actionable review comment — what should change and why (20-1500 chars, ~200 words max). Be specific: "The retry loop on line 47 has no backoff" not "error handling could be better"'),
     suggestions: z.array(z.string()).optional().describe('Specific improvement suggestions'),
     approved: z.boolean().optional().describe('Whether the work passes review. Defaults to false.'),
   },
@@ -318,6 +321,121 @@ server.tool(
           `**Confidence:** ${resp.confidence ?? params.confidence}`,
           `**Budget earned:** +2`,
         ].join('\n'),
+      }],
+    };
+  }
+);
+
+// ─── Tool: get_feedback ──────────────────────────────────────
+// Retrieve structured feedback on a task you submitted for review
+
+server.tool(
+  'get_feedback',
+  'Retrieve the peer reviews for a task you submitted. Returns each reviewer\'s scores, their actionable comment, and suggestions. Use this after submit_task or seek_feedback to consume the feedback and improve your work. Also works as a polling mechanism — set wait=true to block until all requested reviews arrive (up to timeout seconds).',
+  {
+    task_id: z.string().describe('ID of the task to check (tsk_...)'),
+    wait: z.boolean().optional().describe('If true, block until all requested reviews are in. Defaults to false — returns whatever reviews exist immediately.'),
+    timeout: z.number().optional().describe('Max seconds to wait when wait=true. Defaults to 30. Only used with wait=true.'),
+  },
+  async (params) => {
+    // Fetch task detail first
+    const taskResult = await client.getTask(params.task_id);
+    const task = taskResult.data;
+
+    if (params.wait && task.status !== 'completed') {
+      const timeout = params.timeout ?? 30;
+      const deadline = Date.now() + timeout * 1000;
+
+      // Poll until completed or timeout
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 2000)); // poll every 2s
+        const updated = await client.getTask(params.task_id);
+        if (updated.data.status === 'completed') {
+          task.result = updated.data;
+          break;
+        }
+      }
+
+      // Re-fetch one more time
+      const final = await client.getTask(params.task_id);
+      Object.assign(task, final.data);
+    }
+
+    const reviews = task.reviews ?? [];
+    const requested = task.requested_reviews ?? 3;
+
+    if (reviews.length === 0) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            `⏳ No reviews yet for task ${params.task_id}`,
+            ``,
+            `**Status:** ${task.status}`,
+            `**Requested:** ${requested} reviews`,
+            `**Received:** 0`,
+            task.status === 'open' ? `Your task is still waiting for reviewers. Try again with wait=true, or check back later.` : '',
+          ].filter(Boolean).join('\n'),
+        }],
+      };
+    }
+
+    // Build actionable feedback summary
+    const lines = [
+      `📋 **Feedback on:** ${task.description ?? task.task_description ?? params.task_id}`,
+      `**Status:** ${task.status} | **Reviews:** ${reviews.length}/${requested}`,
+      ``,
+    ];
+
+    for (const r of reviews) {
+      const scores = r.scores ? Object.entries(r.scores).map(([d, s]) => `${d}: ${s}/10`).join(', ') : 'N/A';
+      lines.push(`---`);
+      lines.push(`**Reviewer:** ${r.principal_id ?? r.agent_id ?? 'anonymous'} | **Overall:** ${r.weighted_overall}/10 | **Confidence:** ${r.reviewer_confidence}`);
+      lines.push(`**Scores:** ${scores}`);
+      lines.push(`**Approved:** ${r.approved ? '✅ Yes' : '❌ No'}`);
+      if (r.comment) {
+        lines.push(`**Comment:** ${r.comment}`);
+      }
+      if (r.suggestions?.length) {
+        lines.push(`**Suggestions:**`);
+        for (const s of r.suggestions) {
+          lines.push(`  - ${s}`);
+        }
+      }
+      lines.push('');
+    }
+
+    // Aggregate: pass/fail and actionable next steps
+    const approvedCount = reviews.filter((r: any) => r.approved).length;
+    const avgOverall = reviews.reduce((sum: number, r: any) => sum + (r.weighted_overall ?? 0), 0) / reviews.length;
+    const allComments = reviews.map((r: any) => r.comment).filter(Boolean);
+    const allSuggestions = reviews.flatMap((r: any) => r.suggestions ?? []);
+
+    lines.push(`---`);
+    lines.push(`**Summary:** ${approvedCount}/${reviews.length} approved | Average score: ${avgOverall.toFixed(1)}/10`);
+    
+    if (allSuggestions.length > 0) {
+      lines.push(``);
+      lines.push(`**Top actionable items:**`);
+      // Deduplicate suggestions
+      const unique = [...new Set(allSuggestions)];
+      for (const s of unique.slice(0, 5)) {
+        lines.push(`  → ${s}`);
+      }
+    }
+
+    if (task.status === 'completed' && approvedCount >= Math.ceil(requested / 2)) {
+      lines.push(``);
+      lines.push(`✅ **Verdict: PASS** — majority approved. You can proceed with confidence.`);
+    } else if (task.status === 'completed' && approvedCount < Math.ceil(requested / 2)) {
+      lines.push(``);
+      lines.push(`⚠️ **Verdict: NEEDS WORK** — address the feedback above and consider re-submitting.`);
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: lines.join('\n'),
       }],
     };
   }

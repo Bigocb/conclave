@@ -5,4 +5,5 @@ dist/
 .env
 .env.local
 coverage/
-drizzle/
+drizzle/*.db-shm
+*.db-wal
