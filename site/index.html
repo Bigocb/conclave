@@ -379,6 +379,7 @@
         <a href="#concepts">Concepts</a>
         <a href="#lifecycle">Lifecycle</a>
         <a href="#fleet">Fleet</a>
+        <a href="#backends">Backends</a>
         <a href="#self-trigger">Self-Trigger</a>
         <a href="#api">API</a>
         <a href="#economy">Economy</a>
@@ -738,6 +739,81 @@
         <div class="card-icon">🔍</div>
         <h3>Auto-Discovery</h3>
         <p><code>GET /v1/fleet/discover</code> probes Ollama, vLLM, LiteLLM, llama.cpp on localhost. See what's running, auto-configure it.</p>
+      </div>
+    </div>
+
+    <div id="backends" class="section-title" style="margin-top: 48px; font-size: 24px;">Pluggable Reviewer Backends</div>
+    <p class="section-desc">Not every reviewer needs an LLM. Run shell commands for deterministic checks. Slim models for fast pre-filters. Chain them in pipelines. Every backend produces the same <code>ReviewOutput</code> — the consumer never knows what ran the review.</p>
+
+    <div class="concept-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="concept-card highlight">
+        <div class="card-icon">🧠</div>
+        <h3>type: llm</h3>
+        <p>Full OpenAI-compatible <code>/v1/chat/completions</code> review. GPT-4o, Claude, any model. The default.</p>
+      </div>
+      <div class="concept-card">
+        <div class="card-icon">⚡</div>
+        <h3>type: slim</h3>
+        <p>Same as <code>llm</code> but 10s timeout. Fast local quantized models for pre-filtering. Escalate ambiguous tasks upstream.</p>
+      </div>
+      <div class="concept-card">
+        <div class="card-icon">🔧</div>
+        <h3>type: code</h3>
+        <p>Shell command reviewer — <code>semgrep</code>, <code>eslint</code>, custom Python. Deterministic, instant, free. JSON in → JSON out.</p>
+      </div>
+      <div class="concept-card">
+        <div class="card-icon">🔗</div>
+        <h3>type: pipeline</h3>
+        <p>Chain reviewers sequentially: <code>slim</code> pre-filter → <code>llm</code> deep review. Each step sees the prior findings.</p>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top: 32px;">
+      <div class="code-block">
+        <div class="code-header"><span class="method method-post">YAML</span> fleet.yaml — All 4 backends</div>
+        <div class="code-body"><span class="key">reviewers</span>:
+  - <span class="key">name</span>: <span class="str">"Deep Reviewer"</span>
+    <span class="key">type</span>: <span class="str">llm</span>
+    <span class="key">model</span>: <span class="str">gpt-4o</span>
+    <span class="key">provider</span>: <span class="str">openai</span>
+    <span class="key">mode</span>: <span class="str">auto</span>
+
+  - <span class="key">name</span>: <span class="str">"Fast Guard"</span>
+    <span class="key">type</span>: <span class="str">slim</span>
+    <span class="key">model</span>: <span class="str">qwen2.5-coder-0.5b</span>
+    <span class="key">provider</span>: <span class="str">ollama</span>
+    <span class="key">mode</span>: <span class="str">hybrid</span>
+    <span class="key">confidence_threshold</span>: <span class="num">8</span>
+
+  - <span class="key">name</span>: <span class="str">"Security Scanner"</span>
+    <span class="key">type</span>: <span class="str">code</span>
+    <span class="key">command</span>: <span class="str">"python3 reviewers/semgrep_reviewer.py"</span>
+    <span class="key">mode</span>: <span class="str">auto</span>
+
+  - <span class="key">name</span>: <span class="str">"Thorough Review"</span>
+    <span class="key">type</span>: <span class="str">pipeline</span>
+    <span class="key">steps</span>: [<span class="str">"Fast Guard"</span>, <span class="str">"Deep Reviewer"</span>]
+    <span class="key">mode</span>: <span class="str">auto</span></div>
+      </div>
+      <div class="code-block">
+        <div class="code-header"><span class="method method-post">STDIN/STDOUT</span> type:code contract</div>
+        <div class="code-body"><span class="comment"># Input: JSON on stdin</span>
+{
+  <span class="key">"task_id"</span>: <span class="str">"tsk_abc"</span>,
+  <span class="key">"output"</span>: <span class="str">"code being reviewed..."</span>,
+  <span class="key">"dimensions"</span>: [<span class="str">"security"</span>, <span class="str">"correctness"</span>],
+  <span class="key">"instructions"</span>: <span class="str">"Focus on injection"</span>,
+  <span class="key">"skills"</span>: [<span class="str">"security-audit"</span>]
+}
+
+<span class="comment"># Output: JSON on stdout</span>
+{
+  <span class="key">"scores"</span>: {<span class="str">"security"</span>: <span class="num">7</span>, <span class="str">"correctness"</span>: <span class="num">8</span>},
+  <span class="key">"weighted_overall"</span>: <span class="num">7.5</span>,
+  <span class="key">"reviewer_confidence"</span>: <span class="num">1.0</span>,
+  <span class="key">"comment"</span>: <span class="str">"1 SQL injection on L42"</span>,
+  <span class="key">"suggestions"</span>: [<span class="str">"Parameterize query"</span>]
+}</div>
       </div>
     </div>
   </section>

@@ -11,39 +11,94 @@ providers:
   litellm_proxy: http://localhost:4000/v1
 
 reviewers:
+  # ─── Type: llm (default) ──────────────────────────────────
+  # Full LLM review via OpenAI-compatible /v1/chat/completions
   - name: "Code Reviewer"
+    type: llm                    # default — can omit
     channels: [code-review]
     model: gpt-4o-mini
-    provider: openai          # resolves to https://api.openai.com/v1
+    provider: openai             # resolves to https://api.openai.com/v1
     llm_key: ${OPENAI_KEY}
     replicas: 2
     mode: auto
     instructions: "Focus on correctness, performance, and type safety. Cite file:line for every finding."
     skills: ["react-patterns", "security-audit"]
 
-  - name: "Security Scanner"
-    channels: [security-review]
-    model: claude-sonnet-4
-    provider: openrouter      # resolves to https://openrouter.ai/api/v1
-    llm_key: ${OPENROUTER_KEY}
-    mode: human
-    instructions: "Check for OWASP Top 10, auth bypasses, injection vectors. Score severity: blocker/suggestion/nit."
-
-  - name: "Local Reviewer"
-    channels: [code-review, architecture]
-    model: llama-3.1-8b-instant
-    provider: ollama           # resolves to http://localhost:11434/v1
+  # ─── Type: slim ────────────────────────────────────────────
+  # Fast local model with 10s timeout — pre-filter before deep review
+  - name: "Fast Guard"
+    type: slim
+    channels: [code-review]
+    model: qwen2.5-coder-0.5b
+    provider: ollama             # resolves to http://localhost:11434/v1
     replicas: 1
     mode: hybrid
-    confidence_threshold: 7
-    # Custom provider defined above
-    llm_url: http://gpu01.internal:8000/v1
-    llm_key: ${VLLM_KEY}
+    confidence_threshold: 8      # auto-approve if confidence >= 8, else escalate
+    instructions: "Quick pass: syntax errors, obvious bugs only. Skip if confident."
 
+  # ─── Type: code ────────────────────────────────────────────
+  # Shell command reviewer — deterministic, instant, free
+  # Receives task JSON on stdin, must output JSON on stdout
+  - name: "Security Scanner"
+    type: code
+    channels: [security-review]
+    command: "python3 /opt/conclave/reviewers/semgrep_reviewer.py"
+    mode: auto
+    instructions: "Focus on injection, auth bypass, secrets in code"
+
+  # Another code reviewer using a linter
+  - name: "Lint Checker"
+    type: code
+    channels: [code-review]
+    command: "node /opt/conclave/reviewers/eslint_reviewer.js"
+    mode: auto
+
+  # ─── Type: pipeline ───────────────────────────────────────
+  # Chain multiple reviewers sequentially: slim pre-filter → LLM deep review
+  - name: "Thorough Review"
+    type: pipeline
+    steps: ["Fast Guard", "Code Reviewer"]   # run in order, each sees prior results
+    channels: [code-review]
+    mode: auto
+
+  # ─── Human-in-the-loop ─────────────────────────────────────
   - name: "Architecture Reviewer"
+    type: llm
+    channels: [architecture]
+    model: claude-sonnet-4
+    provider: openrouter         # resolves to https://openrouter.ai/api/v1
+    llm_key: ${OPENROUTER_KEY}
+    mode: human
+    instructions: "Check for OWASP Top 10, auth bypasses, injection vectors."
+    skills: ["system-design"]
+
+  # ─── Custom provider example ──────────────────────────────
+  - name: "Local Mixtral"
+    type: slim
     channels: [architecture]
     model: mixtral-8x7b
-    provider: my_vllm          # uses custom provider from above
+    provider: my_vllm            # uses custom provider from above
     llm_key: ${VLLM_KEY}
     mode: auto
     skills: ["system-design"]
+
+# ─── CodeReviewer stdin format ────────────────────────────────
+# When type=code, the command receives JSON on stdin:
+# {
+#   "task_id": "tsk_abc123",
+#   "task_description": "Fix auth bug in login.ts",
+#   "output": "the code/diff being reviewed...",
+#   "dimensions": ["correctness", "security", "style"],
+#   "channel": "code-review",
+#   "instructions": "Focus on injection vectors",
+#   "skills": ["security-audit"]
+# }
+#
+# The command must print JSON to stdout:
+# {
+#   "scores": { "correctness": 8, "security": 7, "style": 9 },
+#   "weighted_overall": 8.0,
+#   "reviewer_confidence": 1.0,
+#   "comment": "One SQL injection risk on line 42...",
+#   "suggestions": ["Parameterize the query on line 42"]
+# }

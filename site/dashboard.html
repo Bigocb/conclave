@@ -322,7 +322,7 @@ tr:hover{background:var(--surface2)}
     </div>
     <div class="card-body scrollable" style="max-height:300px;padding:0">
       <table>
-        <thead><tr><th>Agent</th><th>Model</th><th>Provider</th><th>Endpoint</th><th>Instructions</th><th>Skills</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Type</th><th>Model</th><th>Provider</th><th>Endpoint</th><th>Instructions</th><th>Skills</th><th>Actions</th></tr></thead>
         <tbody id="reviewers-tbody"></tbody>
       </table>
     </div>
@@ -333,6 +333,21 @@ tr:hover{background:var(--surface2)}
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;width:400px;max-width:90vw">
       <h3 style="margin:0 0 16px;font-size:14px">Edit Reviewer Model</h3>
       <div id="reviewer-edit-agent" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
+      <label style="font-size:11px;color:var(--accent);display:block;margin-bottom:4px;font-weight:600">Reviewer Type</label>
+      <select id="reviewer-edit-type" style="width:100%;margin-bottom:12px" onchange="toggleCommandField()">
+        <option value="llm">llm — Full LLM review (default)</option>
+        <option value="slim">slim — Fast local model (10s timeout)</option>
+        <option value="code">code — Shell command (deterministic)</option>
+        <option value="pipeline">pipeline — Chain multiple reviewers</option>
+      </select>
+      <div id="command-field-wrapper" style="display:none">
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Command (for type=code)</label>
+        <input id="reviewer-edit-command" style="width:100%;margin-bottom:12px" placeholder='python3 reviewers/semgrep_reviewer.py'>
+      </div>
+      <div id="steps-field-wrapper" style="display:none">
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Steps (comma-separated reviewer names, for type=pipeline)</label>
+        <input id="reviewer-edit-steps" style="width:100%;margin-bottom:12px" placeholder="Fast Guard, Code Reviewer">
+      </div>
       <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Model</label>
       <input id="reviewer-edit-model" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
       <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Provider</label>
@@ -898,8 +913,12 @@ async function loadReviewers() {
       const urlShort = url.length > 30 ? url.slice(0, 30) + '…' : url;
       const instrShort = a.instructions ? (a.instructions.length > 40 ? a.instructions.slice(0, 40) + '…' : a.instructions) : '—';
       const skills = a.skills && a.skills.length > 0 ? a.skills.map(s => `<span style="background:rgba(129,140,248,0.15);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px;margin-right:2px">${esc(s)}</span>`).join('') : '—';
+      const type = a.type || 'llm';
+      const typeBadge = type === 'code' ? '🔧' : type === 'slim' ? '⚡' : type === 'pipeline' ? '🔗' : '🧠';
+      const typeColor = type === 'code' ? 'var(--green)' : type === 'slim' ? 'var(--warning, #f59e0b)' : type === 'pipeline' ? 'var(--purple)' : 'var(--accent)';
       return `<tr>
         <td style="font-size:12px;font-weight:600">${esc(a.name || a.id)}</td>
+        <td style="font-size:11px"><span style="background:${typeColor};color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${typeBadge} ${esc(type)}</span></td>
         <td style="font-size:12px"><code>${esc(a.model || '—')}</code></td>
         <td style="font-size:12px">${prov !== '—' ? `<span style="background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${esc(prov)}</span>` : '—'}</td>
         <td style="font-size:11px;color:var(--text2)" title="${esc(url)}">${esc(urlShort)}</td>
@@ -916,13 +935,23 @@ function openReviewerEdit(agentId) {
   const agent = reviewersData.find(a => a.id === agentId);
   if (!agent) return;
   document.getElementById('reviewer-edit-agent').textContent = `${agent.name || agent.id}`;
+  document.getElementById('reviewer-edit-type').value = agent.type || 'llm';
   document.getElementById('reviewer-edit-model').value = agent.model || '';
   document.getElementById('reviewer-edit-provider').value = agent.provider || '';
   document.getElementById('reviewer-edit-llm-url').value = agent.llm_url || '';
+  document.getElementById('reviewer-edit-command').value = agent.command || '';
+  document.getElementById('reviewer-edit-steps').value = (agent.steps || []).join(', ');
   document.getElementById('reviewer-edit-instructions').value = agent.instructions || '';
   document.getElementById('reviewer-edit-skills').value = (agent.skills || []).join(', ');
+  toggleCommandField();
   const modal = document.getElementById('reviewer-edit-modal');
   modal.style.display = 'flex';
+}
+
+function toggleCommandField() {
+  const type = document.getElementById('reviewer-edit-type').value;
+  document.getElementById('command-field-wrapper').style.display = type === 'code' ? 'block' : 'none';
+  document.getElementById('steps-field-wrapper').style.display = type === 'pipeline' ? 'block' : 'none';
 }
 
 function closeReviewerEdit() {
@@ -932,19 +961,27 @@ function closeReviewerEdit() {
 
 async function saveReviewerEdit() {
   if (!editingAgentId) return;
+  const type = document.getElementById('reviewer-edit-type').value;
   const model = document.getElementById('reviewer-edit-model').value.trim();
   const provider = document.getElementById('reviewer-edit-provider').value;
   const customUrl = document.getElementById('reviewer-edit-llm-url').value.trim();
+  const command = document.getElementById('reviewer-edit-command').value.trim();
+  const stepsRaw = document.getElementById('reviewer-edit-steps').value.trim();
   const instructions = document.getElementById('reviewer-edit-instructions').value.trim();
   const skillsRaw = document.getElementById('reviewer-edit-skills').value.trim();
 
   const body = {};
+  body.type = type;
   if (model) body.model = model;
   if (provider && provider !== 'custom') {
     body.provider = provider;
     if (!customUrl) body.llm_url = PROVIDER_URLS[provider];
   }
   if (customUrl) body.llm_url = customUrl;
+  if (type === 'code' && command) body.command = command;
+  if (type === 'pipeline' && stepsRaw) {
+    body.steps = stepsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  }
   if (instructions) body.instructions = instructions;
   if (skillsRaw) {
     body.skills = skillsRaw.split(',').map(s => s.trim()).filter(Boolean);

@@ -58,18 +58,22 @@ export const UpdatePrincipalSchema = z.object({
 export const RegisterAgentSchema = z.object({
   principal_id: z.string(),
   name: z.string().min(1).max(200),
+  type: z.enum(['llm', 'slim', 'code', 'pipeline']).default('llm'),
   model: z.string().optional(),
   provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
-  llm_url: z.string().url().optional(),
+  llm_url: z.string().optional(),
+  command: z.string().max(2000).optional(),         // shell command for type=code
   instructions: z.string().max(4000).optional(),
   skills: z.array(z.string()).optional(),
 });
 
 export const UpdateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  type: z.enum(['llm', 'slim', 'code', 'pipeline']).optional(),
   model: z.string().optional(),
   provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
-  llm_url: z.string().url().optional(),
+  llm_url: z.string().optional(),
+  command: z.string().max(2000).optional(),
   instructions: z.string().max(4000).optional(),
   skills: z.array(z.string()).optional(),
 });

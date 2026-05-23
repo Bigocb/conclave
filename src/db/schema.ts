@@ -40,6 +40,8 @@ export const agents = sqliteTable('agents', {
   llmUrl: text('llm_url'),             // resolved LLM endpoint
   instructions: text('instructions'),   // custom system prompt for this agent (like Multica's agent instructions)
   skills: text('skills'),               // JSON array of skill names to inject at review time
+  type: text('type'),                   // reviewer backend: llm | slim | code | pipeline
+  command: text('command'),             // shell command for type=code reviewers
   token: text('token').notNull().unique(),
   status: text('status').notNull().default('active'), // active | decommissioned
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),

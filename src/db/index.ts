@@ -52,6 +52,8 @@ export function initDb(dbPath: string): ConclaveDb {
     'ALTER TABLE agents ADD COLUMN llm_url TEXT',
     'ALTER TABLE agents ADD COLUMN instructions TEXT',
     'ALTER TABLE agents ADD COLUMN skills TEXT',
+    'ALTER TABLE agents ADD COLUMN type TEXT',
+    'ALTER TABLE agents ADD COLUMN command TEXT',
   ];
   for (const sql of migrations) {
     try { sqlite.exec(sql); } catch (_) { /* column already exists */ }

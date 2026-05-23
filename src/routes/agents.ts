@@ -40,6 +40,8 @@ export async function agentRoutes(fastify: FastifyInstance) {
       model: data.model,
       provider: data.provider,
       llmUrl: data.llm_url,
+      type: data.type,
+      command: data.command,
       instructions: data.instructions,
       skills: data.skills,
     });

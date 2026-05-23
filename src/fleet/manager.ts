@@ -19,6 +19,7 @@ import {
   ReviewerMode,
   principalSlug,
 } from './config.js';
+import { runLlmReview, runSlimReview, runCodeReview, runPipelineReview, type ReviewInput, type ReviewOutput } from './backends.js';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -45,6 +46,9 @@ interface ReviewerProcess {
   principalId: string;
   agents: Array<{ agentId: string; token: string; index: number }>;
   channels: string[];
+  type: 'llm' | 'slim' | 'code' | 'pipeline';
+  command?: string;             // shell command for type=code
+  steps?: string[];             // reviewer names for type=pipeline
   mode: ReviewerMode;
   confidenceThreshold: number;
   interval: number;
@@ -53,6 +57,8 @@ interface ReviewerProcess {
   model: string;
   llmUrl: string;
   llmKey: string;
+  instructions?: string;
+  skills?: string[];
   running: boolean;
   timer?: ReturnType<typeof setInterval>;
   activeReviews: number;
@@ -221,9 +227,11 @@ export class FleetManager extends EventEmitter {
         try {
           const resp = await client.registerAgentUnderPrincipal(principalId, {
             name: `${reviewer.name} #${i + 1}`,
+            type: reviewer.type || 'llm',
             model: reviewer.model,
             provider: reviewer.provider,
             llm_url: reviewer.llm_url,
+            command: reviewer.command,
             instructions: reviewer.instructions,
             skills: reviewer.skills,
           });
@@ -269,6 +277,9 @@ export class FleetManager extends EventEmitter {
         principalId,
         agents,
         channels: reviewer.channels,
+        type: reviewer.type || 'llm',
+        command: reviewer.command,
+        steps: reviewer.steps,
         mode: reviewer.mode,
         confidenceThreshold: reviewer.confidence_threshold,
         interval: reviewer.interval ?? 30,
@@ -277,6 +288,8 @@ export class FleetManager extends EventEmitter {
         model: reviewer.model,
         llmUrl: reviewer.llm_url,
         llmKey: reviewer.llm_key,
+        instructions: reviewer.instructions,
+        skills: reviewer.skills,
         running: false,
         activeReviews: 0,
         reviewedTaskIds: new Set(),
@@ -407,26 +420,64 @@ export class FleetManager extends EventEmitter {
     console.log(`  📋 ${proc.reviewerName}: Reviewing task ${task.id ?? task.task_id} from ${channel}`);
 
     try {
-      // 1. Call LLM to draft review
-      const userMessage = `## Task to Review\n\n**Description:** ${task.description}\n\n**Channel:** ${channel}\n**Dimensions:** ${Array.isArray(task.dimensions) ? task.dimensions.join(', ') : task.dimensions}\n\n**Output:**\n${task.output}`;
+      // 1. Build input for any backend type
+      const reviewInput: ReviewInput = {
+        task_id: task.id ?? task.task_id,
+        task_description: task.description,
+        output: task.output,
+        dimensions: Array.isArray(task.dimensions) ? task.dimensions : JSON.parse(task.dimensions || '[]'),
+        channel,
+        instructions: proc.instructions,
+        skills: proc.skills,
+      };
 
-      const rawResponse = await callLLM({
-        url: proc.llmUrl,
-        key: proc.llmKey,
+      // Build a minimal agent record for the backend
+      const agentRecord: any = {
         model: proc.model,
-        systemPrompt: proc.prompt,
-        userMessage,
-      });
+        instructions: proc.instructions,
+        skills: proc.skills,
+      };
 
-      const draft = parseReviewResponse(rawResponse);
-      if (!draft) {
-        console.warn(`  ⚠ ${proc.reviewerName}: Could not parse LLM response for task ${task.id} — skipping`);
+      // 2. Dispatch to the right backend based on type
+      let draft: ReviewOutput;
+      const reviewerType = proc.type || 'llm';
+
+      if (reviewerType === 'code') {
+        if (!proc.command) throw new Error('Code reviewer has no command configured');
+        draft = await runCodeReview(agentRecord, reviewInput, proc.command);
+      } else if (reviewerType === 'slim') {
+        draft = await runSlimReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+      } else if (reviewerType === 'pipeline') {
+        if (!proc.steps || proc.steps.length === 0) throw new Error('Pipeline reviewer has no steps');
+        draft = await runPipelineReview(
+          proc.steps,
+          agentRecord,
+          reviewInput,
+          async (stepName: string, input: ReviewInput) => {
+            // Find the step's process
+            const stepProc = [...this.processes.values()].find(p => p.reviewerName === stepName);
+            if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
+            const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
+            const stepType = stepProc.type || 'llm';
+            if (stepType === 'code') return runCodeReview(stepAgent, input, stepProc.command!);
+            if (stepType === 'slim') return runSlimReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
+            return runLlmReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
+          },
+        );
+      } else {
+        // Default: full LLM review
+        draft = await runLlmReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+      }
+
+      if (!draft || draft.weighted_overall === undefined) {
+        console.warn(`  ⚠ ${proc.reviewerName}: Backend returned invalid review for task ${task.id} — skipping`);
         return;
       }
 
-      // 2. Route based on mode
+      // 2. Route based on mode (compute approved from overall score)
+      const approved = draft.weighted_overall >= 7;
       if (proc.mode === 'auto') {
-        await client.submitReview(task.id, draft);
+        await client.submitReview(task.id, { ...draft, approved });
         this.incrementCompleted(principalId);
         console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${task.id} (overall: ${draft.weighted_overall})`);
         this.emit('review_completed', { principalId, taskId: task.id, mode: 'auto' });
@@ -448,7 +499,7 @@ export class FleetManager extends EventEmitter {
 
       } else if (proc.mode === 'hybrid') {
         if (draft.reviewer_confidence >= proc.confidenceThreshold) {
-          await client.submitReview(task.id, draft);
+          await client.submitReview(task.id, { ...draft, approved });
           this.incrementCompleted(principalId);
           console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed (confidence ${draft.reviewer_confidence} ≥ ${proc.confidenceThreshold}) task ${task.id}`);
           this.emit('review_completed', { principalId, taskId: task.id, mode: 'hybrid_auto' });

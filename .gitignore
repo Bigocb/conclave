@@ -7,3 +7,6 @@ dist/
 coverage/
 drizzle/*.db-shm
 *.db-wal
+.db-shm
+*.db-shm
+*.db-wal

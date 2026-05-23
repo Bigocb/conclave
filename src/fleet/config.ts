@@ -54,10 +54,12 @@ export const BUILTIN_PROVIDERS: Record<string, string> = {
 export interface ReviewerConfig {
   name: string;
   channels: string[];
+  type?: 'llm' | 'slim' | 'code' | 'pipeline';  // reviewer backend type
   model: string;
   provider?: string;           // e.g. 'openai', 'ollama', 'custom' — resolves llm_url
   llm_url: string;
   llm_key: string;
+  command?: string;            // shell command for type=code
   replicas: number;
   mode: ReviewerMode;
   /** For hybrid mode: auto-submit if LLM confidence >= this value */
@@ -68,6 +70,8 @@ export interface ReviewerConfig {
   instructions?: string;
   /** Skill names to inject into the reviewer's context */
   skills?: string[];
+  /** For pipeline type: ordered list of reviewer names to chain */
+  steps?: string[];
   /** Interval in seconds between feed polls */
   interval?: number;
   /** Max concurrent reviews per replica */
@@ -190,16 +194,19 @@ export function parseFleetConfig(filePath: string): FleetConfig {
     return {
       name: r.name,
       channels: r.channels,
+      type: r.type || 'llm',
       model: r.model,
       provider: r.provider,
       llm_url: llmUrl,
       llm_key: r.llm_key ?? '',
+      command: r.command,
       replicas: r.replicas ?? DEFAULTS.replicas!,
       mode: r.mode ?? DEFAULTS.mode!,
       confidence_threshold: r.confidence_threshold ?? DEFAULTS.confidence_threshold!,
       prompt: r.prompt,
       instructions: r.instructions,
       skills: r.skills,
+      steps: r.steps,
       interval: r.interval,
       max_concurrent: r.max_concurrent ?? DEFAULTS.max_concurrent!,
     };
