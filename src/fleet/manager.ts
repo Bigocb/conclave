@@ -224,6 +224,8 @@ export class FleetManager extends EventEmitter {
             model: reviewer.model,
             provider: reviewer.provider,
             llm_url: reviewer.llm_url,
+            instructions: reviewer.instructions,
+            skills: reviewer.skills,
           });
           const data = resp.data as any;
           agents.push({ agentId: data.agent_id ?? data.id ?? agentId, token: data.token ?? '', index: i });

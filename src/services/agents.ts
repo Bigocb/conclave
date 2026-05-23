@@ -19,6 +19,8 @@ export class AgentService {
     model?: string;
     provider?: string;
     llmUrl?: string;
+    instructions?: string;
+    skills?: string[];
   }) {
     const now = new Date().toISOString();
     await this.db.insert(schema.agents).values({
@@ -30,6 +32,8 @@ export class AgentService {
       model: data.model ?? null,
       provider: data.provider ?? null,
       llmUrl: data.llmUrl ?? null,
+      instructions: data.instructions ?? null,
+      skills: data.skills ? JSON.stringify(data.skills) : null,
       status: 'active',
       createdAt: now,
       updatedAt: now,
@@ -50,12 +54,14 @@ export class AgentService {
     return this.formatAgent(rows[0]);
   }
 
-  async update(id: string, data: { name?: string; model?: string; provider?: string; llm_url?: string }) {
+  async update(id: string, data: { name?: string; model?: string; provider?: string; llm_url?: string; instructions?: string; skills?: string[] }) {
     const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (data.name) updates.name = data.name;
     if (data.model !== undefined) updates.model = data.model;
     if (data.provider !== undefined) updates.provider = data.provider;
     if (data.llm_url !== undefined) updates.llmUrl = data.llm_url;
+    if (data.instructions !== undefined) updates.instructions = data.instructions;
+    if (data.skills !== undefined) updates.skills = JSON.stringify(data.skills);
 
     await this.db.update(schema.agents).set(updates).where(eq(schema.agents.id, id));
     return this.getById(id);
@@ -97,6 +103,8 @@ export class AgentService {
       model: row.model,
       provider: row.provider,
       llm_url: row.llmUrl,
+      instructions: row.instructions,
+      skills: row.skills ? JSON.parse(row.skills) : [],
       status: row.status,
       created_at: row.createdAt,
       updated_at: row.updatedAt,

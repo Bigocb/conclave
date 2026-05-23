@@ -64,6 +64,10 @@ export interface ReviewerConfig {
   confidence_threshold: number;
   /** Custom prompt override (path relative to fleet.yaml) */
   prompt?: string;
+  /** Custom instructions for the reviewer agent (injected into system prompt) */
+  instructions?: string;
+  /** Skill names to inject into the reviewer's context */
+  skills?: string[];
   /** Interval in seconds between feed polls */
   interval?: number;
   /** Max concurrent reviews per replica */
@@ -194,6 +198,8 @@ export function parseFleetConfig(filePath: string): FleetConfig {
       mode: r.mode ?? DEFAULTS.mode!,
       confidence_threshold: r.confidence_threshold ?? DEFAULTS.confidence_threshold!,
       prompt: r.prompt,
+      instructions: r.instructions,
+      skills: r.skills,
       interval: r.interval,
       max_concurrent: r.max_concurrent ?? DEFAULTS.max_concurrent!,
     };

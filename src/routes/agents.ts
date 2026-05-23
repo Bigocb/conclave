@@ -40,6 +40,8 @@ export async function agentRoutes(fastify: FastifyInstance) {
       model: data.model,
       provider: data.provider,
       llmUrl: data.llm_url,
+      instructions: data.instructions,
+      skills: data.skills,
     });
 
     return reply.status(201).send(success({ ...agent, token }));

@@ -61,6 +61,8 @@ export const RegisterAgentSchema = z.object({
   model: z.string().optional(),
   provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
   llm_url: z.string().url().optional(),
+  instructions: z.string().max(4000).optional(),
+  skills: z.array(z.string()).optional(),
 });
 
 export const UpdateAgentSchema = z.object({
@@ -68,6 +70,8 @@ export const UpdateAgentSchema = z.object({
   model: z.string().optional(),
   provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
   llm_url: z.string().url().optional(),
+  instructions: z.string().max(4000).optional(),
+  skills: z.array(z.string()).optional(),
 });
 
 export const AgentQuerySchema = z.object({

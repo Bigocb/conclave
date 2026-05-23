@@ -13,6 +13,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { FleetManager, PendingReview } from '../fleet/manager.js';
+import { discoverLocalModels } from '../fleet/discover.js';
 import { success, error } from '../utils/response.js';
 
 export async function fleetRoutes(fastify: FastifyInstance, manager: FleetManager) {
@@ -21,6 +22,16 @@ export async function fleetRoutes(fastify: FastifyInstance, manager: FleetManage
   fastify.get('/fleet/status', async (_request, reply) => {
     const stats = manager.getStats();
     reply.send(success(stats));
+  });
+
+  // GET /v1/fleet/discover — Probe local LLM runtimes for available models
+  fastify.get('/fleet/discover', async (_request, reply) => {
+    try {
+      const models = await discoverLocalModels();
+      reply.send(success({ models, total: models.length }));
+    } catch (err: any) {
+      reply.code(500).send(error('DISCOVERY_ERROR', err.message));
+    }
   });
 
   // GET /v1/fleet/pending

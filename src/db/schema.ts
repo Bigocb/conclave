@@ -38,6 +38,8 @@ export const agents = sqliteTable('agents', {
   model: text('model'),
   provider: text('provider'),           // openai | openrouter | ollama | anthropic | together | fireworks | groq | custom
   llmUrl: text('llm_url'),             // resolved LLM endpoint
+  instructions: text('instructions'),   // custom system prompt for this agent (like Multica's agent instructions)
+  skills: text('skills'),               // JSON array of skill names to inject at review time
   token: text('token').notNull().unique(),
   status: text('status').notNull().default('active'), // active | decommissioned
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),

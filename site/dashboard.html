@@ -322,7 +322,7 @@ tr:hover{background:var(--surface2)}
     </div>
     <div class="card-body scrollable" style="max-height:300px;padding:0">
       <table>
-        <thead><tr><th>Agent</th><th>Model</th><th>Provider</th><th>LLM URL</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Agent</th><th>Model</th><th>Provider</th><th>Endpoint</th><th>Instructions</th><th>Skills</th><th>Actions</th></tr></thead>
         <tbody id="reviewers-tbody"></tbody>
       </table>
     </div>
@@ -335,22 +335,26 @@ tr:hover{background:var(--surface2)}
       <div id="reviewer-edit-agent" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
       <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Model</label>
       <input id="reviewer-edit-model" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
-      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Provider</label>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Provider</label>
       <select id="reviewer-edit-provider" style="width:100%;margin-bottom:12px">
-        <option value="">— keep current —</option>
-        <option value="openai">openai</option>
-        <option value="openrouter">openrouter</option>
-        <option value="ollama">ollama</option>
-        <option value="anthropic">anthropic</option>
-        <option value="together">together</option>
-        <option value="fireworks">fireworks</option>
-        <option value="groq">groq</option>
-        <option value="vllm">vllm</option>
-        <option value="litellm">litellm</option>
-        <option value="custom">custom URL…</option>
+        <option value="">— none —</option>
+        <option value="openai">OpenAI</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="anthropic">Anthropic (needs proxy)</option>
+        <option value="groq">Groq</option>
+        <option value="ollama">Ollama (local)</option>
+        <option value="together">Together</option>
+        <option value="fireworks">Fireworks</option>
+        <option value="vllm">vLLM (local)</option>
+        <option value="litellm">LiteLLM (local proxy)</option>
+        <option value="custom">Custom URL</option>
       </select>
-      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Custom LLM URL (overrides provider)</label>
-      <input id="reviewer-edit-llm-url" style="width:100%;margin-bottom:16px" placeholder="https://api.openai.com/v1">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Custom Endpoint (overrides provider default)</label>
+      <input id="reviewer-edit-llm-url" style="width:100%;margin-bottom:12px" placeholder="https://api.openai.com/v1">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Instructions (custom system prompt for this reviewer)</label>
+      <textarea id="reviewer-edit-instructions" style="width:100%;min-height:60px;margin-bottom:12px;font-family:var(--mono);font-size:12px;resize:vertical" placeholder="Focus on correctness, cite file:line for every finding"></textarea>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Skills (comma-separated names)</label>
+      <input id="reviewer-edit-skills" style="width:100%;margin-bottom:16px" placeholder="react-patterns, security-audit, system-design">
       <div class="btn-row" style="justify-content:flex-end">
         <button class="btn btn-secondary" onclick="closeReviewerEdit()">Cancel</button>
         <button class="btn btn-primary" onclick="saveReviewerEdit()">Save</button>
@@ -892,11 +896,15 @@ async function loadReviewers() {
       const prov = a.provider || '—';
       const url = a.llm_url || '—';
       const urlShort = url.length > 30 ? url.slice(0, 30) + '…' : url;
+      const instrShort = a.instructions ? (a.instructions.length > 40 ? a.instructions.slice(0, 40) + '…' : a.instructions) : '—';
+      const skills = a.skills && a.skills.length > 0 ? a.skills.map(s => `<span style="background:rgba(129,140,248,0.15);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px;margin-right:2px">${esc(s)}</span>`).join('') : '—';
       return `<tr>
         <td style="font-size:12px;font-weight:600">${esc(a.name || a.id)}</td>
         <td style="font-size:12px"><code>${esc(a.model || '—')}</code></td>
         <td style="font-size:12px">${prov !== '—' ? `<span style="background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${esc(prov)}</span>` : '—'}</td>
         <td style="font-size:11px;color:var(--text2)" title="${esc(url)}">${esc(urlShort)}</td>
+        <td style="font-size:11px;color:var(--text2)" title="${esc(a.instructions || '')}">${esc(instrShort)}</td>
+        <td style="font-size:11px">${skills}</td>
         <td><button class="btn btn-secondary" style="font-size:10px;padding:2px 8px" onclick="openReviewerEdit('${a.id}')">Edit</button></td>
       </tr>`;
     }).join('');
@@ -911,6 +919,8 @@ function openReviewerEdit(agentId) {
   document.getElementById('reviewer-edit-model').value = agent.model || '';
   document.getElementById('reviewer-edit-provider').value = agent.provider || '';
   document.getElementById('reviewer-edit-llm-url').value = agent.llm_url || '';
+  document.getElementById('reviewer-edit-instructions').value = agent.instructions || '';
+  document.getElementById('reviewer-edit-skills').value = (agent.skills || []).join(', ');
   const modal = document.getElementById('reviewer-edit-modal');
   modal.style.display = 'flex';
 }
@@ -925,6 +935,8 @@ async function saveReviewerEdit() {
   const model = document.getElementById('reviewer-edit-model').value.trim();
   const provider = document.getElementById('reviewer-edit-provider').value;
   const customUrl = document.getElementById('reviewer-edit-llm-url').value.trim();
+  const instructions = document.getElementById('reviewer-edit-instructions').value.trim();
+  const skillsRaw = document.getElementById('reviewer-edit-skills').value.trim();
 
   const body = {};
   if (model) body.model = model;
@@ -933,6 +945,10 @@ async function saveReviewerEdit() {
     if (!customUrl) body.llm_url = PROVIDER_URLS[provider];
   }
   if (customUrl) body.llm_url = customUrl;
+  if (instructions) body.instructions = instructions;
+  if (skillsRaw) {
+    body.skills = skillsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  }
 
   try {
     const res = await fetch(`${API}/agents/${editingAgentId}`, {

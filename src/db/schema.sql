@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS agents (
   model TEXT,
   provider TEXT,                       -- openai | openrouter | ollama | custom
   llm_url TEXT,                        -- resolved LLM endpoint (set by fleet or manually)
+  instructions TEXT,                   -- custom system prompt (like Multica agent instructions)
+  skills TEXT,                         -- JSON array of skill names to inject at review time
   token TEXT NOT NULL UNIQUE,        -- Bearer token
   status TEXT NOT NULL DEFAULT 'active',  -- active | decommissioned
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
