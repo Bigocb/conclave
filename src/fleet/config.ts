@@ -35,10 +35,27 @@ import { parse as parseYaml } from 'yaml';
 export type FleetScope = 'public' | 'private' | 'hybrid';
 export type ReviewerMode = 'auto' | 'human' | 'hybrid';
 
+/**
+ * Built-in provider shortcuts — resolve `provider:` to `llm_url` automatically.
+ * To add a custom provider, define it in fleet.yaml under `providers:`.
+ */
+export const BUILTIN_PROVIDERS: Record<string, string> = {
+  openai:    'https://api.openai.com/v1',
+  openrouter:'https://openrouter.ai/api/v1',
+  ollama:    'http://localhost:11434/v1',
+  anthropic: 'https://api.anthropic.com/v1',    // needs proxy for /chat/completions
+  together:  'https://api.together.xyz/v1',
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  groq:      'https://api.groq.com/openai/v1',
+  vllm:      'http://localhost:8000/v1',
+  litellm:   'http://localhost:4000/v1',
+};
+
 export interface ReviewerConfig {
   name: string;
   channels: string[];
   model: string;
+  provider?: string;           // e.g. 'openai', 'ollama', 'custom' — resolves llm_url
   llm_url: string;
   llm_key: string;
   replicas: number;
@@ -57,6 +74,7 @@ export interface FleetConfig {
   org_id: string;
   server: string;
   scope: FleetScope;
+  providers?: Record<string, string>;  // custom provider name → URL overrides
   reviewers: ReviewerConfig[];
   /** Path to the fleet.yaml for reference */
   config_path: string;
@@ -105,11 +123,15 @@ function interpolateObj(obj: any): any {
  * Validate required fields on a reviewer config.
  */
 function validateReviewer(r: any, index: number): void {
-  const required = ['name', 'channels', 'model', 'llm_url', 'llm_key'] as const;
+  const required = ['name', 'channels', 'model'] as const;
   for (const field of required) {
     if (!r[field]) {
       throw new Error(`Reviewer #${index + 1} ("${r.name || 'unnamed'}"): missing required field "${field}"`);
     }
+  }
+  // Must have either provider OR llm_url
+  if (!r.provider && !r.llm_url) {
+    throw new Error(`Reviewer #${index + 1} ("${r.name}"): must specify either "provider" (shortcut) or "llm_url" (full URL)`);
   }
   if (!Array.isArray(r.channels) || r.channels.length === 0) {
     throw new Error(`Reviewer #${index + 1} ("${r.name}"): channels must be a non-empty array`);
@@ -146,25 +168,42 @@ export function parseFleetConfig(filePath: string): FleetConfig {
   // Validate each reviewer
   interpolated.reviewers.forEach((r: any, i: number) => validateReviewer(r, i));
 
-  // Apply defaults
-  const reviewers: ReviewerConfig[] = interpolated.reviewers.map((r: any) => ({
-    name: r.name,
-    channels: r.channels,
-    model: r.model,
-    llm_url: r.llm_url,
-    llm_key: r.llm_key,
-    replicas: r.replicas ?? DEFAULTS.replicas!,
-    mode: r.mode ?? DEFAULTS.mode!,
-    confidence_threshold: r.confidence_threshold ?? DEFAULTS.confidence_threshold!,
-    prompt: r.prompt,
-    interval: r.interval,
-    max_concurrent: r.max_concurrent ?? DEFAULTS.max_concurrent!,
-  }));
+  // Resolve provider shortcuts and build reviewers
+  const customProviders: Record<string, string> = interpolated.providers ?? {};
+  const allProviders = { ...BUILTIN_PROVIDERS, ...customProviders };
+
+  const reviewers: ReviewerConfig[] = interpolated.reviewers.map((r: any) => {
+    // Resolve llm_url from provider shortcut
+    let llmUrl = r.llm_url;
+    if (!llmUrl && r.provider) {
+      const resolved = allProviders[r.provider];
+      if (!resolved) {
+        throw new Error(`Reviewer #${r.name}: unknown provider "${r.provider}". Available: ${Object.keys(allProviders).join(', ')}`);
+      }
+      llmUrl = resolved;
+    }
+
+    return {
+      name: r.name,
+      channels: r.channels,
+      model: r.model,
+      provider: r.provider,
+      llm_url: llmUrl,
+      llm_key: r.llm_key ?? '',
+      replicas: r.replicas ?? DEFAULTS.replicas!,
+      mode: r.mode ?? DEFAULTS.mode!,
+      confidence_threshold: r.confidence_threshold ?? DEFAULTS.confidence_threshold!,
+      prompt: r.prompt,
+      interval: r.interval,
+      max_concurrent: r.max_concurrent ?? DEFAULTS.max_concurrent!,
+    };
+  });
 
   return {
     org_id: interpolated.org_id,
     server: interpolated.server.replace(/\/$/, ''), // strip trailing slash
     scope: interpolated.scope ?? 'public',
+    providers: Object.keys(customProviders).length > 0 ? customProviders : undefined,
     reviewers,
     config_path: resolvedPath,
   };

@@ -17,6 +17,8 @@ export class AgentService {
     name: string;
     token: string;
     model?: string;
+    provider?: string;
+    llmUrl?: string;
   }) {
     const now = new Date().toISOString();
     await this.db.insert(schema.agents).values({
@@ -26,6 +28,8 @@ export class AgentService {
       name: data.name,
       token: data.token,
       model: data.model ?? null,
+      provider: data.provider ?? null,
+      llmUrl: data.llmUrl ?? null,
       status: 'active',
       createdAt: now,
       updatedAt: now,
@@ -46,10 +50,12 @@ export class AgentService {
     return this.formatAgent(rows[0]);
   }
 
-  async update(id: string, data: { name?: string; model?: string }) {
+  async update(id: string, data: { name?: string; model?: string; provider?: string; llm_url?: string }) {
     const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (data.name) updates.name = data.name;
     if (data.model !== undefined) updates.model = data.model;
+    if (data.provider !== undefined) updates.provider = data.provider;
+    if (data.llm_url !== undefined) updates.llmUrl = data.llm_url;
 
     await this.db.update(schema.agents).set(updates).where(eq(schema.agents.id, id));
     return this.getById(id);
@@ -89,6 +95,8 @@ export class AgentService {
       org_id: row.orgId,
       name: row.name,
       model: row.model,
+      provider: row.provider,
+      llm_url: row.llmUrl,
       status: row.status,
       created_at: row.createdAt,
       updated_at: row.updatedAt,

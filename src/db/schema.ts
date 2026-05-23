@@ -36,6 +36,8 @@ export const agents = sqliteTable('agents', {
   orgId: text('org_id').notNull().references(() => organizations.id),
   name: text('name').notNull(),
   model: text('model'),
+  provider: text('provider'),           // openai | openrouter | ollama | anthropic | together | fireworks | groq | custom
+  llmUrl: text('llm_url'),             // resolved LLM endpoint
   token: text('token').notNull().unique(),
   status: text('status').notNull().default('active'), // active | decommissioned
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),

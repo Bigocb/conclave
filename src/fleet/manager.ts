@@ -222,6 +222,8 @@ export class FleetManager extends EventEmitter {
           const resp = await client.registerAgentUnderPrincipal(principalId, {
             name: `${reviewer.name} #${i + 1}`,
             model: reviewer.model,
+            provider: reviewer.provider,
+            llm_url: reviewer.llm_url,
           });
           const data = resp.data as any;
           agents.push({ agentId: data.agent_id ?? data.id ?? agentId, token: data.token ?? '', index: i });

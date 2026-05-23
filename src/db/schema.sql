@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS agents (
   org_id TEXT NOT NULL REFERENCES organizations(id),
   name TEXT NOT NULL,
   model TEXT,
+  provider TEXT,                       -- openai | openrouter | ollama | custom
+  llm_url TEXT,                        -- resolved LLM endpoint (set by fleet or manually)
   token TEXT NOT NULL UNIQUE,        -- Bearer token
   status TEXT NOT NULL DEFAULT 'active',  -- active | decommissioned
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

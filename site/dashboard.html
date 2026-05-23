@@ -314,6 +314,50 @@ tr:hover{background:var(--surface2)}
     </div>
   </div>
 
+  <!-- Reviewers & Models -->
+  <div class="card" id="reviewers-card">
+    <div class="card-header">
+      <h2><span class="icon">🤖</span> Reviewers & Models</h2>
+      <button class="btn btn-secondary" onclick="loadReviewers()" style="font-size:11px;padding:4px 8px">↻ Refresh</button>
+    </div>
+    <div class="card-body scrollable" style="max-height:300px;padding:0">
+      <table>
+        <thead><tr><th>Agent</th><th>Model</th><th>Provider</th><th>LLM URL</th><th>Actions</th></tr></thead>
+        <tbody id="reviewers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Reviewer Edit Modal -->
+  <div id="reviewer-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;width:400px;max-width:90vw">
+      <h3 style="margin:0 0 16px;font-size:14px">Edit Reviewer Model</h3>
+      <div id="reviewer-edit-agent" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Model</label>
+      <input id="reviewer-edit-model" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Provider</label>
+      <select id="reviewer-edit-provider" style="width:100%;margin-bottom:12px">
+        <option value="">— keep current —</option>
+        <option value="openai">openai</option>
+        <option value="openrouter">openrouter</option>
+        <option value="ollama">ollama</option>
+        <option value="anthropic">anthropic</option>
+        <option value="together">together</option>
+        <option value="fireworks">fireworks</option>
+        <option value="groq">groq</option>
+        <option value="vllm">vllm</option>
+        <option value="litellm">litellm</option>
+        <option value="custom">custom URL…</option>
+      </select>
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Custom LLM URL (overrides provider)</label>
+      <input id="reviewer-edit-llm-url" style="width:100%;margin-bottom:16px" placeholder="https://api.openai.com/v1">
+      <div class="btn-row" style="justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="closeReviewerEdit()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveReviewerEdit()">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Leaderboard -->
   <div class="card">
     <div class="card-header"><h2><span class="icon">🏆</span> Reputation Leaderboard</h2></div>
@@ -816,7 +860,100 @@ async function fullDemo() {
 
 // Auto-refresh every 10 seconds
 refresh();
+loadReviewers();
 setInterval(refresh, 10000);
+setInterval(loadReviewers, 30000);
+
+// ─── Reviewer Config Panel ──────────────────────────────────
+const PROVIDER_URLS = {
+  openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  ollama: 'http://localhost:11434/v1',
+  anthropic: 'https://api.anthropic.com/v1',
+  together: 'https://api.together.xyz/v1',
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  groq: 'https://api.groq.com/openai/v1',
+  vllm: 'http://localhost:8000/v1',
+  litellm: 'http://localhost:4000/v1',
+};
+
+let reviewersData = [];
+let editingAgentId = null;
+
+async function loadReviewers() {
+  try {
+    const res = await fetch(`${API}/agents?per_page=50`);
+    const json = await res.json();
+    const agents = json.data?.items ?? json.data ?? [];
+    reviewersData = agents;
+    const tbody = document.getElementById('reviewers-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = agents.map(a => {
+      const prov = a.provider || '—';
+      const url = a.llm_url || '—';
+      const urlShort = url.length > 30 ? url.slice(0, 30) + '…' : url;
+      return `<tr>
+        <td style="font-size:12px;font-weight:600">${esc(a.name || a.id)}</td>
+        <td style="font-size:12px"><code>${esc(a.model || '—')}</code></td>
+        <td style="font-size:12px">${prov !== '—' ? `<span style="background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${esc(prov)}</span>` : '—'}</td>
+        <td style="font-size:11px;color:var(--text2)" title="${esc(url)}">${esc(urlShort)}</td>
+        <td><button class="btn btn-secondary" style="font-size:10px;padding:2px 8px" onclick="openReviewerEdit('${a.id}')">Edit</button></td>
+      </tr>`;
+    }).join('');
+  } catch (e) { console.error('loadReviewers error:', e); }
+}
+
+function openReviewerEdit(agentId) {
+  editingAgentId = agentId;
+  const agent = reviewersData.find(a => a.id === agentId);
+  if (!agent) return;
+  document.getElementById('reviewer-edit-agent').textContent = `${agent.name || agent.id}`;
+  document.getElementById('reviewer-edit-model').value = agent.model || '';
+  document.getElementById('reviewer-edit-provider').value = agent.provider || '';
+  document.getElementById('reviewer-edit-llm-url').value = agent.llm_url || '';
+  const modal = document.getElementById('reviewer-edit-modal');
+  modal.style.display = 'flex';
+}
+
+function closeReviewerEdit() {
+  document.getElementById('reviewer-edit-modal').style.display = 'none';
+  editingAgentId = null;
+}
+
+async function saveReviewerEdit() {
+  if (!editingAgentId) return;
+  const model = document.getElementById('reviewer-edit-model').value.trim();
+  const provider = document.getElementById('reviewer-edit-provider').value;
+  const customUrl = document.getElementById('reviewer-edit-llm-url').value.trim();
+
+  const body = {};
+  if (model) body.model = model;
+  if (provider && provider !== 'custom') {
+    body.provider = provider;
+    if (!customUrl) body.llm_url = PROVIDER_URLS[provider];
+  }
+  if (customUrl) body.llm_url = customUrl;
+
+  try {
+    const res = await fetch(`${API}/agents/${editingAgentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(`Error: ${err.error?.message || res.statusText}`, 'error');
+      return;
+    }
+    toast(`Updated ${editingAgentId}`, 'success');
+    closeReviewerEdit();
+    loadReviewers();
+  } catch (e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 </script>
 </body>
 </html>

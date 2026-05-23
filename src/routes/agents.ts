@@ -38,6 +38,8 @@ export async function agentRoutes(fastify: FastifyInstance) {
       name: data.name,
       token,
       model: data.model,
+      provider: data.provider,
+      llmUrl: data.llm_url,
     });
 
     return reply.status(201).send(success({ ...agent, token }));
@@ -77,7 +79,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }));
   });
 
-  // PUT /v1/agents/:id — Update agent
+  // PUT /v1/agents/:id — Update agent (full replacement)
   fastify.put('/agents/:id', async (request, reply) => {
     const { id } = request.params as any;
     const parse = UpdateAgentSchema.safeParse(request.body);
@@ -85,6 +87,31 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
     }
     const agent = await agentService.update(id, parse.data);
+    if (!agent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+    return reply.send(success(agent));
+  });
+
+  // PATCH /v1/agents/:id — Partial update (e.g. swap model/provider at runtime)
+  fastify.patch('/agents/:id', async (request, reply) => {
+    const { id } = request.params as any;
+    const parse = UpdateAgentSchema.safeParse(request.body);
+    if (!parse.success) {
+      return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
+    }
+    let data = parse.data;
+
+    // Resolve provider shortcut to llm_url if provider given without llm_url
+    if (data.provider && !data.llm_url) {
+      const { BUILTIN_PROVIDERS } = await import('../fleet/config.js');
+      const resolved = BUILTIN_PROVIDERS[data.provider];
+      if (resolved) {
+        data = { ...data, llm_url: resolved };
+      }
+    }
+
+    const agent = await agentService.update(id, data);
     if (!agent) {
       return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
     }

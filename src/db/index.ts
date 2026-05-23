@@ -46,6 +46,15 @@ export function initDb(dbPath: string): ConclaveDb {
   // Execute the entire schema SQL at once — SQLite handles multi-statement
   sqlite.exec(schemaSql);
 
+  // Migrations for existing DBs (idempotent — ALTER TABLE ADD COLUMN is safe if column exists)
+  const migrations = [
+    'ALTER TABLE agents ADD COLUMN provider TEXT',
+    'ALTER TABLE agents ADD COLUMN llm_url TEXT',
+  ];
+  for (const sql of migrations) {
+    try { sqlite.exec(sql); } catch (_) { /* column already exists */ }
+  }
+
   // Seed default channels & dev org/principal/agent
   seedChannels(sqlite);
   seedDevDefaults(sqlite);

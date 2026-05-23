@@ -89,7 +89,7 @@ export class ConclaveApiClient {
 
   // ─── Agents ────────────────────────────────────────
 
-  async registerAgentUnderPrincipal(principalId: string, data: { name: string; model?: string }) {
+  async registerAgentUnderPrincipal(principalId: string, data: { name: string; model?: string; provider?: string; llm_url?: string }) {
     return this.request('POST', `/principals/${principalId}/agents`, {
       principal_id: principalId,
       ...data,

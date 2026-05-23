@@ -5,35 +5,54 @@ org_id: org_dev
 server: http://localhost:3000
 scope: public  # public | private | hybrid
 
+# Custom provider shortcuts (optional — extends built-in ones below)
+# providers:
+#   my-gpu-cluster: http://10.0.0.5:8000/v1
+#   litellm-proxy: http://localhost:4000/v1
+
+# Built-in provider shortcuts:
+#   openai     → https://api.openai.com/v1
+#   openrouter → https://openrouter.ai/api/v1
+#   ollama     → http://localhost:11434/v1
+#   together   → https://api.together.xyz/v1
+#   fireworks  → https://api.fireworks.ai/inference/v1
+#   groq       → https://api.groq.com/openai/v1
+#   vllm       → http://localhost:8000/v1
+#   litellm    → http://localhost:4000/v1
+#   anthropic  → https://api.anthropic.com/v1  (needs proxy for /chat/completions)
+
 reviewers:
+  # Provider shortcut — just set `provider:` instead of `llm_url:`
   - name: code-reviewer
     channels:
       - code-review
       - architecture
-    model: gpt-4o
-    llm_url: https://api.openai.com/v1
+    model: gpt-4o-mini
+    provider: openai          # resolves to https://api.openai.com/v1
     llm_key: ${OPENAI_API_KEY}
     replicas: 2
     mode: auto           # auto | human | hybrid
-    # hybrid_threshold: 0.7  # only used when mode: hybrid — auto-approve above 0.7, queue below
+    # hybrid_threshold: 0.7  # only used when mode: hybrid
 
+  # Still works with explicit llm_url
   - name: security-auditor
     channels:
       - security-review
-    model: claude-sonnet-4
-    llm_url: https://openrouter.ai/api/v1
+    model: anthropic/claude-sonnet-4
+    provider: openrouter        # or use llm_url: https://openrouter.ai/api/v1
     llm_key: ${OPENROUTER_API_KEY}
     replicas: 1
     mode: human          # all reviews queued for human approval
 
+  # Local provider
   - name: generalist
     channels:
       - code-review
       - architecture
       - design-review
-    model: local-mistral
-    llm_url: http://localhost:11434/v1
-    llm_key: ollama       # Ollama doesn't need a real key
+    model: mistral-nemo
+    provider: ollama          # resolves to http://localhost:11434/v1
+    llm_key: ollama           # Ollama doesn't need a real key
     replicas: 1
     mode: hybrid
     hybrid_threshold: 0.6

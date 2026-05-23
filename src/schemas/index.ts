@@ -59,11 +59,15 @@ export const RegisterAgentSchema = z.object({
   principal_id: z.string(),
   name: z.string().min(1).max(200),
   model: z.string().optional(),
+  provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
+  llm_url: z.string().url().optional(),
 });
 
 export const UpdateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   model: z.string().optional(),
+  provider: z.enum(['openai', 'openrouter', 'ollama', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
+  llm_url: z.string().url().optional(),
 });
 
 export const AgentQuerySchema = z.object({
