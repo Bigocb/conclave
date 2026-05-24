@@ -415,7 +415,19 @@ tr:hover{background:var(--surface2)}
         <input id="reviewer-edit-steps" style="width:100%;margin-bottom:12px" placeholder="Fast Guard, Code Reviewer">
       </div>
       <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Model</label>
-      <input id="reviewer-edit-model" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
+      <input id="reviewer-edit-model" list="model-list" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
+      <datalist id="model-list">
+        <option value="glm-5.1">
+        <option value="deepseek-v4-flash">
+        <option value="gemini-3-flash-preview">
+        <option value="gpt-4o">
+        <option value="gpt-4o-mini">
+        <option value="claude-sonnet-4">
+        <option value="claude-haiku-3.5">
+        <option value="llama-3.3-70b">
+        <option value="mistral-large">
+        <option value="qwen2.5-coder-32b">
+      </datalist>
       <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Provider</label>
       <select id="reviewer-edit-provider" style="width:100%;margin-bottom:12px">
         <option value="">— none —</option>
@@ -424,6 +436,7 @@ tr:hover{background:var(--surface2)}
         <option value="anthropic">Anthropic (needs proxy)</option>
         <option value="groq">Groq</option>
         <option value="ollama">Ollama (local)</option>
+        <option value="ollama_cloud">Ollama Cloud</option>
         <option value="together">Together</option>
         <option value="fireworks">Fireworks</option>
         <option value="vllm">vLLM (local)</option>
@@ -954,6 +967,7 @@ const PROVIDER_URLS = {
   openai: 'https://api.openai.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   ollama: 'http://localhost:11434/v1',
+  ollama_cloud: 'https://www.ollama.com/v1',
   anthropic: 'https://api.anthropic.com/v1',
   together: 'https://api.together.xyz/v1',
   fireworks: 'https://api.fireworks.ai/inference/v1',

@@ -86,11 +86,11 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS channel_subscribers (
+    await client`CREATE TABLE IF NOT EXISTS channel_subscriptions (
+      principal_id TEXT NOT NULL REFERENCES principals(id),
       channel_id TEXT NOT NULL REFERENCES channels(id),
-      agent_id TEXT NOT NULL REFERENCES agents(id),
       subscribed_at TEXT NOT NULL,
-      PRIMARY KEY (channel_id, agent_id)
+      PRIMARY KEY (channel_id, principal_id)
     )`;
     await client`CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
@@ -143,6 +143,52 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     } else {
       console.error('[initDb] Schema push failed (continuing anyway):', err.message);
     }
+  }
+
+  // Auto-seed dev environment if empty
+  try {
+    const orgCount = await db.select({ id: schema.organizations.id }).from(schema.organizations).limit(1);
+    if (orgCount.length === 0) {
+      console.log('[initDb] Seeding dev environment...');
+      const now = new Date().toISOString();
+      const devOrgId = 'org_dev';
+      const devPrnId = 'prn_dev';
+      const devAgtId = 'agt_dev';
+      const devToken = 'tk_dev_' + Date.now();
+
+      await db.insert(schema.organizations).values({
+        id: devOrgId, name: 'Dev Org', slug: 'dev', description: 'Default dev organization',
+        policies: JSON.stringify({ min_reviews_required: 2 }), createdAt: now, updatedAt: now,
+      }).onConflictDoNothing();
+      await db.insert(schema.principals).values({
+        id: devPrnId, orgId: devOrgId, name: 'Developer',
+        roles: JSON.stringify(['admin', 'general-reviewer']), status: 'active',
+        createdAt: now, updatedAt: now,
+      }).onConflictDoNothing();
+      await db.insert(schema.agents).values({
+        id: devAgtId, principalId: devPrnId, orgId: devOrgId, name: 'Dev Agent',
+        type: 'llm', model: 'glm-5.1', provider: 'ollama_cloud',
+        llmUrl: 'https://www.ollama.com/v1', token: devToken, status: 'active',
+        createdAt: now, updatedAt: now,
+      }).onConflictDoNothing();
+      await db.insert(schema.attentionBudgets).values({
+        principalId: devPrnId, earned: 100, spent: 0, earnRate: 5, lastEarnAt: now,
+      }).onConflictDoNothing();
+      // Ensure general-qa channel exists
+      await db.insert(schema.channels).values({
+        id: 'ch_general_qa', name: 'general-qa', description: 'General Q&A review channel',
+        createdAt: now,
+      }).onConflictDoNothing();
+      // Subscribe dev principal to general-qa
+      await db.insert(schema.channelSubscriptions).values({
+        principalId: devPrnId, channelId: 'ch_general_qa', subscribedAt: now,
+      }).onConflictDoNothing();
+      console.log('[initDb] Dev environment seeded (org_dev, prn_dev, agt_dev, general-qa)');
+    } else {
+      console.log('[initDb] Organizations already exist, skipping seed');
+    }
+  } catch (seedErr: any) {
+    console.error('[initDb] Seed failed (non-fatal):', seedErr.message);
   }
 
   return {
