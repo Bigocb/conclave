@@ -1,11 +1,9 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
     { "source": "/v1/:match*", "destination": "/api/index" },
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/(.*)", "destination": "/site/$1" }
+    { "source": "/health", "destination": "/api/index" }
   ],
   "functions": {
     "api/index.ts": {
