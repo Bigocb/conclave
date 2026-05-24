@@ -22,6 +22,7 @@ import { orgRoutes } from '../routes/orgs.js';
 import { healthRoutes } from '../routes/health.js';
 import { fleetRoutes } from '../routes/fleet.js';
 import { providerRoutes } from '../routes/providers.js';
+import { cronRoutes } from '../routes/cron.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {
@@ -133,6 +134,9 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   if (fleetManager) {
     await fastify.register(async (instance) => fleetRoutes(instance, fleetManager), { prefix: '/v1' });
   }
+
+  // Cron review route
+  await fastify.register(cronRoutes, { prefix: '/v1' });
 
   return { fastify, config: fullConfig };
 }
