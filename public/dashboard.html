@@ -390,7 +390,7 @@ tr:hover{background:var(--surface2)}
 <div class="toast" id="toast"></div>
 
 <script>
-const API = `${window.location.protocol}//${window.location.hostname}:3000/v1`;
+const API = `${window.location.origin}/v1`;
 let testReviewers = []; // {agent_id, principal_id, org_id, token}
 let currentTaskDims = [];
 let budgetCache = {}; // principal_id -> {earned, available, spent}
