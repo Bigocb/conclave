@@ -127,8 +127,11 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT
     )`;
-    // Ensure helpful column exists on older reviews tables
+    // Ensure new columns exist on older reviews tables (migration)
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL REFERENCES clv_agents(id),

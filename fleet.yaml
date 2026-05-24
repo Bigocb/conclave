@@ -9,10 +9,10 @@ providers:
 reviewers:
   - name: "Code Reviewer"
     type: llm
-    channels: [general-qa]
+    channels: [general-qa, code-review]
     model: deepseek-v4-flash
     provider: ollama_cloud
-    llm_key: "${OLLAMA_KEY}"
+    llm_key: "a25be7302c4b406c9cb2affc95bd50eb.X3MBLIIMFU5o8lJI2OTr39DL"
     mode: auto
     replicas: 1
     interval: 15
@@ -21,10 +21,10 @@ reviewers:
 
   - name: "General Reviewer"
     type: llm
-    channels: [general-qa]
+    channels: [general-qa, code-review]
     model: glm-5.1
     provider: ollama_cloud
-    llm_key: "${OLLAMA_KEY}"
+    llm_key: "a25be7302c4b406c9cb2affc95bd50eb.X3MBLIIMFU5o8lJI2OTr39DL"
     mode: auto
     replicas: 1
     interval: 20
@@ -33,10 +33,10 @@ reviewers:
 
   - name: "Architecture Reviewer"
     type: llm
-    channels: [general-qa]
+    channels: [general-qa, code-review]
     model: deepseek-v4-flash
     provider: ollama_cloud
-    llm_key: "${OLLAMA_KEY}"
+    llm_key: "a25be7302c4b406c9cb2affc95bd50eb.X3MBLIIMFU5o8lJI2OTr39DL"
     mode: auto
     replicas: 1
     interval: 25
