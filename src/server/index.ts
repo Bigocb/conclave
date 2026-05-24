@@ -53,7 +53,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   const fullConfig: ConclaveConfig = { ...DEFAULT_CONFIG, ...config };
 
   // Initialize database (PG connection — async)
-  const { db, close: closeDb } = await initDb(fullConfig.database);
+  const { db, client: pgClient, close: closeDb } = await initDb(fullConfig.database);
 
   const fastify = Fastify({
     logger: {
@@ -64,9 +64,10 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     },
   });
 
-  // Decorate fastify with db instance
+  // Decorate fastify with db instance and raw PG client
   fastify.decorate('db', db);
   fastify.decorate('config', fullConfig);
+  fastify.decorate('pgClient', pgClient);
 
   // CORS
   await fastify.register(cors, { origin: true });
@@ -166,5 +167,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     db: ConclaveDb;
     config: ConclaveConfig;
+    pgClient: any; // Raw postgres-js client for LISTEN/NOTIFY
   }
 }

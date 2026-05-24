@@ -9,7 +9,7 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 
 export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>>;
-export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb; close: () => Promise<void> }> {
+export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb; client: ReturnType<typeof postgres>; close: () => Promise<void> }> {
   const url = config.url;
   console.log(`[initDb] Connecting to PostgreSQL: ${url.replace(/:[^:@]+@/, ':***@')}`);
 
@@ -212,6 +212,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
 
   return {
     db,
+    client,
     close: async () => {
       await client.end();
       console.log('[initDb] PostgreSQL connection closed');

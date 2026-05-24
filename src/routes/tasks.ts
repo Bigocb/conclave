@@ -76,6 +76,19 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       budgetSpent: Math.abs(cost),
     });
 
+    // Notify reviewer workers that a new task is available
+    try {
+      const pgClient = (fastify as any).pgClient;
+      if (pgClient && typeof pgClient.notify === 'function') {
+        await pgClient.notify('new_task', id);
+      } else if (pgClient) {
+        // Fallback to raw SQL if notify not available
+        await pgClient.query(`SELECT pg_notify('new_task', $1)`, [id]);
+      }
+    } catch (notifyErr: any) {
+      console.warn('[tasks] pg_notify failed (non-fatal):', notifyErr.message);
+    }
+
     reply.code(201).send(success(task));
   });
 

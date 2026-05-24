@@ -117,7 +117,9 @@ export const reviews = pgTable('clv_reviews', {
   suggestions: text('suggestions'),                // JSON array
   approved: integer('approved').notNull().default(0), // 0 or 1
   helpful: integer('helpful'),                         // null | 0 | 1
+  status: text('status').notNull().default('submitted'), // pending | submitted | disputed
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at'),
 });
 
 // ─── Opinions ───────────────────────────────────────────────
