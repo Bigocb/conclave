@@ -42,10 +42,13 @@ export const channelRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     const { name } = request.params as { name: string };
     const channel = await channelSvc.getByName(name);
     if (!channel) return reply.code(404).send(error(ERROR_CODES.CHANNEL_NOT_FOUND.code, 'Channel not found'));
-    const agentId = request.agentId ?? 'agt_dev';
-    // Resolve principal from agent
-    const agent = await agentSvc.getById(agentId);
-    const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
+    // Accept principal_id directly, or resolve from agent
+    let principalId = (request.body as any)?.principal_id || (request.query as any)?.principal_id;
+    if (!principalId) {
+      const agentId = request.agentId ?? 'agt_dev';
+      const agent = await agentSvc.getById(agentId);
+      principalId = agent?.principal_id ?? 'prn_dev';
+    }
     await channelSvc.subscribe(principalId, channel.id);
     reply.send(success({ subscribed: true, channel: name, principal_id: principalId }));
   });
@@ -54,9 +57,12 @@ export const channelRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     const { name } = request.params as { name: string };
     const channel = await channelSvc.getByName(name);
     if (!channel) return reply.code(404).send(error(ERROR_CODES.CHANNEL_NOT_FOUND.code, 'Channel not found'));
-    const agentId = request.agentId ?? 'agt_dev';
-    const agent = await agentSvc.getById(agentId);
-    const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
+    let principalId = (request.body as any)?.principal_id || (request.query as any)?.principal_id;
+    if (!principalId) {
+      const agentId = request.agentId ?? 'agt_dev';
+      const agent = await agentSvc.getById(agentId);
+      principalId = agent?.principal_id ?? 'prn_dev';
+    }
     await channelSvc.unsubscribe(principalId, channel.id);
     reply.send(success({ subscribed: false, channel: name, principal_id: principalId }));
   });

@@ -194,7 +194,98 @@ tr:hover{background:var(--surface2)}
         </div>
       </div>
 
-      <table><thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Budget</th></tr></thead><tbody id="principals-tbody"></tbody></table>
+      <table><thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Channels</th><th>Budget</th><th>Actions</th></tr></thead><tbody id="principals-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Manage Connections -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon">🔗</span> Manage Connections</h2>
+      <button class="btn btn-secondary btn-sm" onclick="refreshConnections()">↻ Refresh</button>
+    </div>
+    <div class="card-body" style="max-height:500px;overflow-y:auto">
+      <!-- Tabs -->
+      <div class="tabs" id="conn-tabs">
+        <div class="tab active" onclick="showConnTab('principal-channel')">Principal → Channel</div>
+        <div class="tab" onclick="showConnTab('principal-agent')">Principal → Agent</div>
+        <div class="tab" onclick="showConnTab('agent-channel')">Agent → Channel</div>
+      </div>
+
+      <!-- Tab: Principal → Channel -->
+      <div id="conn-principal-channel" class="conn-panel" style="padding-top:12px">
+        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Subscribe a principal's agents to a channel so they receive review tasks from it.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group">
+            <label>Principal</label>
+            <select id="conn-pc-principal" onchange="loadPrincipalChannels()"></select>
+          </div>
+          <div class="form-group">
+            <label>Channel</label>
+            <select id="conn-pc-channel"></select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="subscribePrincipalToChannel()">Subscribe to Channel</button>
+        <div id="conn-pc-current" style="margin-top:12px"></div>
+      </div>
+
+      <!-- Tab: Principal → Agent -->
+      <div id="conn-principal-agent" class="conn-panel" style="display:none;padding-top:12px">
+        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Register a reviewer agent under a principal. The agent acts on behalf of that principal.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group">
+            <label>Principal</label>
+            <select id="conn-pa-principal" onchange="loadPrincipalAgents()"></select>
+          </div>
+          <div class="form-group">
+            <label>Agent Name</label>
+            <input type="text" id="conn-pa-name" placeholder="e.g. Code Reviewer #1">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group">
+            <label>Model</label>
+            <input type="text" id="conn-pa-model" value="deepseek-v4-flash" placeholder="e.g. glm-5.1">
+          </div>
+          <div class="form-group">
+            <label>Provider</label>
+            <select id="conn-pa-provider">
+              <option value="ollama_cloud">Ollama Cloud</option>
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="groq">Groq</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select id="conn-pa-type">
+              <option value="llm">LLM Reviewer</option>
+              <option value="slim">Slim (Fast)</option>
+              <option value="code">Code (Command)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="registerAgent()">Register Agent</button>
+        <div id="conn-pa-current" style="margin-top:12px"></div>
+      </div>
+
+      <!-- Tab: Agent → Channel -->
+      <div id="conn-agent-channel" class="conn-panel" style="display:none;padding-top:12px">
+        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Subscribe a specific agent to a channel. Use this to make a reviewer focus on a single channel.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-group">
+            <label>Agent</label>
+            <select id="conn-ac-agent" onchange="loadAgentSubscriptions()"></select>
+          </div>
+          <div class="form-group">
+            <label>Channel</label>
+            <select id="conn-ac-channel"></select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="subscribeAgentToChannel()">Subscribe Agent</button>
+        <div id="conn-ac-current" style="margin-top:12px"></div>
+      </div>
     </div>
   </div>
 
@@ -587,10 +678,14 @@ async function refresh() {
         <td class="mono-sm id-cell" title="${p.id}">${shortId(p.id)}</td>
         <td>${p.name || '—'}</td>
         <td style="font-size:11px">${(p.roles||[]).join(', ')}</td>
+        <td style="font-size:11px;color:var(--text2)" id="pchan-${p.id}">…</td>
         <td id="budget-${p.id}">—</td>
+        <td><button class="btn btn-secondary" style="font-size:10px;padding:2px 6px" onclick="showConnTab('principal-channel');document.getElementById('conn-pc-principal').value='${p.id}'">🔗</button></td>
       </tr>`).join('');
       // Fetch budget for each principal in background (non-blocking)
       fetchBudgets(pList);
+      // Fetch channel subscriptions for each principal
+      fetchPrincipalChannels(pList);
     }
 
     // Channels (lightweight, just re-render)
@@ -1005,6 +1100,232 @@ async function fullDemo() {
   }
 
   refresh();
+}
+
+// ─── Connection Management ──────────────────────────────────
+
+let connData = { principals: [], agents: [], channels: [] };
+
+function showConnTab(tab) {
+  document.querySelectorAll('.conn-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('#conn-tabs .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`conn-${tab}`).style.display = 'block';
+  const tabMap = { 'principal-channel': 0, 'principal-agent': 1, 'agent-channel': 2 };
+  document.querySelectorAll('#conn-tabs .tab')[tabMap[tab]].classList.add('active');
+  refreshConnections();
+}
+
+async function refreshConnections() {
+  try {
+    const [prResp, agResp, chResp] = await Promise.all([
+      api('GET', '/principals'),
+      api('GET', '/agents'),
+      api('GET', '/channels'),
+    ]);
+    connData.principals = prResp.data || [];
+    connData.agents = agResp.data || [];
+    connData.channels = chResp.data?.channels || [];
+
+    // Populate dropdowns
+    populateSelect('conn-pc-principal', connData.principals.map(p => ({ value: p.id, label: p.name || p.id })));
+    populateSelect('conn-pc-channel', connData.channels.map(c => ({ value: c.name, label: c.name })));
+    populateSelect('conn-pa-principal', connData.principals.map(p => ({ value: p.id, label: p.name || p.id })));
+    populateSelect('conn-ac-agent', connData.agents.map(a => ({ value: a.id, label: a.name || a.id })));
+    populateSelect('conn-ac-channel', connData.channels.map(c => ({ value: c.name, label: c.name })));
+
+    // Load current relationships
+    loadPrincipalChannels();
+    loadPrincipalAgents();
+    loadAgentSubscriptions();
+  } catch(e) {
+    console.error('refreshConnections error:', e);
+  }
+}
+
+function populateSelect(id, options) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+}
+
+async function loadPrincipalChannels() {
+  const sel = document.getElementById('conn-pc-principal');
+  if (!sel?.value) { document.getElementById('conn-pc-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select a principal</span>'; return; }
+  const pid = sel.value;
+  const principal = connData.principals.find(p => p.id === pid);
+  if (!principal) return;
+
+  // Get agents under this principal, then find their channel subscriptions
+  try {
+    const agentsResp = await api('GET', `/principals/${pid}/agents`);
+    const agents = agentsResp.data?.agents || [];
+    const channelSet = new Set();
+    for (const ag of agents) {
+      try {
+        const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
+        (subs.data?.channels || []).forEach(c => channelSet.add(c));
+      } catch(e) {}
+    }
+    const channels = [...channelSet];
+    document.getElementById('conn-pc-current').innerHTML = channels.length > 0
+      ? `<div style="font-size:11px;color:var(--text2)">Subscribed channels:</div>` +
+        channels.map(c => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:var(--surface2);border-radius:3px;font-size:11px">#${c} <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="unsubscribePrincipalFromChannel('${pid}','${c}')">✕</button></span>`).join('')
+      : '<span style="color:var(--text2);font-size:11px">Not subscribed to any channels</span>';
+  } catch(e) {
+    document.getElementById('conn-pc-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
+  }
+}
+
+async function subscribePrincipalToChannel() {
+  const pid = document.getElementById('conn-pc-principal').value;
+  const channel = document.getElementById('conn-pc-channel').value;
+  if (!pid || !channel) return toast('Select a principal and channel', 'error');
+
+  try {
+    // Get agents under this principal
+    const agentsResp = await api('GET', `/principals/${pid}/agents`);
+    const agents = agentsResp.data?.agents || [];
+    if (agents.length === 0) {
+      toast('No agents under this principal — register one first', 'error');
+      return;
+    }
+    // Subscribe all agents under this principal to the channel
+    for (const ag of agents) {
+      await api('POST', `/channels/${channel}/subscribe`, { agent_id: ag.id });
+    }
+    toast(`Subscribed ${agents.length} agent(s) to #${channel}`);
+    loadPrincipalChannels();
+  } catch(e) {
+    toast(e.message || 'Failed to subscribe', 'error');
+  }
+}
+
+async function unsubscribePrincipalFromChannel(pid, channel) {
+  try {
+    const agentsResp = await api('GET', `/principals/${pid}/agents`);
+    const agents = agentsResp.data?.agents || [];
+    for (const ag of agents) {
+      await api('DELETE', `/channels/${channel}/subscribe`, { agent_id: ag.id });
+    }
+    toast(`Unsubscribed ${agents.length} agent(s) from #${channel}`);
+    loadPrincipalChannels();
+  } catch(e) {
+    toast(e.message || 'Failed to unsubscribe', 'error');
+  }
+}
+
+async function loadPrincipalAgents() {
+  const sel = document.getElementById('conn-pa-principal');
+  if (!sel?.value) { document.getElementById('conn-pa-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select a principal</span>'; return; }
+  const pid = sel.value;
+  try {
+    const agentsResp = await api('GET', `/principals/${pid}/agents`);
+    const agents = agentsResp.data?.agents || [];
+    document.getElementById('conn-pa-current').innerHTML = agents.length > 0
+      ? agents.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:11px">
+          <span><strong>${a.name || a.id}</strong> <span style="color:var(--text2)">${a.type || ''} ${a.model ? '· ' + a.model : ''}</span></span>
+          <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="deleteAgent('${a.id}')">✕</button>
+        </div>`).join('')
+      : '<span style="color:var(--text2);font-size:11px">No agents registered</span>';
+  } catch(e) {
+    document.getElementById('conn-pa-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
+  }
+}
+
+async function registerAgent() {
+  const pid = document.getElementById('conn-pa-principal').value;
+  const name = document.getElementById('conn-pa-name').value;
+  const model = document.getElementById('conn-pa-model').value;
+  const provider = document.getElementById('conn-pa-provider').value;
+  const type = document.getElementById('conn-pa-type').value;
+  if (!pid || !name) return toast('Select a principal and enter agent name', 'error');
+
+  try {
+    const resp = await api('POST', `/principals/${pid}/agents`, {
+      name, type, model, provider,
+      llm_url: PROVIDER_URLS[provider] || '',
+      instructions: `You are a ${name}. Review for quality and correctness.`,
+    });
+    toast(`Registered agent ${resp.data?.agent_id || name}`);
+    document.getElementById('conn-pa-name').value = '';
+    loadPrincipalAgents();
+    refresh(); // Refresh main dashboard
+  } catch(e) {
+    toast(e.message || 'Failed to register agent', 'error');
+  }
+}
+
+async function deleteAgent(agentId) {
+  try {
+    await api('DELETE', `/agents/${agentId}`);
+    toast(`Deleted agent ${shortId(agentId)}`);
+    loadPrincipalAgents();
+    refresh();
+  } catch(e) {
+    toast(e.message || 'Failed to delete agent', 'error');
+  }
+}
+
+async function loadAgentSubscriptions() {
+  const sel = document.getElementById('conn-ac-agent');
+  if (!sel?.value) { document.getElementById('conn-ac-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select an agent</span>'; return; }
+  const aid = sel.value;
+  try {
+    const subs = await api('GET', `/agents/${aid}/subscriptions`);
+    const channels = subs.data?.channels || [];
+    document.getElementById('conn-ac-current').innerHTML = channels.length > 0
+      ? channels.map(c => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:var(--surface2);border-radius:3px;font-size:11px">#${c} <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="unsubscribeAgent('${aid}','${c}')">✕</button></span>`).join('')
+      : '<span style="color:var(--text2);font-size:11px">Not subscribed to any channels</span>';
+  } catch(e) {
+    document.getElementById('conn-ac-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
+  }
+}
+
+async function subscribeAgentToChannel() {
+  const aid = document.getElementById('conn-ac-agent').value;
+  const channel = document.getElementById('conn-ac-channel').value;
+  if (!aid || !channel) return toast('Select an agent and channel', 'error');
+  try {
+    await api('POST', `/channels/${channel}/subscribe`, { agent_id: aid });
+    toast(`Subscribed ${shortId(aid)} to #${channel}`);
+    loadAgentSubscriptions();
+  } catch(e) {
+    toast(e.message || 'Failed to subscribe', 'error');
+  }
+}
+
+async function unsubscribeAgent(aid, channel) {
+  try {
+    await api('DELETE', `/channels/${channel}/subscribe`, { agent_id: aid });
+    toast(`Unsubscribed from #${channel}`);
+    loadAgentSubscriptions();
+  } catch(e) {
+    toast(e.message || 'Failed to unsubscribe', 'error');
+  }
+}
+
+// Fetch channel subscriptions for principals table
+async function fetchPrincipalChannels(principals) {
+  for (const p of principals) {
+    try {
+      const agentsResp = await api('GET', `/principals/${p.id}/agents`);
+      const agents = agentsResp.data?.agents || [];
+      const channelSet = new Set();
+      for (const ag of agents) {
+        try {
+          const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
+          (subs.data?.channels || []).forEach(c => channelSet.add(c));
+        } catch(e) {}
+      }
+      const el = document.getElementById(`pchan-${p.id}`);
+      if (el) {
+        const channels = [...channelSet];
+        el.innerHTML = channels.length > 0
+          ? channels.map(c => `<span style="background:var(--surface2);padding:1px 4px;border-radius:2px;font-size:10px">#${c}</span>`).join(' ')
+          : '<span style="color:var(--text2)">—</span>';
+      }
+    } catch(e) {}
+  }
 }
 
 // Auto-refresh every 10 seconds
