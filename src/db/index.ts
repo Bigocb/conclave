@@ -26,8 +26,12 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
 
   try {
     console.log('[initDb] Pushing schema to ensure tables exist...');
+    // Drop old unprefixed tables if they exist (migration from pre-clv_ schema)
+    await client`DROP TABLE IF EXISTS spot_checks, reputation_snapshots, opinion_responses, opinions, reviews, tasks, channel_subscribers, channel_subscriptions, channels, budget_history, attention_budgets, agents, principals, organizations CASCADE`;
+    console.log('[initDb] Old unprefixed tables dropped (if any)');
+
     // Create tables if they don't exist using raw SQL
-    await client`CREATE TABLE IF NOT EXISTS organizations (
+    await client`CREATE TABLE IF NOT EXISTS clv_organizations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
@@ -36,9 +40,9 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS principals (
+    await client`CREATE TABLE IF NOT EXISTS clv_principals (
       id TEXT PRIMARY KEY,
-      org_id TEXT NOT NULL REFERENCES organizations(id),
+      org_id TEXT NOT NULL REFERENCES clv_organizations(id),
       name TEXT NOT NULL,
       roles TEXT,
       capabilities TEXT,
@@ -47,10 +51,10 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS agents (
+    await client`CREATE TABLE IF NOT EXISTS clv_agents (
       id TEXT PRIMARY KEY,
-      principal_id TEXT NOT NULL REFERENCES principals(id),
-      org_id TEXT NOT NULL REFERENCES organizations(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
+      org_id TEXT NOT NULL REFERENCES clv_organizations(id),
       name TEXT NOT NULL,
       model TEXT,
       provider TEXT,
@@ -64,21 +68,21 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS attention_budgets (
-      principal_id TEXT PRIMARY KEY REFERENCES principals(id),
+    await client`CREATE TABLE IF NOT EXISTS clv_attention_budgets (
+      principal_id TEXT PRIMARY KEY REFERENCES clv_principals(id),
       earned INTEGER NOT NULL DEFAULT 15,
       spent INTEGER NOT NULL DEFAULT 0,
       earn_rate INTEGER NOT NULL DEFAULT 5,
       last_earn_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS budget_history (
+    await client`CREATE TABLE IF NOT EXISTS clv_budget_history (
       id TEXT PRIMARY KEY,
-      principal_id TEXT NOT NULL REFERENCES principals(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
       amount INTEGER NOT NULL,
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS channels (
+    await client`CREATE TABLE IF NOT EXISTS clv_channels (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       description TEXT,
@@ -86,16 +90,16 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS channel_subscriptions (
-      principal_id TEXT NOT NULL REFERENCES principals(id),
-      channel_id TEXT NOT NULL REFERENCES channels(id),
+    await client`CREATE TABLE IF NOT EXISTS clv_channel_subscriptions (
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
+      channel_id TEXT NOT NULL REFERENCES clv_channels(id),
       subscribed_at TEXT NOT NULL,
       PRIMARY KEY (channel_id, principal_id)
     )`;
-    await client`CREATE TABLE IF NOT EXISTS tasks (
+    await client`CREATE TABLE IF NOT EXISTS clv_tasks (
       id TEXT PRIMARY KEY,
-      principal_id TEXT NOT NULL REFERENCES principals(id),
-      channel_id TEXT NOT NULL REFERENCES channels(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
+      channel_id TEXT NOT NULL REFERENCES clv_channels(id),
       task_description TEXT NOT NULL,
       output TEXT NOT NULL,
       dimensions TEXT,
@@ -106,11 +110,11 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS reviews (
+    await client`CREATE TABLE IF NOT EXISTS clv_reviews (
       id TEXT PRIMARY KEY,
-      task_id TEXT NOT NULL REFERENCES tasks(id),
-      reviewer_agent_id TEXT NOT NULL REFERENCES agents(id),
-      reviewer_principal_id TEXT NOT NULL REFERENCES principals(id),
+      task_id TEXT NOT NULL REFERENCES clv_tasks(id),
+      reviewer_agent_id TEXT NOT NULL REFERENCES clv_agents(id),
+      reviewer_principal_id TEXT NOT NULL REFERENCES clv_principals(id),
       scores TEXT NOT NULL,
       weighted_overall INTEGER NOT NULL,
       reviewer_confidence DOUBLE PRECISION DEFAULT 0.8,
@@ -120,18 +124,18 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS opinions (
+    await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
-      review_id TEXT NOT NULL REFERENCES reviews(id),
-      principal_id TEXT NOT NULL REFERENCES principals(id),
+      review_id TEXT NOT NULL REFERENCES clv_reviews(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
       outcome TEXT NOT NULL,
       reasoning TEXT,
       created_at TEXT NOT NULL
     )`;
-    await client`CREATE TABLE IF NOT EXISTS opinion_responses (
+    await client`CREATE TABLE IF NOT EXISTS clv_opinion_responses (
       id TEXT PRIMARY KEY,
-      opinion_id TEXT NOT NULL REFERENCES opinions(id),
-      principal_id TEXT NOT NULL REFERENCES principals(id),
+      opinion_id TEXT NOT NULL REFERENCES clv_opinions(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
       response TEXT NOT NULL,
       reasoning TEXT,
       created_at TEXT NOT NULL

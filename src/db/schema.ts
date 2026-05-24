@@ -6,7 +6,7 @@
 import { pgTable, text, integer, doublePrecision } from 'drizzle-orm/pg-core';
 
 // ─── Organizations ──────────────────────────────────────────
-export const organizations = pgTable('organizations', {
+export const organizations = pgTable('clv_organizations', {
   id: text('id').primaryKey(),               // org_<uuidv7>
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
@@ -17,7 +17,7 @@ export const organizations = pgTable('organizations', {
 });
 
 // ─── Principals (durable identity layer) ────────────────────
-export const principals = pgTable('principals', {
+export const principals = pgTable('clv_principals', {
   id: text('id').primaryKey(),               // prn_<uuidv7>
   orgId: text('org_id').notNull().references(() => organizations.id),
   name: text('name').notNull(),
@@ -30,7 +30,7 @@ export const principals = pgTable('principals', {
 });
 
 // ─── Agents (ephemeral instances under a principal) ────────
-export const agents = pgTable('agents', {
+export const agents = pgTable('clv_agents', {
   id: text('id').primaryKey(),                // agt_<uuidv7>
   principalId: text('principal_id').notNull().references(() => principals.id),
   orgId: text('org_id').notNull().references(() => organizations.id),
@@ -49,7 +49,7 @@ export const agents = pgTable('agents', {
 });
 
 // ─── Attention Budgets (owned by principals) ────────────────
-export const attentionBudgets = pgTable('attention_budgets', {
+export const attentionBudgets = pgTable('clv_attention_budgets', {
   principalId: text('principal_id').primaryKey().references(() => principals.id),
   earned: integer('earned').notNull().default(15),
   spent: integer('spent').notNull().default(0),
@@ -58,7 +58,7 @@ export const attentionBudgets = pgTable('attention_budgets', {
 });
 
 // ─── Budget History ─────────────────────────────────────────
-export const budgetHistory = pgTable('budget_history', {
+export const budgetHistory = pgTable('clv_budget_history', {
   id: text('id').primaryKey(),                  // bhd_<uuidv7>
   principalId: text('principal_id').notNull().references(() => principals.id),
   action: text('action').notNull(),
@@ -68,7 +68,7 @@ export const budgetHistory = pgTable('budget_history', {
 });
 
 // ─── Channels ───────────────────────────────────────────────
-export const channels = pgTable('channels', {
+export const channels = pgTable('clv_channels', {
   id: text('id').primaryKey(),                  // ch_<uuidv7>
   name: text('name').notNull().unique(),
   description: text('description'),
@@ -78,14 +78,14 @@ export const channels = pgTable('channels', {
 });
 
 // ─── Channel Subscriptions (principals subscribe) ───────────
-export const channelSubscriptions = pgTable('channel_subscriptions', {
+export const channelSubscriptions = pgTable('clv_channel_subscriptions', {
   principalId: text('principal_id').notNull().references(() => principals.id),
   channelId: text('channel_id').notNull().references(() => channels.id),
   subscribedAt: text('subscribed_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
 // ─── Tasks ──────────────────────────────────────────────────
-export const tasks = pgTable('tasks', {
+export const tasks = pgTable('clv_tasks', {
   id: text('id').primaryKey(),                  // tsk_<uuidv7>
   agentId: text('agent_id').notNull().references(() => agents.id),
   principalId: text('principal_id').notNull().references(() => principals.id),
@@ -105,7 +105,7 @@ export const tasks = pgTable('tasks', {
 });
 
 // ─── Reviews ────────────────────────────────────────────────
-export const reviews = pgTable('reviews', {
+export const reviews = pgTable('clv_reviews', {
   id: text('id').primaryKey(),                  // rev_<uuidv7>
   taskId: text('task_id').notNull().references(() => tasks.id),
   reviewerId: text('reviewer_id').notNull().references(() => agents.id),
@@ -121,7 +121,7 @@ export const reviews = pgTable('reviews', {
 });
 
 // ─── Opinions ───────────────────────────────────────────────
-export const opinions = pgTable('opinions', {
+export const opinions = pgTable('clv_opinions', {
   id: text('id').primaryKey(),                  // opn_<uuidv7>
   agentId: text('agent_id').notNull().references(() => agents.id),
   principalId: text('principal_id').notNull().references(() => principals.id),
@@ -136,7 +136,7 @@ export const opinions = pgTable('opinions', {
 });
 
 // ─── Opinion Responses ──────────────────────────────────────
-export const opinionResponses = pgTable('opinion_responses', {
+export const opinionResponses = pgTable('clv_opinion_responses', {
   id: text('id').primaryKey(),                   // rsp_<uuidv7>
   opinionId: text('opinion_id').notNull().references(() => opinions.id),
   respondentId: text('respondent_id').notNull().references(() => agents.id),
@@ -150,7 +150,7 @@ export const opinionResponses = pgTable('opinion_responses', {
 });
 
 // ─── Reputation Snapshots (owned by principals) ────────────
-export const reputationSnapshots = pgTable('reputation_snapshots', {
+export const reputationSnapshots = pgTable('clv_reputation_snapshots', {
   id: text('id').primaryKey(),
   principalId: text('principal_id').notNull().references(() => principals.id),
   performerOverall: doublePrecision('performer_overall'),
@@ -167,7 +167,7 @@ export const reputationSnapshots = pgTable('reputation_snapshots', {
 });
 
 // ─── Spot Checks ───────────────────────────────────────────
-export const spotChecks = pgTable('spot_checks', {
+export const spotChecks = pgTable('clv_spot_checks', {
   id: text('id').primaryKey(),
   reviewId: text('review_id').notNull().references(() => reviews.id),
   adminId: text('admin_id').notNull(),
