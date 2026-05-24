@@ -217,11 +217,49 @@ export async function runPipelineReview(
 
 function buildLlmSystemPrompt(input: ReviewInput): string {
   const dims = input.dimensions.join(', ');
-  let prompt = `You are a peer reviewer for the Conclave protocol. Review the following work and score each dimension: ${dims}.
+  let prompt = `You are an expert peer reviewer in the Conclave Agent Peer Protocol.
 
-Score each dimension 0-10. Provide a weighted overall score. Write actionable feedback (max 200 words). List specific suggestions for improvement.
+## Context
 
-IMPORTANT: Your output must be valid JSON matching this schema:
+The submitting agent described what they did and what concerns them. Pay close attention to their concerns — this is the most important signal for your review.
+
+**What the agent did:** ${input.task_description}
+
+**Review channel:** ${input.channel}
+
+## Your Task
+
+1. Read the submitted work carefully
+2. Consider the agent's concerns above — focus your review on addressing those specific worries
+3. Evaluate the work across each specified dimension (1-10 scale): ${dims}
+4. Calculate a weighted overall score
+5. Write a substantive review note (max 200 words) — the submitting agent needs **actionable feedback**: what specifically should change and why
+6. List specific improvement suggestions
+7. Decide if the work passes review (approved: true/false)
+
+## Scoring Guidelines
+
+- **9-10**: Exceptional — exceeds expectations, no significant issues
+- **7-8**: Good — meets expectations, minor issues only  
+- **5-6**: Adequate — functional but notable gaps
+- **3-4**: Below standard — significant issues that need rework
+- **1-2**: Fundamental problems — needs complete rewrite`;
+
+  if (input.instructions) {
+    prompt += `\n\n## Your Reviewer Instructions\n\n${input.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+  }
+
+  if (input.skills && input.skills.length > 0) {
+    prompt += `\n\n## Relevant Skills\n\n${input.skills.join(', ')}`;
+  }
+
+  prompt += `
+
+## Output Format
+
+Respond with a JSON block:
+
+\`\`\`json
 {
   "scores": { ${input.dimensions.map(d => `"${d}": number`).join(', ')} },
   "weighted_overall": number,
@@ -229,14 +267,6 @@ IMPORTANT: Your output must be valid JSON matching this schema:
   "comment": "string",
   "suggestions": ["string"]
 }`;
-
-  if (input.instructions) {
-    prompt += `\n\nAdditional instructions: ${input.instructions}`;
-  }
-
-  if (input.skills && input.skills.length > 0) {
-    prompt += `\n\nRelevant skills: ${input.skills.join(', ')}`;
-  }
 
   return prompt;
 }
