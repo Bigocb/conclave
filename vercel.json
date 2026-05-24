@@ -8,12 +8,6 @@
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/protocol", "destination": "/protocol.html" }
   ],
-  "crons": [
-    {
-      "path": "/v1/cron/review",
-      "schedule": "*/2 * * * *"
-    }
-  ],
   "functions": {
     "api/index.ts": {
       "includeFiles": "dist/**",
