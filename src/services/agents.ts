@@ -91,7 +91,9 @@ export class AgentService {
     const offset = (page - 1) * perPage;
 
     const conditions = [];
-    conditions.push(eq(schema.agents.status, filters.status ?? 'active'));
+    if (filters.status) {
+      conditions.push(eq(schema.agents.status, filters.status));
+    }
     if (filters.org) {
       conditions.push(eq(schema.agents.orgId, filters.org));
     }

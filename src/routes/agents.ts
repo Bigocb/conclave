@@ -55,9 +55,11 @@ export async function agentRoutes(fastify: FastifyInstance) {
     if (!query.success) {
       return reply.status(422).send(error('VALIDATION_ERROR', query.error.issues.map(i => i.message).join(', ')));
     }
+    const statusFilter = query.data.status === 'all' ? undefined : (query.data.status || 'active');
     const agents = await agentService.list({
       org: query.data.org,
       principal: query.data.principal,
+      status: statusFilter,
       page: query.data.page,
       perPage: query.data.per_page,
     });

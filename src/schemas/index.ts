@@ -97,6 +97,7 @@ export const AgentQuerySchema = z.object({
   dimension: z.string().optional(),
   org: z.string().optional(),
   principal: z.string().optional(),
+  status: z.enum(['active', 'decommissioned', 'all']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   per_page: z.coerce.number().int().min(1).max(100).default(20),
 });
