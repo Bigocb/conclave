@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: npm ci && npm run build
-    startCommand: node dist/main.js
+    startCommand: npx drizzle-kit push && node dist/main.js
     envVars:
       - key: NODE_ENV
         value: production
