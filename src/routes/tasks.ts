@@ -87,7 +87,54 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
     if (!task) return reply.code(404).send(error(ERROR_CODES.TASK_NOT_FOUND.code, 'Task not found'));
 
     const reviews = await taskSvc.getReviewsForTask(id);
-    reply.send(success({ ...task, reviews_received: reviews.length, reviews }));
+
+    // Compute review summary — aggregate scores, approval rate, top suggestions
+    const review_summary = reviews.length > 0 ? (() => {
+      const dimensionScores: Record<string, number[]> = {};
+      let overallSum = 0;
+      let approvalCount = 0;
+      let confidenceSum = 0;
+      const allSuggestions: string[] = [];
+
+      for (const r of reviews) {
+        if (r.scores && typeof r.scores === 'object') {
+          for (const [dim, val] of Object.entries(r.scores)) {
+            if (!dimensionScores[dim]) dimensionScores[dim] = [];
+            dimensionScores[dim].push(Number(val) || 0);
+          }
+        }
+        overallSum += r.weighted_overall ?? 0;
+        confidenceSum += r.reviewer_confidence ?? 0;
+        if (r.approved) approvalCount++;
+        if (Array.isArray(r.suggestions)) allSuggestions.push(...r.suggestions);
+      }
+
+      const avgScores: Record<string, number> = {};
+      for (const [dim, vals] of Object.entries(dimensionScores)) {
+        avgScores[dim] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+      }
+
+      // Deduplicate and take top 5 suggestions
+      const seen = new Set<string>();
+      const topSuggestions = allSuggestions.filter(s => {
+        const key = s.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 5);
+
+      return {
+        review_count: reviews.length,
+        avg_overall: Math.round((overallSum / reviews.length) * 10) / 10,
+        avg_scores: avgScores,
+        approval_rate: Math.round((approvalCount / reviews.length) * 100),
+        avg_confidence: Math.round((confidenceSum / reviews.length) * 100) / 100,
+        top_suggestions: topSuggestions,
+        approved: approvalCount >= Math.ceil(reviews.length / 2), // majority rule
+      };
+    })() : null;
+
+    reply.send(success({ ...task, reviews_received: reviews.length, reviews, review_summary }));
   });
 
   // GET /v1/tasks
