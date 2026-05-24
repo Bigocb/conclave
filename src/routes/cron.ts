@@ -1,8 +1,9 @@
 /**
  * Conclave — Cron Review Endpoint
  *
- * Single-sweep reviewer: called by Vercel Cron every 2 minutes.
- * Also callable manually: GET/POST /v1/cron/review
+ * Single-review per invocation — designed for Hobby plan (10s timeout).
+ * Called by GitHub Actions every 2 minutes.
+ * Picks ONE reviewer with ONE open task, calls LLM, submits review.
  * Protected by CRON_SECRET env var.
  */
 
@@ -12,7 +13,7 @@ import { tasks, reviews, principals, agents, channels, channelSubscriptions } fr
 
 export async function cronRoutes(fastify: FastifyInstance) {
 
-  // GET/POST /v1/cron/review — Single review sweep
+  // GET/POST /v1/cron/review — Single review (one reviewer, one task)
   fastify.all('/cron/review', async (request, reply) => {
     // Verify cron secret if set
     const cronSecret = process.env.CRON_SECRET;
@@ -28,46 +29,32 @@ export async function cronRoutes(fastify: FastifyInstance) {
 
     const startTime = Date.now();
     const db = (fastify as any).db;
-    const results: any[] = [];
+    const ollamaKey = process.env.OLLAMA_KEY || '';
+
+    // Reviewer definitions — add more here to scale
+    const REVIEWERS = [
+      {
+        name: 'Code Reviewer',
+        channels: ['general-qa', 'code-review'],
+        model: 'deepseek-v4-flash',
+        provider: 'ollama_cloud',
+        llm_url: 'https://www.ollama.com/v1',
+        instructions: 'You are a senior code reviewer. Focus on correctness, security, performance, and readability. Cite specific lines. Be constructive and specific. Max 200 words.',
+      },
+      {
+        name: 'General Reviewer',
+        channels: ['general-qa', 'code-review'],
+        model: 'glm-5.1',
+        provider: 'ollama_cloud',
+        llm_url: 'https://www.ollama.com/v1',
+        instructions: 'Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most.',
+      },
+    ];
 
     try {
-      // Load fleet config from env, fall back to defaults
-      const fleetJson = process.env.FLEET_CONFIG;
-      let reviewers: any[];
-      if (fleetJson) {
-        reviewers = JSON.parse(fleetJson).reviewers;
-      } else {
-        const ollamaKey = process.env.OLLAMA_KEY || '';
-        reviewers = [
-          {
-            name: 'Code Reviewer',
-            channels: ['general-qa', 'code-review'],
-            model: 'deepseek-v4-flash',
-            provider: 'ollama_cloud',
-            llm_url: 'https://www.ollama.com/v1',
-            llm_key: ollamaKey,
-            mode: 'auto',
-            instructions: 'You are a senior code reviewer. Focus on correctness, security, performance, and readability. Cite specific lines. Be constructive and specific. Max 200 words.',
-            skills: ['security-audit', 'system-design'],
-          },
-          {
-            name: 'General Reviewer',
-            channels: ['general-qa', 'code-review'],
-            model: 'glm-5.1',
-            provider: 'ollama_cloud',
-            llm_url: 'https://www.ollama.com/v1',
-            llm_key: ollamaKey,
-            mode: 'auto',
-            instructions: 'Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most.',
-            skills: ['reasoning'],
-          },
-        ];
-      }
-
-      for (const reviewer of reviewers) {
-        const ollamaKey = process.env.OLLAMA_KEY || '';
-
-        // 1. Get or create principal
+      // ── Pick ONE reviewer that has an open, unreviewed task ──
+      for (const reviewer of REVIEWERS) {
+        // Get or create principal
         let principalId: string;
         const existingPrincipals = await db.select().from(principals).where(eq(principals.name, reviewer.name));
         if (existingPrincipals.length > 0) {
@@ -76,12 +63,12 @@ export async function cronRoutes(fastify: FastifyInstance) {
           const [newPrin] = await db.insert(principals).values({
             name: reviewer.name,
             capabilities: JSON.stringify(['review']),
-            metadata: JSON.stringify({ fleet: true, mode: reviewer.mode, model: reviewer.model }),
+            metadata: JSON.stringify({ fleet: true, model: reviewer.model }),
           }).returning({ id: principals.id });
           principalId = newPrin.id;
         }
 
-        // 2. Get or create agent
+        // Get or create agent
         const existingAgents = await db.select().from(agents).where(
           and(eq(agents.principalId, principalId), eq(agents.name, `${reviewer.name} #1`))
         );
@@ -92,17 +79,16 @@ export async function cronRoutes(fastify: FastifyInstance) {
           const [newAgent] = await db.insert(agents).values({
             principalId,
             name: `${reviewer.name} #1`,
-            type: reviewer.type || 'llm',
+            type: 'llm',
             model: reviewer.model,
             provider: reviewer.provider,
             llmUrl: reviewer.llm_url,
             instructions: reviewer.instructions,
-            skills: JSON.stringify(reviewer.skills || []),
           }).returning({ id: agents.id });
           agentId = newAgent.id;
         }
 
-        // 3. Subscribe to channels (idempotent)
+        // Ensure subscribed to channels
         for (const channelName of reviewer.channels) {
           const chList = await db.select().from(channels).where(eq(channels.name, channelName));
           if (chList.length > 0) {
@@ -116,35 +102,28 @@ export async function cronRoutes(fastify: FastifyInstance) {
           }
         }
 
-        // 4. Find open tasks in reviewer channels
-        const reviewed: string[] = [];
+        // Find first open task in reviewer channels that this principal hasn't reviewed
         for (const channelName of reviewer.channels) {
-          // Tasks use 'channel' as a text field (channel name), not a FK
           const openTasks = await db.select().from(tasks).where(
             and(eq(tasks.channel, channelName), eq(tasks.status, 'open'))
           );
 
           for (const task of openTasks) {
-            // Check if this principal already reviewed this task
             const existingReviews = await db.select().from(reviews).where(
               and(eq(reviews.taskId, task.id), eq(reviews.principalId, principalId))
             );
-            if (existingReviews.length > 0) continue;
+            if (existingReviews.length > 0) continue; // Already reviewed
 
-            // Build prompt
+            // ── Found a task! Call LLM and submit review ──
             const dimensions = task.dimensions ? JSON.parse(task.dimensions) : ['correctness', 'readability', 'security', 'performance'];
             const prompt = `Review the following ${task.outputFormat || 'code'} for ${dimensions.join(', ')}.\n\nTask: ${task.description}\n\nOutput to review:\n${task.output || 'No output provided'}\n\nRespond with ONLY a JSON block:\n\`\`\`json\n{\n  "scores": {${dimensions.map((d: string) => `"${d}": <1-10>`).join(', ')}},\n  "weighted_overall": <1-10>,\n  "reviewer_confidence": <0.0-1.0>,\n  "comment": "<detailed review, max 500 words>",\n  "suggestions": ["<suggestion 1>", "<suggestion 2>"]\n}\n\`\`\``;
 
-            // Call LLM
-            const llmUrl = reviewer.llm_url || 'https://www.ollama.com/v1';
-            const llmKey = reviewer.llm_key || ollamaKey;
-
             try {
-              const llmRes = await fetch(`${llmUrl}/chat/completions`, {
+              const llmRes = await fetch(`${reviewer.llm_url}/chat/completions`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  ...(llmKey ? { 'Authorization': `Bearer ${llmKey}` } : {}),
+                  ...(ollamaKey ? { 'Authorization': `Bearer ${ollamaKey}` } : {}),
                 },
                 body: JSON.stringify({
                   model: reviewer.model,
@@ -155,22 +134,28 @@ export async function cronRoutes(fastify: FastifyInstance) {
                   temperature: 0.3,
                   max_tokens: 1500,
                 }),
+                signal: AbortSignal.timeout(8000), // 8s LLM timeout — fits in 10s Vercel limit
               });
 
               if (!llmRes.ok) {
                 const errBody = await llmRes.text().catch(() => '');
-                results.push({ reviewer: reviewer.name, task: task.id, error: `LLM ${llmRes.status}: ${errBody.slice(0, 200)}` });
-                continue;
+                return reply.send({
+                  status: 'llm_error',
+                  reviewer: reviewer.name,
+                  task: task.id,
+                  http_status: llmRes.status,
+                  error: errBody.slice(0, 200),
+                  duration_ms: Date.now() - startTime,
+                });
               }
 
               const llmJson = await llmRes.json() as any;
               const content = llmJson.choices?.[0]?.message?.content || '';
               if (!content) {
-                results.push({ reviewer: reviewer.name, task: task.id, error: 'Empty LLM response' });
-                continue;
+                return reply.send({ status: 'empty_response', reviewer: reviewer.name, task: task.id, duration_ms: Date.now() - startTime });
               }
 
-              // Parse LLM response (handles markdown code fences, truncated JSON)
+              // Parse LLM response
               let parsed: any = null;
               const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
               const jsonStr = jsonMatch ? jsonMatch[1] : content;
@@ -179,7 +164,6 @@ export async function cronRoutes(fastify: FastifyInstance) {
                 try {
                   parsed = JSON.parse(jsonStr.slice(braceStart));
                 } catch {
-                  // Nested brace tracking for truncated JSON
                   let depth = 0, end = -1;
                   for (let i = braceStart; i < jsonStr.length; i++) {
                     if (jsonStr[i] === '{') depth++;
@@ -190,8 +174,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
               }
 
               if (!parsed) {
-                results.push({ reviewer: reviewer.name, task: task.id, error: 'Could not parse LLM response' });
-                continue;
+                return reply.send({ status: 'parse_error', reviewer: reviewer.name, task: task.id, raw: content.slice(0, 300), duration_ms: Date.now() - startTime });
               }
 
               // Normalize confidence (0-10 → 0-1)
@@ -204,7 +187,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
                 ? (Object.values(scores) as number[]).reduce((a: number, b: number) => a + b, 0) / Object.values(scores).length
                 : 5;
 
-              // Insert review directly into DB
+              // Insert review
               await db.insert(reviews).values({
                 taskId: task.id,
                 reviewerId: agentId,
@@ -218,38 +201,49 @@ export async function cronRoutes(fastify: FastifyInstance) {
                 status: 'submitted',
               });
 
-              reviewed.push(task.id);
-
-              // Check if task has enough reviews
+              // Check if task has enough reviews → complete it
               const taskReviews = await db.select().from(reviews).where(eq(reviews.taskId, task.id));
               const requestedReviews = task.requestedReviews || 3;
               if (taskReviews.length >= requestedReviews) {
                 await db.update(tasks).set({ status: 'completed', reviewsReceived: taskReviews.length, updatedAt: new Date().toISOString() }).where(eq(tasks.id, task.id));
               }
 
+              return reply.send({
+                status: 'reviewed',
+                reviewer: reviewer.name,
+                task: task.id,
+                channel: channelName,
+                scores,
+                approved: parsed.approved ?? avgScore >= 7,
+                confidence,
+                duration_ms: Date.now() - startTime,
+              });
+
             } catch (llmErr: any) {
-              results.push({ reviewer: reviewer.name, task: task.id, error: `LLM call failed: ${llmErr.message}` });
+              return reply.send({
+                status: 'llm_error',
+                reviewer: reviewer.name,
+                task: task.id,
+                error: llmErr.message,
+                duration_ms: Date.now() - startTime,
+              });
             }
           }
         }
-
-        if (reviewed.length > 0) {
-          results.push({ reviewer: reviewer.name, reviewed });
-        }
       }
 
+      // No open tasks found
       return reply.send({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
+        status: 'idle',
+        message: 'No open tasks to review',
         duration_ms: Date.now() - startTime,
-        results,
       });
 
     } catch (err: any) {
-      console.error('Cron review error:', err);
       return reply.code(500).send({
         status: 'error',
         message: err.message,
+        duration_ms: Date.now() - startTime,
       });
     }
   });
