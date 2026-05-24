@@ -127,6 +127,7 @@ async function callLLM(opts: {
       ],
       temperature: 0.3,
       max_tokens: 2000,
+      response_format: { type: 'json_object' },
     }),
   });
 
@@ -455,14 +456,25 @@ export class ReviewerWorker {
       this.totalReviewed++;
     } catch (err: any) {
       console.error(`  ❌ Review failed for task ${task.id}:`, err.message);
-      // Put task back to open so it can be retried
-      try {
+      // Increment retry counter — if too many failures, mark as failed permanently
+      const meta = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+      const attempts = (meta.review_attempts || 0) + 1;
+      const maxAttempts = 3;
+      if (attempts >= maxAttempts) {
+        console.log(`  💀 Task ${task.id} failed ${attempts} times — marking as failed`);
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_error: err.message })}::jsonb
+          SET status = 'failed', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message })}::jsonb
           WHERE id = ${task.id}
         `;
-      } catch { /* best effort */ }
+      } else {
+        // Put task back to open with retry counter
+        await this.sql`
+          UPDATE clv_tasks
+          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message })}::jsonb
+          WHERE id = ${task.id}
+        `;
+      }
     } finally {
       this.activeReviews--;
     }
