@@ -1,23 +1,15 @@
 /**
  * Conclave — Reviewer Worker (PG LISTEN/NOTIFY + SKIP LOCKED)
  *
- * Standalone process that connects directly to PostgreSQL, LISTENs for
- * `new_task` notifications, picks up pending tasks with SELECT FOR UPDATE
- * SKIP LOCKED (preventing duplicate reviews across workers), calls the
- * configured LLM backend, and writes the review back to the database.
+ * Channel-aware dispatcher: picks up open tasks, finds which principals
+ * are subscribed to the task's channel, selects one of their agents,
+ * and uses that agent's model + instructions for the LLM call.
  *
- * Why this exists:
- *   - The HTTP-based FleetManager polls every N seconds — high latency.
- *   - The GitHub Actions cron splits into /v1/cron/next + /v1/cron/submit
- *     with LLM calls in Actions YAML — fragile escaping, 6h cold starts.
- *   - This worker runs as a persistent process next to (or on) the server,
- *     gets instant notification via pg_notify, and uses the same PG connection
- *     the app already uses. No new infra.
+ * Task lifecycle: open → in_review → completed (after requested_reviews met)
  *
  * Usage:
- *   npx tsx src/workers/reviewer.ts
  *   DATABASE_URL=postgres://... npx tsx src/workers/reviewer.ts
- *   npx tsx src/workers/reviewer.ts --config fleet.yaml
+ *   DATABASE_URL=postgres://... npx tsx src/workers/reviewer.ts --config fleet.yaml
  */
 
 import postgres from 'postgres';
@@ -29,66 +21,78 @@ import { resolve } from 'path';
 
 export interface WorkerConfig {
   databaseUrl: string;
-  /** OpenAI-compatible chat completions endpoint */
   llmUrl: string;
-  /** API key for the LLM endpoint */
   llmKey: string;
-  /** Model name (e.g. 'deepseek-v4-flash') */
   model: string;
-  /** Review mode: auto | human | hybrid */
   mode: 'auto' | 'human' | 'hybrid';
-  /** Confidence threshold for hybrid mode (0-1). Auto-submit if >= threshold. */
-  confidenceThreshold: number;
-  /** Max concurrent LLM calls */
   maxConcurrent: number;
-  /** Poll interval (seconds) as fallback when LISTEN disconnects */
-  pollInterval: number;
-  /** Custom system prompt */
+  pollInterval: number;      // seconds
+  confidenceThreshold: number;
   systemPrompt?: string;
 }
 
-const DEFAULT_CONFIG: Partial<WorkerConfig> = {
-  llmUrl: process.env.OLLAMA_URL || 'https://www.ollama.com/v1',
-  llmKey: process.env.OLLAMA_KEY || '',
-  model: process.env.REVIEWER_MODEL || 'deepseek-v4-flash',
+const DEFAULT_CONFIG: WorkerConfig = {
+  databaseUrl: '',
+  llmUrl: 'https://www.ollama.com/v1',
+  llmKey: '',
+  model: 'deepseek-v4-flash',
   mode: 'auto',
-  confidenceThreshold: 0.7,
   maxConcurrent: 3,
-  pollInterval: 30,
+  pollInterval: 15,
+  confidenceThreshold: 0.7,
 };
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const args: Record<string, string> = {};
-  for (let i = 2; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) {
-      const key = argv[i].slice(2).replace(/-./g, s => s[1].toUpperCase());
-      args[key] = argv[i + 1] ?? '';
-      i++;
-    }
-  }
-  return args;
+const DEFAULT_REVIEW_PROMPT = `You are a senior code reviewer. Analyze the output for quality, correctness, and completeness.
+
+Score each requested dimension from 1-10 (integers only). Provide a weighted overall score (1-10).
+Rate your confidence in this review (0-1, where 1 = very confident).
+Give a concise comment (20-1500 chars) and specific suggestions.
+
+Respond in EXACTLY this JSON format (no markdown, no backticks):
+{
+  "scores": { "dimension_name": 7 },
+  "weighted_overall": 7,
+  "reviewer_confidence": 0.8,
+  "comment": "Your review comment here",
+  "suggestions": ["Suggestion 1", "Suggestion 2"],
+  "approved": true
+}`;
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface AgentRow {
+  id: string;
+  principal_id: string;
+  org_id: string;
+  name: string;
+  model: string | null;
+  provider: string | null;
+  llm_url: string | null;
+  instructions: string | null;
+  skills: string | null;
+  type: string | null;
+  status: string;
 }
 
-function loadConfigFromYaml(path: string): Partial<WorkerConfig> {
-  // Minimal YAML parsing for fleet.yaml — just enough to extract reviewer settings
-  // For full config, use the FleetManager's parseFleetConfig
-  if (!existsSync(path)) return {};
-  const raw = readFileSync(path, 'utf-8');
-  const config: Partial<WorkerConfig> = {};
-  // Extract server/reviewer fields from fleet.yaml
-  const serverMatch = raw.match(/server:\s*["']?([^"'\n]+)/);
-  if (serverMatch) config.llmUrl = serverMatch[1];
-  // Use the first reviewer found
-  const modelMatch = raw.match(/model:\s*["']?([^"'\n]+)/);
-  if (modelMatch) config.model = modelMatch[1];
-  const modeMatch = raw.match(/mode:\s*["']?([^"'\n]+)/);
-  if (modeMatch) config.mode = modeMatch[1] as WorkerConfig['mode'];
-  return config;
+interface ChannelSubRow {
+  principal_id: string;
+  channel_id: string;
+  channel_name: string;
 }
 
-// ─── LLM Client ───────────────────────────────────────────────
+interface TaskRow {
+  id: string;
+  agent_id: string;
+  principal_id: string;
+  description: string;
+  output: string;
+  dimensions: any;
+  channel: string;
+  metadata: any;
+  requested_reviews: number;
+}
 
-interface LLMResponse {
+interface ReviewResult {
   scores: Record<string, number>;
   weighted_overall: number;
   reviewer_confidence: number;
@@ -97,25 +101,7 @@ interface LLMResponse {
   approved: boolean;
 }
 
-const DEFAULT_REVIEW_PROMPT = `You are a quality reviewer for AI agent outputs. Evaluate the task output on these dimensions:
-- relevance (1-10): Does the output address the task description?
-- accuracy (1-10): Is the output factually correct?
-- completeness (1-10): Does the output cover all aspects requested?
-- clarity (1-10): Is the output well-structured and easy to understand?
-
-Respond ONLY with a JSON block:
-\`\`\`json
-{
-  "scores": { "relevance": N, "accuracy": N, "completeness": N, "clarity": N },
-  "weighted_overall": N,
-  "reviewer_confidence": N,
-  "comment": "Brief review comment (20-1500 chars)",
-  "suggestions": ["suggestion1", "suggestion2"],
-  "approved": true_or_false
-}
-\`\`\`
-
-Approve if weighted_overall >= 7. Confidence is 0-10 scale (will be normalized to 0-1).`;
+// ─── LLM Call ────────────────────────────────────────────────
 
 async function callLLM(opts: {
   url: string;
@@ -123,16 +109,8 @@ async function callLLM(opts: {
   model: string;
   systemPrompt: string;
   userMessage: string;
-  signal?: AbortSignal;
 }): Promise<string> {
-  let endpoint = opts.url.replace(/\/$/, '');
-  if (endpoint.endsWith('/v1')) {
-    endpoint += '/chat/completions';
-  } else if (!endpoint.includes('/chat/completions')) {
-    endpoint += '/v1/chat/completions';
-  }
-
-  const resp = await fetch(endpoint, {
+  const res = await fetch(`${opts.url.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -147,38 +125,90 @@ async function callLLM(opts: {
       temperature: 0.3,
       max_tokens: 2000,
     }),
-    signal: opts.signal,
   });
 
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    throw new Error(`LLM API error ${resp.status}: ${body.slice(0, 200)}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`LLM ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  const data = await resp.json() as any;
-  return data.choices?.[0]?.message?.content ?? '';
+  const data = await res.json() as any;
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) throw new Error('Empty LLM response');
+  return content;
 }
 
-function parseReviewResponse(raw: string): LLMResponse | null {
-  try {
-    const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    const obj = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
+// ─── Parse review ─────────────────────────────────────────────
 
+function parseReviewResponse(raw: string): ReviewResult | null {
+  // Strip markdown fences
+  let cleaned = raw.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  }
+
+  try {
+    const parsed = JSON.parse(cleaned);
     return {
-      scores: obj.scores ?? {},
-      weighted_overall: obj.weighted_overall ?? obj.overall ?? 0,
-      reviewer_confidence: obj.reviewer_confidence ?? obj.confidence ?? 5,
-      comment: obj.comment ?? obj.review ?? '',
-      suggestions: obj.suggestions ?? [],
-      approved: obj.approved ?? (obj.weighted_overall ?? obj.overall ?? 0) >= 7,
+      scores: parsed.scores ?? {},
+      weighted_overall: parsed.weighted_overall ?? parsed.overall ?? 5,
+      reviewer_confidence: parsed.reviewer_confidence ?? parsed.confidence ?? 0.5,
+      comment: parsed.comment ?? parsed.summary ?? '',
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      approved: parsed.approved ?? false,
     };
   } catch {
+    // Try to find JSON object in the response
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          scores: parsed.scores ?? {},
+          weighted_overall: parsed.weighted_overall ?? parsed.overall ?? 5,
+          reviewer_confidence: parsed.reviewer_confidence ?? parsed.confidence ?? 0.5,
+          comment: parsed.comment ?? parsed.summary ?? '',
+          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+          approved: parsed.approved ?? false,
+        };
+      } catch { return null; }
+    }
     return null;
   }
 }
 
-// ─── Reviewer Worker ─────────────────────────────────────────
+// ─── Config Parsing ───────────────────────────────────────────
+
+function parseArgs(argv: string[]): Record<string, string> {
+  const args: Record<string, string> = {};
+  for (let i = 2; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) {
+      const key = argv[i].slice(2);
+      args[key] = argv[++i] ?? 'true';
+    }
+  }
+  return args;
+}
+
+function loadConfigFromYaml(path: string): Partial<WorkerConfig> {
+  // Minimal YAML parser for fleet config (no dependency needed)
+  try {
+    const content = readFileSync(path, 'utf-8');
+    const config: any = {};
+    for (const line of content.split('\n')) {
+      const match = line.match(/^(\w+):\s*(.+)$/);
+      if (match) {
+        const [, key, value] = match;
+        (config as any)[key] = value.trim().replace(/^['"]|['"]$/g, '');
+      }
+    }
+    return config;
+  } catch {
+    return {};
+  }
+}
+
+// ─── Worker ───────────────────────────────────────────────────
 
 export class ReviewerWorker {
   private config: WorkerConfig;
@@ -189,14 +219,88 @@ export class ReviewerWorker {
   private totalReviewed = 0;
   private startTime = 0;
 
-  constructor(config: Partial<WorkerConfig> & { databaseUrl: string }) {
-    this.config = { ...DEFAULT_CONFIG, ...config } as WorkerConfig;
+  // Cached agent/subscription data — refreshed periodically
+  private agentCache = new Map<string, AgentRow>();            // id → agent
+  private channelSubs = new Map<string, ChannelSubRow[]>();   // channel_name → subs
+  private lastCacheRefresh = 0;
+  private cacheTTL = 60_000; // 1 minute
+
+  constructor(config: WorkerConfig) {
+    this.config = config;
   }
 
+  // ─── Cache ──────────────────────────────────────────────────
+
+  private async refreshCache(): Promise<void> {
+    if (Date.now() - this.lastCacheRefresh < this.cacheTTL) return;
+
+    // Load all active agents
+    const agents = await this.sql`SELECT id, principal_id, org_id, name, model, provider, llm_url, instructions, skills, type, status FROM clv_agents WHERE status = 'active'`;
+    this.agentCache.clear();
+    for (const a of agents) {
+      this.agentCache.set((a as any).id, a as any);
+    }
+
+    // Load channel subscriptions with channel names
+    const subs = await this.sql`SELECT cs.principal_id, cs.channel_id, ch.name FROM clv_channel_subscriptions cs JOIN clv_channels ch ON ch.id = cs.channel_id`;
+
+    this.channelSubs.clear();
+    for (const s of subs) {
+      const list = this.channelSubs.get((s as any).name) ?? [];
+      list.push(s as any);
+      this.channelSubs.set((s as any).name, list);
+    }
+
+    this.lastCacheRefresh = Date.now();
+    console.log(`  📋 Cache refreshed: ${this.agentCache.size} agents, ${this.channelSubs.size} channels subscribed`);
+  }
+
+  /** Find eligible agents for a task's channel, excluding agents that already reviewed */
+  private async findEligibleAgent(task: TaskRow): Promise<(AgentRow & { principal_id: string }) | null> {
+    await this.refreshCache();
+
+    // 1. Find principals subscribed to this channel
+    const subs = this.channelSubs.get(task.channel) ?? [];
+
+    // 2. Get agents belonging to those principals
+    const eligible = subs
+      .map(sub => this.agentCache.get(sub.principal_id) ?? Array.from(this.agentCache.values()).find(a => a.principal_id === sub.principal_id))
+      .filter((a): a is AgentRow & { principal_id: string } => {
+        if (!a) return false;
+        // Can't review your own task (different principal)
+        if (a.principal_id === task.principal_id) return false;
+        // Must have an LLM config
+        if (!a.model && !this.config.model) return false;
+        return true;
+      });
+
+    if (eligible.length === 0) return null;
+
+    // 3. Exclude agents that already reviewed this task
+    const existingReviews = await this.sql`
+      SELECT reviewer_id FROM clv_reviews WHERE task_id = ${task.id}
+    `;
+    const reviewedBy = new Set(existingReviews.map((r: any) => r.reviewer_id));
+
+    const notYetReviewed = eligible.filter(a => !reviewedBy.has(a.id));
+
+    // 4. If we still have candidates, pick one (round-robin via random for now)
+    if (notYetReviewed.length > 0) {
+      return notYetReviewed[Math.floor(Math.random() * notYetReviewed.length)];
+    }
+
+    // All subscribed agents already reviewed — fall back to worker's default agent
+    return null;
+  }
+
+  // ─── Lifecycle ──────────────────────────────────────────────
+
   async start(): Promise<void> {
+    console.log('');
     console.log('╔══════════════════════════════════════════╗');
     console.log('║     CONCLAVE REVIEWER WORKER            ║');
-    console.log('╚══════════════════════════════════════════╝\n');
+    console.log('╚══════════════════════════════════════════╝');
+    console.log('');
     console.log(`  DB:     ${this.config.databaseUrl.replace(/:[^:@]+@/, ':***@')}`);
     console.log(`  LLM:    ${this.config.llmUrl}`);
     console.log(`  Model:  ${this.config.model}`);
@@ -214,6 +318,9 @@ export class ReviewerWorker {
     // Test connection
     await this.sql`SELECT 1 as ok`;
     console.log('  ✅ Database connected\n');
+
+    // Load initial cache
+    await this.refreshCache();
 
     // Start LISTEN
     await this.startListening();
@@ -253,11 +360,6 @@ export class ReviewerWorker {
 
   async stop(): Promise<void> {
     this.running = false;
-    if (this.listening) {
-      // postgres-js listen returns a handle with unlisten()
-      // Since we used sql.listen(), we don't need to UNLISTEN manually
-      // The connection will be cleaned up on sql.end()
-    }
     await this.sql.end();
     console.log('🛑 Worker stopped');
   }
@@ -265,8 +367,6 @@ export class ReviewerWorker {
   // ─── PG LISTEN ────────────────────────────────────────────
 
   private async startListening(): Promise<void> {
-    // postgres-js listen API: sql.listen(channel, onnotify, onlisten?)
-    // Creates a dedicated connection that auto-reconnects
     await this.sql.listen('new_task', (payload: string) => {
       if (payload) {
         console.log(`\n📡 Received notification for task: ${payload}`);
@@ -304,33 +404,33 @@ export class ReviewerWorker {
   private async processNextTask(): Promise<void> {
     if (this.activeReviews >= this.config.maxConcurrent) return;
 
-    // SELECT FOR UPDATE SKIP LOCKED — atomic task pickup
-    // This prevents duplicate reviews across multiple worker instances
+    // Pick up a task that still needs reviews
+    // status='open' = no reviews yet, status='in_review' = has some but needs more
     const result = await this.sql`
       UPDATE clv_tasks
       SET status = 'in_review'
       WHERE id = (
-        SELECT id FROM clv_tasks
-        WHERE status = 'open'
-        ORDER BY priority DESC, created_at ASC
+        SELECT t.id FROM clv_tasks t
+        WHERE t.status IN ('open', 'in_review')
+        ORDER BY t.priority DESC, t.created_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, agent_id, principal_id, description, output, dimensions, channel, metadata
+      RETURNING id, agent_id, principal_id, description, output, dimensions, channel, metadata, requested_reviews
     `;
 
-    if (result.length === 0) return; // No pending tasks
+    if (result.length === 0) return;
 
-    const task = result[0];
+    const task = result[0] as any as TaskRow;
     this.activeReviews++;
 
     try {
       console.log(`  🎯 Reviewing task ${task.id}: ${(task.description || '').slice(0, 60)}...`);
-      await this.reviewTask(task as any);
+      await this.reviewTask(task);
       this.totalReviewed++;
     } catch (err: any) {
       console.error(`  ❌ Review failed for task ${task.id}:`, err.message);
-      // Mark task as failed so it can be retried
+      // Put task back to open so it can be retried
       try {
         await this.sql`
           UPDATE clv_tasks
@@ -345,16 +445,25 @@ export class ReviewerWorker {
 
   // ─── Review a task ────────────────────────────────────────
 
-  private async reviewTask(task: {
-    id: string;
-    agent_id: string;
-    principal_id: string;
-    description: string;
-    output: string;
-    dimensions: any;
-    channel: string;
-    metadata: any;
-  }): Promise<void> {
+  private async reviewTask(task: TaskRow): Promise<void> {
+    // Find an eligible agent for this task's channel
+    const agent = await this.findEligibleAgent(task);
+
+    if (!agent) {
+      console.log(`  ⏭️  No eligible agent for channel '${task.channel}' — skipping task ${task.id}`);
+      // Put it back to open so it can be picked up later or by a default worker
+      await this.sql`UPDATE clv_tasks SET status = 'open' WHERE id = ${task.id}`;
+      return;
+    }
+
+    console.log(`  🤖 Using agent ${agent.name} (${agent.model || this.config.model}) for principal ${agent.principal_id}`);
+
+    // Determine LLM config — agent-specific or fallback to worker defaults
+    const llmUrl = agent.llm_url || this.config.llmUrl;
+    const llmKey = this.config.llmKey; // API key is worker-level, not per-agent
+    const model = agent.model || this.config.model;
+    const systemPrompt = agent.instructions || this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
+
     // Build LLM prompt
     const dims = Array.isArray(task.dimensions)
       ? task.dimensions
@@ -367,13 +476,11 @@ export class ReviewerWorker {
       `\n## Channel\n${task.channel || 'default'}`,
     ].filter(Boolean).join('\n');
 
-    const systemPrompt = this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
-
     // Call LLM
     const rawResponse = await callLLM({
-      url: this.config.llmUrl,
-      key: this.config.llmKey,
-      model: this.config.model,
+      url: llmUrl,
+      key: llmKey,
+      model,
       systemPrompt,
       userMessage,
     });
@@ -395,7 +502,7 @@ export class ReviewerWorker {
         approved = review.approved;
         break;
       case 'human':
-        approved = false; // Always queue for human review
+        approved = false;
         break;
       case 'hybrid':
         approved = confidence >= this.config.confidenceThreshold ? review.approved : false;
@@ -404,34 +511,17 @@ export class ReviewerWorker {
         approved = review.approved;
     }
 
-    // Write review to DB (raw SQL — reviewer_id is a FK to agents, but the worker
-    // may not be a registered agent. We use a synthetic reviewer_id pattern.)
-    // If the worker's reviewer_id doesn't exist in clv_agents, we insert a stub.
+    // Write review under the real agent and principal
     const reviewId = `rev_${randomUUID()}`;
-    const reviewerId = `worker_${this.config.model.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
     const now = new Date().toISOString();
-
-    // Ensure the worker agent exists (idempotent)
-    await this.sql`
-      INSERT INTO clv_agents (id, principal_id, name, model, provider, llm_url, instructions, skills, type, status, created_at, updated_at)
-      VALUES (${reviewerId}, 'prn_system', ${'[Worker] ' + this.config.model}, ${this.config.model}, 'conclave-worker', ${this.config.llmUrl}, 'Automated reviewer worker', '[]', 'worker', 'active', ${now}, ${now})
-      ON CONFLICT (id) DO NOTHING
-    `;
-
-    // Ensure system principal exists (idempotent)
-    await this.sql`
-      INSERT INTO clv_principals (id, name, roles, capabilities, status, created_at, updated_at)
-      VALUES ('prn_system', 'Conclave Worker System', '["system"]', '["review"]', 'active', ${now}, ${now})
-      ON CONFLICT (id) DO NOTHING
-    `;
 
     await this.sql`
       INSERT INTO clv_reviews (id, task_id, reviewer_id, principal_id, scores, weighted_overall, reviewer_confidence, comment, suggestions, approved, status, created_at, updated_at)
       VALUES (
         ${reviewId},
         ${task.id},
-        ${reviewerId},
-        'prn_system',
+        ${agent.id},
+        ${agent.principal_id},
         ${JSON.stringify(review.scores)},
         ${review.weighted_overall},
         ${confidence},
@@ -444,15 +534,20 @@ export class ReviewerWorker {
       )
     `;
 
-    // Mark task as completed
-    await this.sql`
-      UPDATE clv_tasks
-      SET status = 'completed'
-      WHERE id = ${task.id}
+    // Check if we've hit the requested review count
+    const reviewCount = await this.sql`
+      SELECT COUNT(*) as count FROM clv_reviews WHERE task_id = ${task.id}
     `;
+    const currentCount = Number(reviewCount[0]?.count ?? 0);
 
-    const icon = approved ? '✅' : '❌';
-    console.log(`  ${icon} Task ${task.id}: review=${reviewId} overall=${review.weighted_overall} conf=${confidence.toFixed(2)} approved=${approved}`);
+    if (currentCount >= task.requested_reviews) {
+      // All reviews in — mark task completed
+      await this.sql`UPDATE clv_tasks SET status = 'completed' WHERE id = ${task.id}`;
+      console.log(`  ✅ Task ${task.id}: ${currentCount}/${task.requested_reviews} reviews — completed! review=${reviewId} agent=${agent.name}`);
+    } else {
+      // More reviews needed — keep in_review so other agents can pick it up
+      console.log(`  📝 Task ${task.id}: ${currentCount}/${task.requested_reviews} reviews — still in_review. review=${reviewId} agent=${agent.name}`);
+    }
   }
 }
 
@@ -462,7 +557,6 @@ async function main() {
   const args = parseArgs(process.argv);
   const configPath = args.config ?? 'fleet.yaml';
 
-  // Build config: env > yaml > defaults
   const yamlConfig = existsSync(resolve(configPath)) ? loadConfigFromYaml(configPath) : {};
   const databaseUrl = process.env.DATABASE_URL || args.databaseUrl || '';
   if (!databaseUrl) {
