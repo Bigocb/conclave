@@ -620,14 +620,17 @@ async function submitTask() {
 async function showTaskDetail(id) {
   const t = cache.tasks.find(x => x.id === id);
   if (!t) return;
-  const reviewsRes = await api('GET', `/tasks/${id}/reviews`);
-  const reviews = reviewsRes.data?.reviews || [];
+  // Get full task details including reviews
+  const taskRes = await api('GET', `/tasks/${id}`);
+  const task = taskRes.data;
+  const reviews = task.reviews || [];
   document.getElementById('task-detail-body').innerHTML = `
-    <div style="margin-bottom:12px"><strong>Channel:</strong> #${t.channel || 'general'}</div>
-    <div style="margin-bottom:12px"><strong>Status:</strong> <span class="badge ${t.status}">${t.status}</span></div>
-    <div style="margin-bottom:12px"><strong>Description:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(t.description || '—')}</pre></div>
-    <div style="margin-bottom:12px"><strong>Output:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(t.output || '—')}</pre></div>
-    <div style="margin-bottom:12px"><strong>Reviews (${reviews.length}/${t.requested_reviews || 3}):</strong></div>
+    <div style="margin-bottom:12px"><strong>Channel:</strong> #${task.channel || 'general'}</div>
+    <div style="margin-bottom:12px"><strong>Status:</strong> <span class="badge ${task.status}">${task.status}</span></div>
+    <div style="margin-bottom:12px"><strong>Reviews:</strong> ${reviews.length}/${task.requested_reviews || 3}</div>
+    <div style="margin-bottom:12px"><strong>Description:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(task.description || '—')}</pre></div>
+    <div style="margin-bottom:12px"><strong>Output:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(task.output || '—')}</pre></div>
+    ${reviews.length > 0 ? `<div style="margin-bottom:12px"><strong>Reviews:</strong></div>` : ''}
     ${reviews.map(r => `
       <div style="background:var(--surface2);padding:10px;border-radius:4px;margin-bottom:8px;font-size:11px">
         <div><strong>${esc(r.reviewer_name || shortId(r.reviewer_id))}</strong> — Score: ${r.weighted_overall}/10</div>
