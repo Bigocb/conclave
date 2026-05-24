@@ -170,8 +170,30 @@ tr:hover{background:var(--surface2)}
   <div class="card">
     <div class="card-header">
       <h2><span class="icon">👤</span> Principals</h2>
+      <button class="btn btn-primary btn-sm" onclick="toggleForm('principal-form')">+ Principal</button>
     </div>
-    <div class="card-body scrollable" id="principals-list" style="padding:0">
+    <div class="card-body scrollable" style="max-height:400px">
+      <!-- Principal Form (hidden) -->
+      <div id="principal-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--blue);border-radius:6px">
+        <h4 style="font-size:12px;color:var(--blue);margin:0 0 10px;text-transform:uppercase">New Principal</h4>
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="principal-name" placeholder="e.g. MyReviewer">
+        </div>
+        <div class="form-group">
+          <label>Organization</label>
+          <select id="principal-org-select"></select>
+        </div>
+        <div class="form-group">
+          <label>Roles</label>
+          <input type="text" id="principal-roles" value="general-reviewer" placeholder="general-reviewer, code-reviewer (comma-separated)">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createPrincipal()">Create Principal</button>
+          <button class="btn btn-secondary" onclick="toggleForm('principal-form')">Cancel</button>
+        </div>
+      </div>
+
       <table><thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Budget</th></tr></thead><tbody id="principals-tbody"></tbody></table>
     </div>
   </div>
@@ -281,8 +303,52 @@ tr:hover{background:var(--surface2)}
   <div class="card">
     <div class="card-header">
       <h2><span class="icon">🌐</span> Channels & Orgs</h2>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-primary btn-sm" onclick="toggleForm('channel-form')">+ Channel</button>
+        <button class="btn btn-primary btn-sm" onclick="toggleForm('org-form')">+ Org</button>
+      </div>
     </div>
-    <div class="card-body scrollable" style="max-height:300px">
+    <div class="card-body scrollable" style="max-height:400px">
+      <!-- Channel Form (hidden) -->
+      <div id="channel-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px">
+        <h4 style="font-size:12px;color:var(--accent);margin:0 0 10px;text-transform:uppercase">New Channel</h4>
+        <div class="form-group">
+          <label>Name (lowercase, dashes)</label>
+          <input type="text" id="channel-name" placeholder="e.g. general-qa" pattern="[a-z0-9-]+">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="channel-desc" placeholder="General Q&A review channel">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createChannel()">Create Channel</button>
+          <button class="btn btn-secondary" onclick="toggleForm('channel-form')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Org Form (hidden) -->
+      <div id="org-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--purple);border-radius:6px">
+        <h4 style="font-size:12px;color:var(--purple);margin:0 0 10px;text-transform:uppercase">New Organization</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="org-name" placeholder="e.g. Acme Corp">
+          </div>
+          <div class="form-group">
+            <label>Slug (lowercase, dashes)</label>
+            <input type="text" id="org-slug" placeholder="e.g. acme-corp" pattern="[a-z0-9-]+">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description (optional)</label>
+          <input type="text" id="org-desc" placeholder="Optional description">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createOrg()">Create Org</button>
+          <button class="btn btn-secondary" onclick="toggleForm('org-form')">Cancel</button>
+        </div>
+      </div>
+
       <div style="margin-bottom:16px">
         <h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Channels</h3>
         <div id="channels-list"></div>
@@ -1007,6 +1073,118 @@ async function saveReviewerEdit() {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ─── Create Forms ──────────────────────────────────────────────
+function toggleForm(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  // Populate org dropdown when showing principal form
+  if (id === 'principal-form' && isHidden) {
+    populateOrgDropdown();
+  }
+}
+
+async function populateOrgDropdown() {
+  const sel = document.getElementById('principal-org-select');
+  if (!sel) return;
+  try {
+    const res = await api('GET', '/orgs');
+    const orgs = res.data?.organizations || res.data || [];
+    sel.innerHTML = orgs.map(o => `<option value="${o.id}">${o.name} (${o.slug})</option>`).join('');
+    if (orgs.length === 0) {
+      sel.innerHTML = '<option value="">— no orgs yet —</option>';
+    }
+  } catch(e) {
+    sel.innerHTML = '<option value="">— error loading orgs —</option>';
+  }
+}
+
+async function createChannel() {
+  const name = document.getElementById('channel-name').value.trim();
+  const desc = document.getElementById('channel-desc').value.trim();
+  if (!name) { toast('Channel name is required', 'error'); return; }
+  if (!/^[a-z0-9-]+$/.test(name)) { toast('Channel name must be lowercase with dashes only', 'error'); return; }
+
+  try {
+    const res = await api('POST', '/channels', { name, description: desc || undefined });
+    if (res.status === 'success' || res.data) {
+      toast(`Channel "${name}" created!`);
+      document.getElementById('channel-name').value = '';
+      document.getElementById('channel-desc').value = '';
+      toggleForm('channel-form');
+      refresh();
+    } else {
+      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
+    }
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
+
+async function createOrg() {
+  const name = document.getElementById('org-name').value.trim();
+  const slug = document.getElementById('org-slug').value.trim();
+  const desc = document.getElementById('org-desc').value.trim();
+  if (!name) { toast('Organization name is required', 'error'); return; }
+  if (!slug) { toast('Slug is required', 'error'); return; }
+  if (!/^[a-z0-9-]+$/.test(slug)) { toast('Slug must be lowercase with dashes only', 'error'); return; }
+
+  try {
+    const res = await api('POST', '/orgs', { name, slug, description: desc || undefined });
+    if (res.status === 'success' || res.data) {
+      toast(`Org "${name}" created!`);
+      document.getElementById('org-name').value = '';
+      document.getElementById('org-slug').value = '';
+      document.getElementById('org-desc').value = '';
+      toggleForm('org-form');
+      refresh();
+    } else {
+      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
+    }
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
+
+async function createPrincipal() {
+  const name = document.getElementById('principal-name').value.trim();
+  const orgId = document.getElementById('principal-org-select').value;
+  const rolesStr = document.getElementById('principal-roles').value.trim();
+  if (!name) { toast('Principal name is required', 'error'); return; }
+  if (!orgId) { toast('Select an organization first (create one in Channels & Orgs)', 'error'); return; }
+  const roles = rolesStr ? rolesStr.split(',').map(r => r.trim()).filter(Boolean) : ['general-reviewer'];
+
+  try {
+    const res = await api('POST', '/principals', { name, org_id: orgId, roles });
+    if (res.status === 'success' || res.data) {
+      const prnId = res.data.id;
+      toast(`Principal "${name}" created! (${shortId(prnId)})`);
+      document.getElementById('principal-name').value = '';
+      document.getElementById('principal-roles').value = 'general-reviewer';
+
+      // Auto-create an agent for this principal
+      try {
+        const agtRes = await api('POST', `/principals/${prnId}/agents`, { principal_id: prnId, name: `${name}_agent` });
+        if (agtRes.status === 'success' || agtRes.data) {
+          toast(`Agent "${name}_agent" auto-created`, 'success');
+          // Auto-subscribe to general-qa if channel exists
+          try { await api('POST', '/channels/general-qa/subscribe', null, agtRes.data.id); } catch(e) {}
+        }
+      } catch(e) {
+        // Agent creation is optional, don't block
+      }
+
+      toggleForm('principal-form');
+      refresh();
+    } else {
+      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
+    }
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
 </script>
 </body>
 </html>
