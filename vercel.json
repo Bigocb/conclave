@@ -5,6 +5,8 @@
   "rewrites": [
     { "source": "/v1/:match*", "destination": "/api/index" },
     { "source": "/health", "destination": "/api/index" },
+    { "source": "/cron/review", "destination": "/api/cron" },
+    { "source": "/v1/cron/review", "destination": "/api/cron" },
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/protocol", "destination": "/protocol.html" }
   ],
