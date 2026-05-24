@@ -57,6 +57,15 @@ export class ChannelService {
       .where(eq(schema.channelSubscriptions.principalId, principalId));
   }
 
+  async getSubscribers(channelId: string) {
+    const rows = await this.db.select({
+      principalId: schema.channelSubscriptions.principalId,
+      subscribedAt: schema.channelSubscriptions.subscribedAt,
+    }).from(schema.channelSubscriptions)
+      .where(eq(schema.channelSubscriptions.channelId, channelId));
+    return rows;
+  }
+
   async getFeed(channelName: string, limit: number = 20) {
     const tasks = await this.db.select().from(schema.tasks)
       .where(eq(schema.tasks.channel, channelName))

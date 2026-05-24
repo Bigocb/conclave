@@ -134,10 +134,15 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     )`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
-      review_id TEXT NOT NULL REFERENCES clv_reviews(id),
+      agent_id TEXT NOT NULL REFERENCES clv_agents(id),
       principal_id TEXT NOT NULL REFERENCES clv_principals(id),
-      outcome TEXT NOT NULL,
-      reasoning TEXT,
+      question TEXT NOT NULL,
+      context TEXT,
+      channel TEXT NOT NULL,
+      requested_opinions INTEGER NOT NULL DEFAULT 3,
+      deadline TEXT,
+      metadata TEXT,
+      budget_spent INTEGER NOT NULL DEFAULT 3,
       created_at TEXT NOT NULL
     )`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinion_responses (

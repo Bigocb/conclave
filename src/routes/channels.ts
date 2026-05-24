@@ -61,6 +61,15 @@ export const channelRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     reply.send(success({ subscribed: false, channel: name, principal_id: principalId }));
   });
 
+  // GET /channels/:name/subscribers — list who's subscribed
+  fastify.get('/channels/:name/subscribers', async (request: any, reply) => {
+    const { name } = request.params as { name: string };
+    const channel = await channelSvc.getByName(name);
+    if (!channel) return reply.code(404).send(error(ERROR_CODES.CHANNEL_NOT_FOUND.code, 'Channel not found'));
+    const subscribers = await channelSvc.getSubscribers(channel.id);
+    reply.send(success({ channel: name, subscribers, total: subscribers.length }));
+  });
+
   fastify.get('/channels/:name/feed', async (request: any, reply) => {
     const { name } = request.params as { name: string };
     const limit = parseInt((request.query as any).limit ?? '20');
