@@ -218,11 +218,28 @@ export class FleetManager extends EventEmitter {
         principalId,
       });
 
-      // 2. Register agents (one per replica)
+      // 2. Register agents (one per replica) — reuse existing agents when possible
       const agents: Array<{ agentId: string; token: string; index: number }> = [];
+
+      // Try to find existing agents for this principal
+      let existingAgents: any[] = [];
+      try {
+        const agentListResp = await tempClient.listAgentsUnderPrincipal(principalId);
+        existingAgents = ((agentListResp.data as any)?.agents ?? agentListResp.data as any[]) ?? [];
+      } catch { /* list failed, will create new */ }
+
+      const existingCount = existingAgents.length;
       for (let i = 0; i < reviewer.replicas; i++) {
+        // Reuse existing agent if available
+        if (i < existingCount) {
+          const existing = existingAgents[i];
+          agents.push({ agentId: existing.id, token: '', index: i });
+          console.log(`  Agent reused: ${existing.id} (${existing.name})`);
+          continue;
+        }
+
+        // Create new agent only if needed
         const suffix = reviewer.replicas > 1 ? `_${i + 1}` : '';
-        const constructedAgentId = `agt_${principalId.replace('prn_', '')}${suffix}`;
         try {
           const resp = await regClient.registerAgentUnderPrincipal(principalId, {
             name: `${reviewer.name} #${i + 1}`,
@@ -235,16 +252,18 @@ export class FleetManager extends EventEmitter {
             skills: reviewer.skills,
           });
           const data = resp.data as any;
-          const registeredAgentId = data.agent_id ?? data.id ?? constructedAgentId;
+          const registeredAgentId = data.agent_id ?? data.id ?? `agt_${principalId.replace('prn_', '')}`;
           agents.push({ agentId: registeredAgentId, token: data.token ?? '', index: i });
           console.log(`  Agent registered: ${registeredAgentId} under ${principalId}`);
         } catch (err: any) {
           if (err.message?.includes('already exists') || err.message?.includes('duplicate')) {
-            agents.push({ agentId: constructedAgentId, token: '', index: i });
-            console.log(`  Agent exists: ${constructedAgentId}`);
+            const fallbackId = `agt_${principalId.replace('prn_', '')}_${i}`;
+            agents.push({ agentId: fallbackId, token: '', index: i });
+            console.log(`  Agent exists: ${fallbackId}`);
           } else {
             console.warn(`  ⚠ Agent registration failed: ${err.message}`);
-            agents.push({ agentId: constructedAgentId, token: '', index: i });
+            const fallbackId = `agt_${principalId.replace('prn_', '')}_${i}`;
+            agents.push({ agentId: fallbackId, token: '', index: i });
           }
         }
       }

@@ -515,15 +515,19 @@ async function api(method, path, body, agentId) {
   return res.json();
 }
 
+let lastTasksHash = '';
+let lastPrincipalsHash = '';
+let lastRefreshTime = 0;
+let currentDetailTaskId = null; // Track which task detail is open
+
 async function refresh() {
   try {
-    const [health, orgs, principals, channels, tasks, devBudget] = await Promise.all([
+    const [health, orgs, principals, channels, tasks] = await Promise.all([
       api('GET', '/health'),
       api('GET', '/orgs'),
       api('GET', '/principals'),
       api('GET', '/channels'),
       api('GET', '/tasks'),
-      api('GET', '/agents/agt_dev/budget'),
     ]);
 
     // Status
@@ -537,20 +541,16 @@ async function refresh() {
     const inReviewTasks = allTasks.filter(t => t.status === 'in_review');
     const completedTasks = allTasks.filter(t => t.status === 'completed');
 
-    // Count total reviews (need detail calls for reviews_received)
+    // Count reviews from list data (no per-task detail calls)
     let totalReviews = 0;
+    for (const t of allTasks) {
+      totalReviews += (t.reviews_received || 0);
+    }
 
     document.getElementById('stat-orgs').textContent = orgs.data?.organizations?.length || 0;
     document.getElementById('stat-principals').textContent = principals.data?.length || 0;
     document.getElementById('stat-tasks-open').textContent = openTasks.length + inReviewTasks.length;
     document.getElementById('stat-tasks-completed').textContent = completedTasks.length;
-    // Fetch review counts from detail endpoint for completed/in_review tasks
-    for (const t of [...completedTasks, ...inReviewTasks]) {
-      try {
-        const td = await api('GET', `/tasks/${t.id}`);
-        totalReviews += (td.data?.reviews_received || 0);
-      } catch(e) {}
-    }
     document.getElementById('stat-reviews').textContent = totalReviews;
     document.getElementById('stat-channels').textContent = channels.data?.channels?.length || 0;
 
@@ -560,50 +560,40 @@ async function refresh() {
       document.getElementById('stat-opinions').textContent = opinions.data?.opinions?.length || 0;
     } catch(e) { document.getElementById('stat-opinions').textContent = '0'; }
 
-    // Dev budget
-    if (devBudget.data) {
-      const b = devBudget.data;
-      document.getElementById('stat-budget').textContent = b.available;
-      document.getElementById('stat-budget-sub').textContent = `earned ${b.earned} / spent ${b.spent}`;
+    // Only re-render tasks table if data changed
+    const tasksHash = JSON.stringify(allTasks.map(t => `${t.id}:${t.status}:${t.reviews_received}`));
+    if (tasksHash !== lastTasksHash) {
+      lastTasksHash = tasksHash;
+      const tbody = document.getElementById('tasks-tbody');
+      const sortedTasks = [...allTasks].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+      tbody.innerHTML = sortedTasks.map(t => `
+        <tr style="cursor:pointer" onclick="showTaskDetail('${t.id}')">
+          <td class="mono-sm id-cell" title="${t.id}">${shortId(t.id)}</td>
+          <td>${(t.description||'').substring(0,40)}${(t.description||'').length>40?'…':''}</td>
+          <td><span class="badge ${t.status}">${t.status}</span></td>
+          <td>${t.reviews_received ?? 0}/${t.requested_reviews || '?'}</td>
+          <td style="color:var(--text2);font-size:11px">${timeAgo(t.created_at)}</td>
+        </tr>
+      `).join('');
     }
 
-    // Tasks table
-    const tbody = document.getElementById('tasks-tbody');
-    const sortedTasks = [...allTasks].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    tbody.innerHTML = sortedTasks.map(t => `
-      <tr style="cursor:pointer" onclick="showTaskDetail('${t.id}')">
-        <td class="mono-sm id-cell" title="${t.id}">${shortId(t.id)}</td>
-        <td>${(t.description||'').substring(0,40)}${(t.description||'').length>40?'…':''}</td>
-        <td><span class="badge ${t.status}">${t.status}</span></td>
-        <td>${t.requested_reviews || '?'} requested</td>
-        <td style="color:var(--text2);font-size:11px">${timeAgo(t.created_at)}</td>
-      </tr>
-    `).join('');
-
-    // Principals table + budget
-    const ptbody = document.getElementById('principals-tbody');
+    // Principals — only re-render if data changed (budget fetched lazily)
     const pList = principals.data || [];
-    ptbody.innerHTML = '';
-    for (const p of pList) {
-      let budgetInfo = '—';
-      try {
-        const bData = await api('GET', `/principals/${p.id}/budget`);
-        if (bData.data) {
-          const b = bData.data;
-          budgetCache[p.id] = b; // cache for leaderboard
-          const pct = b.spent + b.available > 0 ? Math.round(b.available / (b.spent + b.available) * 100) : 0;
-          budgetInfo = `<div>💰 ${b.available} <span style="color:var(--text2);font-size:10px">(earned: ${b.earned})</span></div><div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%"></div></div>`;
-        }
-      } catch(e) {}
-      ptbody.innerHTML += `<tr>
+    const pHash = JSON.stringify(pList.map(p => p.id));
+    if (pHash !== lastPrincipalsHash) {
+      lastPrincipalsHash = pHash;
+      const ptbody = document.getElementById('principals-tbody');
+      ptbody.innerHTML = pList.map(p => `<tr>
         <td class="mono-sm id-cell" title="${p.id}">${shortId(p.id)}</td>
         <td>${p.name || '—'}</td>
         <td style="font-size:11px">${(p.roles||[]).join(', ')}</td>
-        <td>${budgetInfo}</td>
-      </tr>`;
+        <td id="budget-${p.id}">—</td>
+      </tr>`).join('');
+      // Fetch budget for each principal in background (non-blocking)
+      fetchBudgets(pList);
     }
 
-    // Channels
+    // Channels (lightweight, just re-render)
     const chList = channels.data?.channels || [];
     document.getElementById('channels-list').innerHTML = chList.map(c => `
       <div style="padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:12px">
@@ -623,7 +613,50 @@ async function refresh() {
     const sel = document.getElementById('task-channel');
     sel.innerHTML = chList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
 
-    // Activity feed (prn_dev budget history)
+    // Activity feed — fetch prn_dev budget lazily (non-blocking)
+    fetchDevBudget();
+
+    // Leaderboard (using cached budget data)
+    renderLeaderboard(pList);
+
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+
+  } catch(e) {
+    document.getElementById('status-dot').classList.add('offline');
+    console.error('Refresh error:', e);
+  }
+}
+
+// Background: fetch budget for each principal, update cells individually
+async function fetchBudgets(principals) {
+  for (const p of principals) {
+    try {
+      const bData = await api('GET', `/principals/${p.id}/budget`);
+      if (bData.data) {
+        budgetCache[p.id] = bData.data;
+        const b = bData.data;
+        const pct = b.spent + b.available > 0 ? Math.round(b.available / (b.spent + b.available) * 100) : 0;
+        const el = document.getElementById(`budget-${p.id}`);
+        if (el) {
+          el.innerHTML = `<div>💰 ${b.available} <span style="color:var(--text2);font-size:10px">(earned: ${b.earned})</span></div><div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%"></div></div>`;
+        }
+      }
+    } catch(e) {}
+  }
+  renderLeaderboard(principals);
+}
+
+// Background: fetch dev budget for activity feed
+async function fetchDevBudget() {
+  try {
+    const devBudget = await api('GET', '/agents/agt_dev/budget');
+    if (devBudget.data) {
+      const b = devBudget.data;
+      const budgetEl = document.getElementById('stat-budget');
+      if (budgetEl) budgetEl.textContent = b.available;
+      const subEl = document.getElementById('stat-budget-sub');
+      if (subEl) subEl.textContent = `earned ${b.earned} / spent ${b.spent}`;
+    }
     if (devBudget.data && devBudget.data.history) {
       const hist = devBudget.data.history.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,15);
       document.getElementById('activity-feed').innerHTML = hist.map(h => {
@@ -635,27 +668,23 @@ async function refresh() {
         </div>`;
       }).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">No activity yet</div>';
     }
+  } catch(e) {}
+}
 
-    // Leaderboard (using data we already have)
-    const lbtbody = document.getElementById('leaderboard-tbody');
-    const entries = [];
-    for (const p of pList) {
-      const bData = budgetCache[p.id];
-      if (bData) {
-        entries.push({name: p.name || shortId(p.id), earned: bData.earned, available: bData.available});
-      }
+function renderLeaderboard(pList) {
+  const lbtbody = document.getElementById('leaderboard-tbody');
+  if (!lbtbody) return;
+  const entries = [];
+  for (const p of pList) {
+    const bData = budgetCache[p.id];
+    if (bData) {
+      entries.push({name: p.name || shortId(p.id), earned: bData.earned, available: bData.available});
     }
-    entries.sort((a,b) => b.earned - a.earned);
-    lbtbody.innerHTML = entries.map((e, i) => `
-      <tr><td style="color:var(--accent);font-weight:700">${i+1}</td><td>${e.name}</td><td>${e.earned}</td><td>${e.available}</td></tr>
-    `).join('') || '<tr><td colspan="4" style="color:var(--text2);text-align:center">No data</td></tr>';
-
-    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
-
-  } catch(e) {
-    document.getElementById('status-dot').classList.add('offline');
-    console.error('Refresh error:', e);
   }
+  entries.sort((a,b) => b.earned - a.earned);
+  lbtbody.innerHTML = entries.map((e, i) => `
+    <tr><td style="color:var(--accent);font-weight:700">${i+1}</td><td>${e.name}</td><td>${e.earned}</td><td>${e.available}</td></tr>
+  `).join('') || '<tr><td colspan="4" style="color:var(--text2);text-align:center">No data</td></tr>';
 }
 
 function showCreateTask() {
