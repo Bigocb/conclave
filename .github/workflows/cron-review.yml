@@ -28,67 +28,87 @@ jobs:
             echo "::error::Failed to get task with HTTP $HTTP_CODE"
             exit 1
           fi
-          # Parse response fields
+
           STATUS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null)
           echo "status=$STATUS" >> $GITHUB_OUTPUT
           if [ "$STATUS" = "idle" ]; then
             echo "No open tasks — skipping LLM call"
             exit 0
           fi
-          # Save full body for next step
-          echo "$BODY" > /tmp/task_body.json
+
+          # Save task body as base64 to avoid shell escaping issues
+          echo "$BODY" | python3 -c "import sys,base64; print(base64.b64encode(sys.stdin.read().encode()).decode())" > /tmp/task_b64.txt
 
       - name: Call LLM and submit review
         if: steps.get-task.outputs.status == 'reviewing'
         run: |
-          BODY=$(cat /tmp/task_body.json)
-          # Extract fields from task response
-          LLM_URL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('llm_url',''))")
-          MODEL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('model',''))")
-          SYSTEM_PROMPT=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('system_prompt',''))")
-          USER_PROMPT=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user_prompt',''))")
-          TASK_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('task_id',''))")
-          REVIEWER_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('reviewer_id',''))")
-          PRINCIPAL_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('principal_id',''))")
-          CHANNEL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('channel',''))")
+          # Decode task body safely from base64
+          BODY=$(cat /tmp/task_b64.txt | python3 -c "import sys,base64; print(base64.b64decode(sys.stdin.read().strip()).decode())")
 
-          echo "Reviewing task $TASK_ID with $MODEL..."
+          # Extract fields using python3 to handle special characters safely
+          python3 << 'PYEOF'
+          import json, subprocess, sys, os, re, base64
 
-          # Call LLM (no hard timeout — GitHub Actions allows up to 6h)
-          LLM_RESPONSE=$(curl -sf -X POST \
-            "${LLM_URL}/chat/completions" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${OLLAMA_KEY}" \
-            -d "$(python3 -c "
-          import json
+          body = json.loads(os.environ["BODY"])
+          llm_url = body["llm_url"]
+          model = body["model"]
+          system_prompt = body["system_prompt"]
+          user_prompt = body["user_prompt"]
+          task_id = body["task_id"]
+          reviewer_id = body["reviewer_id"]
+          principal_id = body["principal_id"]
+          channel = body.get("channel", "")
+          ollama_key = os.environ["OLLAMA_KEY"]
+          conclave_url = os.environ["CONCLAVE_URL"]
+          cron_secret = os.environ["CRON_SECRET"]
+
+          print(f"Reviewing task {task_id} with {model}...")
+
+          # Build LLM request payload
           payload = {
-            'model': '$MODEL',
-            'messages': [
-              {'role': 'system', 'content': '''$SYSTEM_PROMPT'''},
-              {'role': 'user', 'content': '''$USER_PROMPT'''}
-            ],
-            'temperature': 0.3,
-            'max_tokens': 1500
+              "model": model,
+              "messages": [
+                  {"role": "system", "content": system_prompt},
+                  {"role": "user", "content": user_prompt}
+              ],
+              "temperature": 0.3,
+              "max_tokens": 1500
           }
-          print(json.dumps(payload))
-          ")")
 
-          # Extract content from LLM response
-          CONTENT=$(echo "$LLM_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message']['content'])")
+          # Call LLM
+          import urllib.request
+          req = urllib.request.Request(
+              f"{llm_url}/chat/completions",
+              data=json.dumps(payload).encode(),
+              headers={
+                  "Content-Type": "application/json",
+                  "Authorization": f"Bearer {ollama_key}"
+              }
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=120) as resp:
+                  llm_data = json.loads(resp.read().decode())
+              content = llm_data["choices"][0]["message"]["content"]
+          except Exception as e:
+              print(f"LLM call failed: {e}")
+              content = ""
 
-          # Submit review to Conclave
-          SUBMIT_BODY=$(python3 -c "
-          import json, re
-          content = '''$CONTENT'''
+          if not content:
+              print("No LLM response — skipping submit")
+              sys.exit(1)
+
+          print(f"LLM response received ({len(content)} chars)")
+
           # Parse JSON from LLM output
           parsed = None
-          json_match = re.search(r'\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`', content)
+          json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
           json_str = json_match.group(1) if json_match else content
           brace_start = json_str.find('{')
           if brace_start != -1:
               try:
                   parsed = json.loads(json_str[brace_start:])
               except:
+                  # Try to auto-close truncated JSON
                   depth = 0
                   end = -1
                   for i in range(brace_start, len(json_str)):
@@ -99,48 +119,60 @@ jobs:
                               end = i
                               break
                   if end != -1:
-                      parsed = json.loads(json_str[brace_start:end+1])
+                      try:
+                          parsed = json.loads(json_str[brace_start:end+1])
+                      except:
+                          pass
 
           if not parsed:
               parsed = {
-                  'scores': {'overall': 7},
-                  'weighted_overall': 7,
-                  'reviewer_confidence': 0.7,
-                  'comment': content[:500],
-                  'suggestions': []
+                  "scores": {"overall": 7},
+                  "weighted_overall": 7,
+                  "reviewer_confidence": 0.7,
+                  "comment": content[:500],
+                  "suggestions": []
               }
 
           # Normalize confidence (0-10 → 0-1)
-          conf = parsed.get('reviewer_confidence', 0.7)
+          conf = parsed.get("reviewer_confidence", 0.7)
           if conf > 1: conf = conf / 10
-          parsed['reviewer_confidence'] = min(1, max(0, conf))
+          parsed["reviewer_confidence"] = min(1, max(0, conf))
 
           # Build submit payload
-          scores = parsed.get('scores', {})
+          scores = parsed.get("scores", {})
           avg = sum(scores.values()) / len(scores) if scores else 7
 
           submit = {
-              'task_id': '$TASK_ID',
-              'reviewer_id': '$REVIEWER_ID',
-              'principal_id': '$PRINCIPAL_ID',
-              'channel': '$CHANNEL',
-              'scores': json.dumps(scores),
-              'weighted_overall': min(10, max(0, parsed.get('weighted_overall', round(avg * 10) / 10))),
-              'reviewer_confidence': parsed['reviewer_confidence'],
-              'comment': parsed.get('comment', 'No comment provided.')[:1500],
-              'suggestions': json.dumps(parsed.get('suggestions', [])),
-              'approved': parsed.get('approved', avg >= 7),
+              "task_id": task_id,
+              "reviewer_id": reviewer_id,
+              "principal_id": principal_id,
+              "channel": channel,
+              "scores": json.dumps(scores) if isinstance(scores, dict) else str(scores),
+              "weighted_overall": min(10, max(0, parsed.get("weighted_overall", round(avg * 10) / 10))),
+              "reviewer_confidence": parsed["reviewer_confidence"],
+              "comment": parsed.get("comment", "No comment provided.")[:1500],
+              "suggestions": json.dumps(parsed.get("suggestions", [])) if isinstance(parsed.get("suggestions"), list) else str(parsed.get("suggestions", [])),
+              "approved": parsed.get("approved", avg >= 7),
           }
-          print(json.dumps(submit))
-          ")
 
-          RESULT=$(curl -sf -w "\n%{http_code}" -X POST \
-            "${CONCLAVE_URL}/v1/cron/submit" \
-            -H "Content-Type: application/json" \
-            -H "x-cron-secret: ${CRON_SECRET}" \
-            -d "$SUBMIT_BODY")
-
-          HTTP_CODE=$(echo "$RESULT" | tail -1)
-          RESP=$(echo "$RESULT" | sed '$d')
-          echo "Submit result: HTTP $HTTP_CODE"
-          echo "$RESP"
+          # Submit review to Conclave
+          submit_data = json.dumps(submit).encode()
+          submit_req = urllib.request.Request(
+              f"{conclave_url}/v1/cron/submit",
+              data=submit_data,
+              headers={
+                  "Content-Type": "application/json",
+                  "x-cron-secret": cron_secret
+              }
+          )
+          try:
+              with urllib.request.urlopen(submit_req, timeout=30) as resp:
+                  result = resp.read().decode()
+              print(f"Submit result: {result}")
+          except urllib.error.HTTPError as e:
+              print(f"Submit failed: HTTP {e.code} — {e.read().decode()}")
+              sys.exit(1)
+          except Exception as e:
+              print(f"Submit failed: {e}")
+              sys.exit(1)
+          PYEOF
