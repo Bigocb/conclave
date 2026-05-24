@@ -37,6 +37,11 @@ export class ConclaveApiClient {
     }
   }
 
+  /** Set the auth token (e.g. after registration) */
+  setToken(token: string): void {
+    this.token = token;
+  }
+
   private async request(method: string, path: string, body?: unknown): Promise<ApiResponse> {
     const url = `${this.baseUrl}/v1${path}`;
     const headers: Record<string, string> = {
@@ -47,11 +52,22 @@ export class ConclaveApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (err: any) {
+      throw new Error(`Conclave API connection failed (${method} ${url}): ${err.message || err}. Check that --server URL is reachable.`);
+    }
+
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch {}
+      throw new Error(`Conclave API returned ${res.status} ${res.statusText} for ${method} ${url}: ${detail}`);
+    }
 
     const json = await res.json() as ApiResponse;
 

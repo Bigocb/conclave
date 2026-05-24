@@ -212,20 +212,19 @@ export class FleetManager extends EventEmitter {
         principalId = (principal as any).id;
       }
 
-      // Create API client with the actual principal ID
-      const client = new ConclaveApiClient({
+      // Create a client for registration with the reviewer's principal
+      const regClient = new ConclaveApiClient({
         serverUrl: this.config.server,
         principalId,
       });
-      this.apiClients.set(principalId, client);
 
       // 2. Register agents (one per replica)
       const agents: Array<{ agentId: string; token: string; index: number }> = [];
       for (let i = 0; i < reviewer.replicas; i++) {
         const suffix = reviewer.replicas > 1 ? `_${i + 1}` : '';
-        const agentId = `agt_${principalId.replace('prn_', '')}${suffix}`;
+        const constructedAgentId = `agt_${principalId.replace('prn_', '')}${suffix}`;
         try {
-          const resp = await client.registerAgentUnderPrincipal(principalId, {
+          const resp = await regClient.registerAgentUnderPrincipal(principalId, {
             name: `${reviewer.name} #${i + 1}`,
             type: reviewer.type || 'llm',
             model: reviewer.model,
@@ -236,23 +235,35 @@ export class FleetManager extends EventEmitter {
             skills: reviewer.skills,
           });
           const data = resp.data as any;
-          agents.push({ agentId: data.agent_id ?? data.id ?? agentId, token: data.token ?? '', index: i });
-          console.log(`  Agent registered: ${agentId} under ${principalId}`);
+          const registeredAgentId = data.agent_id ?? data.id ?? constructedAgentId;
+          agents.push({ agentId: registeredAgentId, token: data.token ?? '', index: i });
+          console.log(`  Agent registered: ${registeredAgentId} under ${principalId}`);
         } catch (err: any) {
           if (err.message?.includes('already exists') || err.message?.includes('duplicate')) {
-            agents.push({ agentId, token: '', index: i });
-            console.log(`  Agent exists: ${agentId}`);
+            agents.push({ agentId: constructedAgentId, token: '', index: i });
+            console.log(`  Agent exists: ${constructedAgentId}`);
           } else {
             console.warn(`  ⚠ Agent registration failed: ${err.message}`);
-            agents.push({ agentId, token: '', index: i });
+            agents.push({ agentId: constructedAgentId, token: '', index: i });
           }
         }
       }
 
-      // 3. Subscribe to channels
+      // 3. Create API client with the first agent's ID (for polling/reviewing)
+      const pollingClient = new ConclaveApiClient({
+        serverUrl: this.config.server,
+        principalId,
+        agentId: agents[0]?.agentId,
+      });
+      if (agents[0]?.token) {
+        pollingClient.setToken(agents[0].token);
+      }
+      this.apiClients.set(principalId, pollingClient);
+
+      // 4. Subscribe to channels
       for (const ch of reviewer.channels) {
         try {
-          await client.subscribeToChannel(ch);
+          await regClient.subscribeToChannel(ch);
           console.log(`  Subscribed: ${principalId} → ${ch}`);
         } catch (err: any) {
           if (!err.message?.includes('already subscribed') && !err.message?.includes('duplicate')) {
@@ -368,6 +379,7 @@ export class FleetManager extends EventEmitter {
         const resp = await client.getChannelFeed(channel);
         const data = resp.data as any;
         const tasks: any[] = data?.tasks ?? [];
+        console.log(`  📡 ${proc.reviewerName} polled ${channel}: ${Array.isArray(tasks) ? tasks.length : 'not-array'} tasks`);
         if (!Array.isArray(tasks)) continue;
 
         for (const feedItem of tasks) {
@@ -387,6 +399,7 @@ export class FleetManager extends EventEmitter {
 
           // Mark as seen to prevent duplicate picks
           proc.reviewedTaskIds.add(taskId);
+          console.log(`  🎯 ${proc.reviewerName} found task ${taskId} on channel ${channel}`);
 
           // Fetch full task details (feed only has summary)
           let fullTask = feedItem;
@@ -400,6 +413,8 @@ export class FleetManager extends EventEmitter {
           // Process async
           this.reviewTask(principalId, fullTask, channel).catch(err => {
             console.error(`  ❌ Review failed for task ${taskId}:`, err.message);
+            // Remove from seen set so it can be retried on the next poll
+            proc.reviewedTaskIds.delete(taskId);
           });
 
           proc.activeReviews++;
@@ -474,10 +489,26 @@ export class FleetManager extends EventEmitter {
         return;
       }
 
-      // 2. Route based on mode (compute approved from overall score)
-      const approved = draft.weighted_overall >= 7;
+      // 2. Sanitize scores to meet API constraints (int 1-10, weighted_overall >= 1)
+      const sanitizedScores: Record<string, number> = {};
+      for (const [dim, val] of Object.entries(draft.scores)) {
+        sanitizedScores[dim] = Math.max(1, Math.min(10, Math.round(val)));
+      }
+      const sanitizedOverall = Math.max(1, Math.min(10, Math.round(draft.weighted_overall)));
+
+      // 3. Route based on mode (compute approved from overall score)
+      const approved = sanitizedOverall >= 7;
+      const reviewPayload = {
+        scores: sanitizedScores,
+        weighted_overall: sanitizedOverall,
+        reviewer_confidence: draft.reviewer_confidence ?? 5,
+        comment: draft.comment || '',
+        suggestions: draft.suggestions || [],
+        approved,
+      };
+
       if (proc.mode === 'auto') {
-        await client.submitReview(task.id, { ...draft, approved });
+        await client.submitReview(task.id, reviewPayload);
         this.incrementCompleted(principalId);
         console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${task.id} (overall: ${draft.weighted_overall})`);
         this.emit('review_completed', { principalId, taskId: task.id, mode: 'auto' });
@@ -490,7 +521,7 @@ export class FleetManager extends EventEmitter {
           reviewerName: proc.reviewerName,
           principalId,
           agentId: agent.agentId,
-          draft,
+          draft: reviewPayload,
           createdAt: new Date().toISOString(),
         };
         this.pendingApprovals.push(pending);
@@ -498,8 +529,8 @@ export class FleetManager extends EventEmitter {
         this.emit('review_pending', pending);
 
       } else if (proc.mode === 'hybrid') {
-        if (draft.reviewer_confidence >= proc.confidenceThreshold) {
-          await client.submitReview(task.id, { ...draft, approved });
+        if (draft.reviewer_confidence ?? 5 >= proc.confidenceThreshold) {
+          await client.submitReview(task.id, reviewPayload);
           this.incrementCompleted(principalId);
           console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed (confidence ${draft.reviewer_confidence} ≥ ${proc.confidenceThreshold}) task ${task.id}`);
           this.emit('review_completed', { principalId, taskId: task.id, mode: 'hybrid_auto' });
@@ -511,7 +542,7 @@ export class FleetManager extends EventEmitter {
             reviewerName: proc.reviewerName,
             principalId,
             agentId: agent.agentId,
-            draft,
+            draft: reviewPayload,
             createdAt: new Date().toISOString(),
           };
           this.pendingApprovals.push(pending);

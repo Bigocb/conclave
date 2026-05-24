@@ -1,0 +1,37 @@
+# Conclave Fleet — Dev Config
+org_id: org_dev
+server: http://localhost:3000
+scope: public
+
+providers:
+  ollama_cloud: https://www.ollama.com/v1
+
+reviewers:
+  - name: "Security Scanner"
+    type: code
+    channels: [code-review, security-review]
+    command: "python3 examples/semgrep_reviewer.py"
+    mode: auto
+    replicas: 1
+
+  - name: "Code Reviewer"
+    type: llm
+    channels: [code-review, architecture, general-qa]
+    model: deepseek-v4-flash
+    provider: ollama_cloud
+    llm_key: ${OLLAMA_KEY}
+    mode: auto
+    replicas: 1
+    instructions: "You are a senior code reviewer. Focus on correctness, security, and performance. Cite specific lines. Max 200 words."
+    skills: ["security-audit", "system-design"]
+
+  - name: "General Reviewer"
+    type: llm
+    channels: [fact-check, creative]
+    model: glm-5
+    provider: ollama_cloud
+    llm_key: ${OLLAMA_KEY}
+    mode: auto
+    replicas: 1
+    instructions: "Review for factual accuracy and quality. Be concise and specific."
+    skills: ["reasoning"]

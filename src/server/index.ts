@@ -52,11 +52,7 @@ const DEFAULT_CONFIG: ConclaveConfig = {
 export async function createServer(config: Partial<ConclaveConfig> = {}, fleetManager?: FleetManager) {
   const fullConfig: ConclaveConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Initialize database (delete old DB to get fresh schema with principals)
-  const fs = await import('fs');
-  if (fs.existsSync(fullConfig.database.url)) {
-    fs.unlinkSync(fullConfig.database.url);
-  }
+  // Initialize database (preserve existing data — only create schema if missing)
   const db: ConclaveDb = initDb(fullConfig.database.url);
 
   const fastify = Fastify({

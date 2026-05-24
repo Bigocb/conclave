@@ -43,6 +43,7 @@ export const BUILTIN_PROVIDERS: Record<string, string> = {
   openai:    'https://api.openai.com/v1',
   openrouter:'https://openrouter.ai/api/v1',
   ollama:    'http://localhost:11434/v1',
+  ollama_cloud: 'https://www.ollama.com/v1',
   anthropic: 'https://api.anthropic.com/v1',    // needs proxy for /chat/completions
   together:  'https://api.together.xyz/v1',
   fireworks: 'https://api.fireworks.ai/inference/v1',
@@ -131,15 +132,27 @@ function interpolateObj(obj: any): any {
  * Validate required fields on a reviewer config.
  */
 function validateReviewer(r: any, index: number): void {
-  const required = ['name', 'channels', 'model'] as const;
+  const required = ['name', 'channels'] as const;
   for (const field of required) {
     if (!r[field]) {
       throw new Error(`Reviewer #${index + 1} ("${r.name || 'unnamed'}"): missing required field "${field}"`);
     }
   }
-  // Must have either provider OR llm_url
-  if (!r.provider && !r.llm_url) {
-    throw new Error(`Reviewer #${index + 1} ("${r.name}"): must specify either "provider" (shortcut) or "llm_url" (full URL)`);
+  // code-type reviewers don't need model or provider
+  const type = r.type || 'llm';
+  if (type !== 'code') {
+    if (!r.model) {
+      throw new Error(`Reviewer #${index + 1} ("${r.name}"): missing required field "model" (required for type: ${type})`);
+    }
+    if (!r.provider && !r.llm_url) {
+      throw new Error(`Reviewer #${index + 1} ("${r.name}"): must specify either "provider" (shortcut) or "llm_url" (full URL)`);
+    }
+  }
+  if (type === 'code' && !r.command) {
+    throw new Error(`Reviewer #${index + 1} ("${r.name}"): "command" is required for type: code`);
+  }
+  if (type === 'pipeline' && (!r.steps || !Array.isArray(r.steps) || r.steps.length === 0)) {
+    throw new Error(`Reviewer #${index + 1} ("${r.name}"): "steps" array is required for type: pipeline`);
   }
   if (!Array.isArray(r.channels) || r.channels.length === 0) {
     throw new Error(`Reviewer #${index + 1} ("${r.name}"): channels must be a non-empty array`);
