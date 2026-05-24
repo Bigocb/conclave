@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
-    "build": "tsc",
+    "build": "tsc --noEmitOnError false",
     "start": "node dist/server/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

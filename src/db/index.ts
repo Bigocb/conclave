@@ -5,7 +5,6 @@
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';
-// @ts-expect-error - postgres uses CJS export =, esModuleInterop handles at runtime
 import postgres from 'postgres';
 import * as schema from './schema.js';
 
