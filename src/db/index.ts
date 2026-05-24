@@ -86,9 +86,9 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       description TEXT,
-      rules TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      default_dimensions TEXT,
+      created_by_org TEXT REFERENCES clv_organizations(id),
+      created_at TEXT NOT NULL
     )`;
     await client`CREATE TABLE IF NOT EXISTS clv_channel_subscriptions (
       principal_id TEXT NOT NULL REFERENCES clv_principals(id),
