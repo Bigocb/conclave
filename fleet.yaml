@@ -1,6 +1,4 @@
 # Conclave Fleet — Production Reviewers
-# Points at the deployed Conclave API on Vercel
-
 org_id: org_dev
 server: https://conclave-roan.vercel.app
 scope: public
@@ -14,7 +12,7 @@ reviewers:
     channels: [general-qa]
     model: deepseek-v4-flash
     provider: ollama_cloud
-    llm_key: ${OLLAMA_KEY}
+    llm_key: "${OLLAMA_KEY}"
     mode: auto
     replicas: 1
     interval: 15
@@ -26,7 +24,7 @@ reviewers:
     channels: [general-qa]
     model: glm-5.1
     provider: ollama_cloud
-    llm_key: ${OLLAMA_KEY}
+    llm_key: "${OLLAMA_KEY}"
     mode: auto
     replicas: 1
     interval: 20
@@ -38,7 +36,7 @@ reviewers:
     channels: [general-qa]
     model: deepseek-v4-flash
     provider: ollama_cloud
-    llm_key: ${OLLAMA_KEY}
+    llm_key: "${OLLAMA_KEY}"
     mode: auto
     replicas: 1
     interval: 25

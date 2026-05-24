@@ -125,7 +125,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       helpful INTEGER,
       status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT
     )`;
     // Ensure helpful column exists on older reviews tables
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
