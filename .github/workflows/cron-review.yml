@@ -44,10 +44,11 @@ jobs:
         run: |
           # Decode task body safely from base64
           BODY=$(cat /tmp/task_b64.txt | python3 -c "import sys,base64; print(base64.b64decode(sys.stdin.read().strip()).decode())")
+          export BODY
 
           # Extract fields using python3 to handle special characters safely
           python3 << 'PYEOF'
-          import json, subprocess, sys, os, re, base64
+          import json, subprocess, sys, os, re, base64, urllib.request
 
           body = json.loads(os.environ["BODY"])
           llm_url = body["llm_url"]
