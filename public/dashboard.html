@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conclave — Live Dashboard</title>
+<title>Conclave — Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -27,12 +27,18 @@ code,pre,.mono{font-family:var(--font)}
 .status-dot.offline{background:var(--red);animation:none}
 .mode-badge{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)}
 
+/* Main Tabs */
+.main-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 24px;background:var(--surface)}
+.main-tabs .tab{padding:12px 20px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
+.main-tabs .tab:hover{color:var(--text)}
+.main-tabs .tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface2)}
+
 /* Main Layout */
-.main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 24px;max-width:1440px;margin:0 auto}
-@media(max-width:900px){.main{grid-template-columns:1fr}}
+.main{padding:20px 24px;max-width:1600px;margin:0 auto}
+@media(max-width:900px){.main{padding:12px}}
 
 /* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px}
 .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .card-header h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2)}
 .card-header h2 .icon{margin-right:6px}
@@ -65,12 +71,7 @@ tr:hover{background:var(--surface2)}
 .badge.open{background:#1e3a5f;color:#60a5fa}
 .badge.in_review{background:#1e3a2f;color:var(--accent)}
 .badge.completed{background:#14532d;color:#4ade80}
-.badge.expired{background:#451a03;color:var(--yellow)}
-.badge.archived{background:#1c1c1c;color:var(--text2)}
-
-/* Budget Bar */
-.budget-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px}
-.budget-bar-fill{height:100%;border-radius:3px;transition:width 0.5s;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+.badge.failed{background:#451a03;color:var(--yellow)}
 
 /* Forms */
 .form-group{margin-bottom:12px}
@@ -86,71 +87,56 @@ tr:hover{background:var(--surface2)}
 .btn-sm{padding:4px 10px;font-size:11px}
 .btn-row{display:flex;gap:8px;margin-top:12px}
 
-/* Score Sliders */
-.score-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
-.score-item{text-align:center}
-.score-item label{font-size:10px}
-.score-val{font-size:18px;font-weight:700;color:var(--accent)}
-.score-slider{width:100%;accent-color:var(--accent)}
-
-/* Activity Feed */
-.activity-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;align-items:flex-start}
-.activity-item:last-child{border-bottom:none}
-.activity-time{color:var(--text2);font-size:10px;white-space:nowrap;min-width:60px}
-.activity-text{flex:1}
-.activity-amount.positive{color:var(--accent)}
-.activity-amount.negative{color:var(--red)}
-
 /* Toast */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 20px;font-size:13px;z-index:200;transform:translateY(100px);opacity:0;transition:all 0.3s}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.success{border-color:var(--accent)}
 .toast.error{border-color:var(--red)}
 
-/* Tabs */
-.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:0}
-.tab{padding:10px 16px;font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-
-/* Responsive */
-@media(max-width:600px){
-  .main{padding:12px}
-  .stats-grid{grid-template-columns:1fr 1fr}
-  .header{padding:12px}
-}
-
 /* Scrollable */
-.scrollable{max-height:400px;overflow-y:auto}
+.scrollable{max-height:500px;overflow-y:auto}
 .scrollable::-webkit-scrollbar{width:4px}
 .scrollable::-webkit-scrollbar-track{background:transparent}
 .scrollable::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Agent tags */
+.agent-tag{display:inline-block;padding:2px 6px;margin:1px;background:var(--surface2);border-radius:3px;font-size:10px;margin-right:4px}
+.channel-tag{display:inline-block;padding:2px 6px;margin:1px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;font-size:10px;color:var(--accent)}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>⬡ <span>Conclave</span> Dashboard <a href="index.html" style="font-size:14px;color:var(--accent);text-decoration:none;margin-left:12px;">← Home</a> <a href="protocol.html" style="font-size:14px;color:var(--text2);text-decoration:none;margin-left:12px;">Protocol Docs</a></h1>
+  <h1>⬡ <span>Conclave</span> Dashboard</h1>
   <div class="header-right">
-    <span class="mode-badge" id="mode-badge">LOCAL</span>
+    <span class="mode-badge" id="mode-badge">LIVE</span>
     <span class="status-dot" id="status-dot" title="API Connected"></span>
     <span style="font-size:11px;color:var(--text2)" id="last-refresh"></span>
   </div>
 </div>
 
+<div class="main-tabs" id="main-tabs">
+  <div class="tab active" onclick="showMainTab('overview')">📊 Overview</div>
+  <div class="tab" onclick="showMainTab('principals')">👤 Principals</div>
+  <div class="tab" onclick="showMainTab('channels')">📡 Channels</div>
+</div>
+
 <div class="main">
-  <!-- Stats Overview -->
+
+<!-- ==================== OVERVIEW TAB ==================== -->
+<div id="tab-overview" class="main-tab-panel">
+  <!-- Stats -->
   <div class="card full-width">
     <div class="card-body" style="padding:12px 16px">
-      <div class="stats-grid" id="stats-grid">
+      <div class="stats-grid">
         <div class="stat"><div class="stat-value" id="stat-orgs">—</div><div class="stat-label">Organizations</div></div>
         <div class="stat"><div class="stat-value blue" id="stat-principals">—</div><div class="stat-label">Principals</div></div>
+        <div class="stat"><div class="stat-value yellow" id="stat-agents">—</div><div class="stat-label">Agents</div></div>
+        <div class="stat"><div class="stat-value" id="stat-channels">—</div><div class="stat-label">Channels</div></div>
         <div class="stat"><div class="stat-value yellow" id="stat-tasks-open">—</div><div class="stat-label">Open Tasks</div></div>
         <div class="stat"><div class="stat-value purple" id="stat-tasks-completed">—</div><div class="stat-label">Completed</div></div>
         <div class="stat"><div class="stat-value" id="stat-reviews">—</div><div class="stat-label">Reviews</div></div>
-        <div class="stat"><div class="stat-value" id="stat-opinions">—</div><div class="stat-label">Opinions</div></div>
-        <div class="stat"><div class="stat-value red" id="stat-channels">—</div><div class="stat-label">Channels</div></div>
-        <div class="stat"><div class="stat-value" id="stat-budget">—</div><div class="stat-label">prn_dev Budget</div><div class="stat-sub" id="stat-budget-sub"></div></div>
+        <div class="stat"><div class="stat-value" id="stat-budget">—</div><div class="stat-label">prn_dev Budget</div></div>
       </div>
     </div>
   </div>
@@ -161,20 +147,77 @@ tr:hover{background:var(--surface2)}
       <h2><span class="icon">📋</span> Tasks</h2>
       <button class="btn btn-primary btn-sm" onclick="showCreateTask()">+ New Task</button>
     </div>
-    <div class="card-body scrollable" id="tasks-list" style="padding:0">
-      <table><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Reviews</th><th>Created</th></tr></thead><tbody id="tasks-tbody"></tbody></table>
+    <div class="card-body scrollable" style="padding:0">
+      <table><thead><tr><th>ID</th><th>Channel</th><th>Status</th><th>Reviews</th><th>Created</th><th>Actions</th></tr></thead><tbody id="tasks-tbody"></tbody></table>
     </div>
   </div>
 
-  <!-- Principals & Budget -->
+  <!-- Activity Feed -->
   <div class="card">
     <div class="card-header">
-      <h2><span class="icon">👤</span> Principals</h2>
-      <button class="btn btn-primary btn-sm" onclick="toggleForm('principal-form')">+ Principal</button>
+      <h2><span class="icon">📜</span> Recent Activity</h2>
     </div>
-    <div class="card-body scrollable" style="max-height:400px">
-      <!-- Principal Form (hidden) -->
-      <div id="principal-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--blue);border-radius:6px">
+    <div class="card-body scrollable" id="activity-feed">
+      <div style="color:var(--text2);font-size:12px">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Create Task Form -->
+  <div class="card full-width" id="create-task-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="icon">✏️</span> Submit Task for Review</h2>
+      <button class="btn btn-secondary btn-sm" onclick="hideCreateTask()">✕ Close</button>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Channel</label>
+          <select id="task-channel"></select>
+        </div>
+        <div class="form-group">
+          <label>Requested Reviews</label>
+          <input type="number" id="task-reviews" value="3" min="1" max="10">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="task-desc" placeholder="Describe what you want reviewed..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Output</label>
+        <textarea id="task-output" placeholder="The actual output/content to be reviewed..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Dimensions (comma-separated)</label>
+        <input type="text" id="task-dims" value="quality,completeness,correctness">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitTask()">Submit Task (−5 budget)</button>
+        <button class="btn btn-secondary" onclick="hideCreateTask()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail -->
+  <div class="card full-width" id="task-detail-card" style="display:none">
+    <div class="card-header">
+      <h2><span class="icon">🔍</span> Task Detail</h2>
+      <button class="btn btn-secondary btn-sm" onclick="hideTaskDetail()">✕ Close</button>
+    </div>
+    <div class="card-body" id="task-detail-body"></div>
+  </div>
+</div>
+
+<!-- ==================== PRINCIPALS TAB ==================== -->
+<div id="tab-principals" class="main-tab-panel" style="display:none">
+  <div class="card full-width">
+    <div class="card-header">
+      <h2><span class="icon">👤</span> Principals</h2>
+      <button class="btn btn-primary btn-sm" onclick="toggleForm('principal-form')">+ New Principal</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      <!-- Principal Form -->
+      <div id="principal-form" style="display:none;margin:12px;padding:12px;background:var(--surface2);border:1px solid var(--blue);border-radius:6px">
         <h4 style="font-size:12px;color:var(--blue);margin:0 0 10px;text-transform:uppercase">New Principal</h4>
         <div class="form-group">
           <label>Name</label>
@@ -186,1391 +229,430 @@ tr:hover{background:var(--surface2)}
         </div>
         <div class="form-group">
           <label>Roles</label>
-          <input type="text" id="principal-roles" value="general-reviewer" placeholder="general-reviewer, code-reviewer (comma-separated)">
+          <input type="text" id="principal-roles" value="general-reviewer" placeholder="general-reviewer, code-reviewer">
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="createPrincipal()">Create Principal</button>
+          <button class="btn btn-primary" onclick="createPrincipal()">Create</button>
           <button class="btn btn-secondary" onclick="toggleForm('principal-form')">Cancel</button>
         </div>
       </div>
-
-      <table><thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Channels</th><th>Budget</th><th>Actions</th></tr></thead><tbody id="principals-tbody"></tbody></table>
+      <table><thead><tr><th>ID</th><th>Name</th><th>Org</th><th>Roles</th><th>Agents</th><th>Subscribed Channels</th><th>Actions</th></tr></thead><tbody id="principals-tbody"></tbody></table>
     </div>
   </div>
 
-  <!-- Manage Connections -->
-  <div class="card">
+  <div class="card full-width">
     <div class="card-header">
-      <h2><span class="icon">🔗</span> Manage Connections</h2>
-      <button class="btn btn-secondary btn-sm" onclick="refreshConnections()">↻ Refresh</button>
-    </div>
-    <div class="card-body" style="max-height:500px;overflow-y:auto">
-      <!-- Tabs -->
-      <div class="tabs" id="conn-tabs">
-        <div class="tab active" onclick="showConnTab('principal-channel')">Principal → Channel</div>
-        <div class="tab" onclick="showConnTab('principal-agent')">Principal → Agent</div>
-        <div class="tab" onclick="showConnTab('agent-channel')">Agent → Channel</div>
-      </div>
-
-      <!-- Tab: Principal → Channel -->
-      <div id="conn-principal-channel" class="conn-panel" style="padding-top:12px">
-        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Subscribe a principal's agents to a channel so they receive review tasks from it.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="form-group">
-            <label>Principal</label>
-            <select id="conn-pc-principal" onchange="loadPrincipalChannels()"></select>
-          </div>
-          <div class="form-group">
-            <label>Channel</label>
-            <select id="conn-pc-channel"></select>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="subscribePrincipalToChannel()">Subscribe to Channel</button>
-        <div id="conn-pc-current" style="margin-top:12px"></div>
-      </div>
-
-      <!-- Tab: Principal → Agent -->
-      <div id="conn-principal-agent" class="conn-panel" style="display:none;padding-top:12px">
-        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Register a reviewer agent under a principal. The agent acts on behalf of that principal.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="form-group">
-            <label>Principal</label>
-            <select id="conn-pa-principal" onchange="loadPrincipalAgents()"></select>
-          </div>
-          <div class="form-group">
-            <label>Agent Name</label>
-            <input type="text" id="conn-pa-name" placeholder="e.g. Code Reviewer #1">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="form-group">
-            <label>Model</label>
-            <input type="text" id="conn-pa-model" value="deepseek-v4-flash" placeholder="e.g. glm-5.1">
-          </div>
-          <div class="form-group">
-            <label>Provider</label>
-            <select id="conn-pa-provider">
-              <option value="ollama_cloud">Ollama Cloud</option>
-              <option value="openai">OpenAI</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="groq">Groq</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Type</label>
-            <select id="conn-pa-type">
-              <option value="llm">LLM Reviewer</option>
-              <option value="slim">Slim (Fast)</option>
-              <option value="code">Code (Command)</option>
-            </select>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="registerAgent()">Register Agent</button>
-        <div id="conn-pa-current" style="margin-top:12px"></div>
-      </div>
-
-      <!-- Tab: Agent → Channel -->
-      <div id="conn-agent-channel" class="conn-panel" style="display:none;padding-top:12px">
-        <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Subscribe a specific agent to a channel. Use this to make a reviewer focus on a single channel.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div class="form-group">
-            <label>Agent</label>
-            <select id="conn-ac-agent" onchange="loadAgentSubscriptions()"></select>
-          </div>
-          <div class="form-group">
-            <label>Channel</label>
-            <select id="conn-ac-channel"></select>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="subscribeAgentToChannel()">Subscribe Agent</button>
-        <div id="conn-ac-current" style="margin-top:12px"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create Task Form (hidden by default) -->
-  <div class="card full-width" id="create-task-card" style="display:none">
-    <div class="card-header">
-      <h2><span class="icon">✏️</span> Submit Task for Review</h2>
-      <button class="btn btn-secondary btn-sm" onclick="hideCreateTask()">✕ Close</button>
+      <h2><span class="icon">🤖</span> Register Agent</h2>
     </div>
     <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
         <div class="form-group">
-          <label>Agent ID</label>
-          <input type="text" id="task-agent" value="agt_dev" placeholder="agt_dev">
+          <label>Principal</label>
+          <select id="reg-agent-principal"></select>
         </div>
         <div class="form-group">
-          <label>Channel</label>
-          <select id="task-channel"></select>
+          <label>Agent Name</label>
+          <input type="text" id="reg-agent-name" placeholder="e.g. Code Reviewer #1">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="reg-agent-type">
+            <option value="llm">LLM Reviewer</option>
+            <option value="slim">Slim (Fast)</option>
+            <option value="code">Code (Command)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" id="reg-agent-model" value="deepseek-v4-flash" placeholder="e.g. glm-5.1">
+        </div>
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="reg-agent-provider">
+            <option value="ollama_cloud">Ollama Cloud</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="groq">Groq</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>LLM URL (optional)</label>
+          <input type="text" id="reg-agent-llm-url" placeholder="Custom endpoint">
         </div>
       </div>
       <div class="form-group">
-        <label>Description</label>
-        <textarea id="task-desc" placeholder="Describe the work you want reviewed..."></textarea>
-      </div>
-      <div class="form-group">
-        <label>Output</label>
-        <textarea id="task-output" placeholder="The actual output/content to be reviewed..."></textarea>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label>Requested Reviews</label>
-          <input type="number" id="task-reviews" value="3" min="1" max="10">
-        </div>
-        <div class="form-group">
-          <label>Dimensions (comma-separated)</label>
-          <input type="text" id="task-dims" value="quality,completeness,correctness">
-        </div>
+        <label>Instructions</label>
+        <textarea id="reg-agent-instructions" placeholder="You are a senior code reviewer..."></textarea>
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="submitTask()">Submit Task (−5 budget)</button>
-        <button class="btn btn-secondary" onclick="hideCreateTask()">Cancel</button>
+        <button class="btn btn-primary" onclick="registerAgentFromForm()">Register Agent</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Task Detail Panel -->
-  <div class="card full-width" id="task-detail-card" style="display:none">
-    <div class="card-header">
-      <h2><span class="icon">🔍</span> Task Detail</h2>
-      <button class="btn btn-secondary btn-sm" onclick="hideTaskDetail()">✕ Close</button>
-    </div>
-    <div class="card-body" id="task-detail-body"></div>
-  </div>
-
-  <!-- Review Form (hidden by default) -->
-  <div class="card full-width" id="review-card" style="display:none">
-    <div class="card-header">
-      <h2><span class="icon">⭐</span> Submit Review</h2>
-      <button class="btn btn-secondary btn-sm" onclick="hideReviewForm()">✕ Close</button>
-    </div>
-    <div class="card-body">
-      <input type="hidden" id="review-task-id">
-      <div class="form-group">
-        <label>Reviewing as (Agent ID)</label>
-        <input type="text" id="review-agent" placeholder="agt_xxx — must be different principal than task owner">
-      </div>
-      <div class="form-group">
-        <label>Scores</label>
-        <div class="score-grid" id="score-sliders"></div>
-      </div>
-      <div class="form-group">
-        <label>Weighted Overall</label>
-        <input type="number" id="review-overall" value="7" min="1" max="10" step="1">
-      </div>
-      <div class="form-group">
-        <label>Confidence (0—1)</label>
-        <input type="range" id="review-confidence" min="0" max="1" step="0.05" value="0.8" oninput="document.getElementById('conf-val').textContent=this.value"><span id="conf-val" style="margin-left:8px">0.8</span>
-      </div>
-      <div class="form-group">
-        <label>Comment (min 20 chars)</label>
-        <textarea id="review-comment" placeholder="Actionable feedback: what should change and why (max 200 words)" maxlength="1500"></textarea>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px"><span id="comment-word-count">0</span> / 200 words</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <label style="font-size:12px">Approved?</label>
-        <input type="checkbox" id="review-approved" checked>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="submitReview()">Submit Review (+3 budget)</button>
-        <button class="btn btn-secondary" onclick="hideReviewForm()">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Activity Feed -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon">⚡</span> Budget Activity (prn_dev)</h2>
-    </div>
-    <div class="card-body scrollable" id="activity-feed" style="max-height:300px">
-      <div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">Loading...</div>
-    </div>
-  </div>
-
-  <!-- Channels & Orgs -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon">🌐</span> Channels & Orgs</h2>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-primary btn-sm" onclick="toggleForm('channel-form')">+ Channel</button>
-        <button class="btn btn-primary btn-sm" onclick="toggleForm('org-form')">+ Org</button>
-      </div>
-    </div>
-    <div class="card-body scrollable" style="max-height:400px">
-      <!-- Channel Form (hidden) -->
-      <div id="channel-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px">
-        <h4 style="font-size:12px;color:var(--accent);margin:0 0 10px;text-transform:uppercase">New Channel</h4>
-        <div class="form-group">
-          <label>Name (lowercase, dashes)</label>
-          <input type="text" id="channel-name" placeholder="e.g. general-qa" pattern="[a-z0-9-]+">
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <input type="text" id="channel-desc" placeholder="General Q&A review channel">
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="createChannel()">Create Channel</button>
-          <button class="btn btn-secondary" onclick="toggleForm('channel-form')">Cancel</button>
-        </div>
-      </div>
-
-      <!-- Org Form (hidden) -->
-      <div id="org-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--surface2);border:1px solid var(--purple);border-radius:6px">
-        <h4 style="font-size:12px;color:var(--purple);margin:0 0 10px;text-transform:uppercase">New Organization</h4>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="org-name" placeholder="e.g. Acme Corp">
-          </div>
-          <div class="form-group">
-            <label>Slug (lowercase, dashes)</label>
-            <input type="text" id="org-slug" placeholder="e.g. acme-corp" pattern="[a-z0-9-]+">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Description (optional)</label>
-          <input type="text" id="org-desc" placeholder="Optional description">
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="createOrg()">Create Org</button>
-          <button class="btn btn-secondary" onclick="toggleForm('org-form')">Cancel</button>
-        </div>
-      </div>
-
-      <div style="margin-bottom:16px">
-        <h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Channels</h3>
-        <div id="channels-list"></div>
-      </div>
-      <div>
-        <h3 style="font-size:12px;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Organizations</h3>
-        <div id="orgs-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Quick Actions -->
-  <div class="card">
-    <div class="card-header"><h2><span class="icon">🔧</span> Quick Actions</h2></div>
-    <div class="card-body">
-      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Set up test reviewers to simulate the protocol. Each creates a new org + principal + agent subscribed to general-qa.</p>
-      <div class="btn-row" style="flex-wrap:wrap">
-        <button class="btn btn-secondary" onclick="createTestReviewer(1)">+1 Reviewer</button>
-        <button class="btn btn-secondary" onclick="createTestReviewer(3)">+3 Reviewers</button>
-        <button class="btn btn-secondary" onclick="createTestReviewer(5)">+5 Reviewers</button>
-        <button class="btn btn-secondary" onclick="autoReviewAll()">Auto-Review All Open</button>
-      </div>
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-        <p style="font-size:12px;color:var(--text2);margin-bottom:8px">Auto-submit a test task and fill it with reviews from random reviewers.</p>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="fullDemo()">▶ Full Demo (Task + 3 Reviews)</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Reviewers & Models -->
-  <div class="card" id="reviewers-card">
-    <div class="card-header">
-      <h2><span class="icon">🤖</span> Reviewers & Models</h2>
-      <button class="btn btn-secondary" onclick="loadReviewers()" style="font-size:11px;padding:4px 8px">↻ Refresh</button>
-    </div>
-    <div class="card-body scrollable" style="max-height:300px;padding:0">
-      <table>
-        <thead><tr><th>Agent</th><th>Type</th><th>Model</th><th>Provider</th><th>Endpoint</th><th>Instructions</th><th>Skills</th><th>Actions</th></tr></thead>
-        <tbody id="reviewers-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Reviewer Edit Modal -->
-  <div id="reviewer-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;width:400px;max-width:90vw">
-      <h3 style="margin:0 0 16px;font-size:14px">Edit Reviewer Model</h3>
-      <div id="reviewer-edit-agent" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
-      <label style="font-size:11px;color:var(--accent);display:block;margin-bottom:4px;font-weight:600">Reviewer Type</label>
-      <select id="reviewer-edit-type" style="width:100%;margin-bottom:12px" onchange="toggleCommandField()">
-        <option value="llm">llm — Full LLM review (default)</option>
-        <option value="slim">slim — Fast local model (10s timeout)</option>
-        <option value="code">code — Shell command (deterministic)</option>
-        <option value="pipeline">pipeline — Chain multiple reviewers</option>
-      </select>
-      <div id="command-field-wrapper" style="display:none">
-        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Command (for type=code)</label>
-        <input id="reviewer-edit-command" style="width:100%;margin-bottom:12px" placeholder='python3 reviewers/semgrep_reviewer.py'>
-      </div>
-      <div id="steps-field-wrapper" style="display:none">
-        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Steps (comma-separated reviewer names, for type=pipeline)</label>
-        <input id="reviewer-edit-steps" style="width:100%;margin-bottom:12px" placeholder="Fast Guard, Code Reviewer">
-      </div>
-      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px">Model</label>
-      <input id="reviewer-edit-model" list="model-list" style="width:100%;margin-bottom:12px" placeholder="e.g. gpt-4o, claude-sonnet-4">
-      <datalist id="model-list">
-        <option value="glm-5.1">
-        <option value="deepseek-v4-flash">
-        <option value="gemini-3-flash-preview">
-        <option value="gpt-4o">
-        <option value="gpt-4o-mini">
-        <option value="claude-sonnet-4">
-        <option value="claude-haiku-3.5">
-        <option value="llama-3.3-70b">
-        <option value="mistral-large">
-        <option value="qwen2.5-coder-32b">
-      </datalist>
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Provider</label>
-      <select id="reviewer-edit-provider" style="width:100%;margin-bottom:12px">
-        <option value="">— none —</option>
-        <option value="openai">OpenAI</option>
-        <option value="openrouter">OpenRouter</option>
-        <option value="anthropic">Anthropic (needs proxy)</option>
-        <option value="groq">Groq</option>
-        <option value="ollama">Ollama (local)</option>
-        <option value="ollama_cloud">Ollama Cloud</option>
-        <option value="together">Together</option>
-        <option value="fireworks">Fireworks</option>
-        <option value="vllm">vLLM (local)</option>
-        <option value="litellm">LiteLLM (local proxy)</option>
-        <option value="custom">Custom URL</option>
-      </select>
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Custom Endpoint (overrides provider default)</label>
-      <input id="reviewer-edit-llm-url" style="width:100%;margin-bottom:12px" placeholder="https://api.openai.com/v1">
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Instructions (custom system prompt for this reviewer)</label>
-      <textarea id="reviewer-edit-instructions" style="width:100%;min-height:60px;margin-bottom:12px;font-family:var(--mono);font-size:12px;resize:vertical" placeholder="Focus on correctness, cite file:line for every finding"></textarea>
-      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Skills (comma-separated names)</label>
-      <input id="reviewer-edit-skills" style="width:100%;margin-bottom:16px" placeholder="react-patterns, security-audit, system-design">
-      <div class="btn-row" style="justify-content:flex-end">
-        <button class="btn btn-secondary" onclick="closeReviewerEdit()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveReviewerEdit()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Leaderboard -->
-  <div class="card">
-    <div class="card-header"><h2><span class="icon">🏆</span> Reputation Leaderboard</h2></div>
-    <div class="card-body scrollable" style="max-height:300px;padding:0">
-      <table><thead><tr><th>#</th><th>Principal</th><th>Score</th><th>Budget</th></tr></thead><tbody id="leaderboard-tbody"></tbody></table>
     </div>
   </div>
 </div>
 
-<!-- Toast -->
+<!-- ==================== CHANNELS TAB ==================== -->
+<div id="tab-channels" class="main-tab-panel" style="display:none">
+  <div class="card full-width">
+    <div class="card-header">
+      <h2><span class="icon">📡</span> Channels</h2>
+      <button class="btn btn-primary btn-sm" onclick="toggleForm('channel-form')">+ New Channel</button>
+    </div>
+    <div class="card-body" style="padding:0">
+      <!-- Channel Form -->
+      <div id="channel-form" style="display:none;margin:12px;padding:12px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px">
+        <h4 style="font-size:12px;color:var(--accent);margin:0 0 10px;text-transform:uppercase">New Channel</h4>
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="channel-name" placeholder="e.g. code-review">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="channel-desc" placeholder="What is this channel for?"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createChannel()">Create</button>
+          <button class="btn btn-secondary" onclick="toggleForm('channel-form')">Cancel</button>
+        </div>
+      </div>
+      <table><thead><tr><th>Name</th><th>Description</th><th>Subscribers</th><th>Tasks Today</th><th>Actions</th></tr></thead><tbody id="channels-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <div class="card full-width">
+    <div class="card-header">
+      <h2><span class="icon">🔗</span> Subscribe Principal to Channel</h2>
+    </div>
+    <div class="card-body">
+      <p style="font-size:11px;color:var(--text2);margin-bottom:12px">Subscribe a principal's agents to a channel so they receive review tasks from it.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-group">
+          <label>Principal</label>
+          <select id="sub-principal"></select>
+        </div>
+        <div class="form-group">
+          <label>Channel</label>
+          <select id="sub-channel"></select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="subscribePrincipal()">Subscribe</button>
+      <div id="sub-status" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-const API = `${window.location.origin}/v1`;
-let testReviewers = []; // {agent_id, principal_id, org_id, token}
-let currentTaskDims = [];
-let budgetCache = {}; // principal_id -> {earned, available, spent}
+const API = '/v1';
+let cache = { orgs: [], principals: [], agents: [], channels: [], tasks: [], reviews: [] };
 
-// Live word counter for review comment
-document.addEventListener('DOMContentLoaded', () => {
-  const ta = document.getElementById('review-comment');
-  if (ta) {
-    ta.addEventListener('input', () => {
-      const words = ta.value.trim().split(/\s+/).filter(Boolean).length;
-      const el = document.getElementById('comment-word-count');
-      if (el) el.textContent = words;
-    });
-  }
-});
+// ─── Tab Navigation ──────────────────────────────────────────────
+function showMainTab(tab) {
+  document.querySelectorAll('.main-tab-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.main-tabs .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).style.display = 'block';
+  const idx = {overview:0,principals:1,channels:2}[tab];
+  document.querySelectorAll('.main-tabs .tab')[idx].classList.add('active');
+  refresh();
+}
+
+// ─── API Helper ──────────────────────────────────────────────
+async function api(method, path, body, agentId) {
+  const headers = {'Content-Type':'application/json'};
+  if (agentId) headers['X-Agent-Id'] = agentId;
+  const res = await fetch(`${API}${path}`, {method, headers, body: body ? JSON.stringify(body) : undefined});
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error?.message || res.statusText);
+  return json;
+}
 
 function toast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'toast ' + type + ' show';
-  setTimeout(() => t.classList.remove('show'), 3000);
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3000);
 }
 
-function timeAgo(iso) {
-  const d = new Date(iso);
-  const now = new Date();
-  const s = Math.floor((now - d) / 1000);
-  if (s < 60) return s + 's ago';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-}
+function shortId(id) { return id?.slice(0,8) + '…' || '—'; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-function shortId(id) {
-  if (!id) return '—';
-  return id.substring(0, 16) + '…';
-}
-
-async function api(method, path, body, agentId) {
-  const headers = {'Content-Type': 'application/json'};
-  if (agentId) headers['X-Agent-Id'] = agentId;
-  const res = await fetch(API + path, {method, headers, body: body ? JSON.stringify(body) : undefined});
-  return res.json();
-}
-
-let lastTasksHash = '';
-let lastPrincipalsHash = '';
-let lastRefreshTime = 0;
-let currentDetailTaskId = null; // Track which task detail is open
-
+// ─── Refresh Data ──────────────────────────────────────────────
 async function refresh() {
   try {
-    const [health, orgs, principals, channels, tasks] = await Promise.all([
-      api('GET', '/health'),
+    const [orgs, prns, ags, chs, tasks] = await Promise.all([
       api('GET', '/orgs'),
-      api('GET', '/principals'),
-      api('GET', '/channels'),
-      api('GET', '/tasks'),
-    ]);
-
-    // Status
-    const dot = document.getElementById('status-dot');
-    dot.classList.toggle('offline', health.status !== 'ok');
-    document.getElementById('mode-badge').textContent = (health.mode || 'LOCAL').toUpperCase();
-
-    // Stats
-    const allTasks = tasks.data?.tasks || [];
-    const openTasks = allTasks.filter(t => t.status === 'open');
-    const inReviewTasks = allTasks.filter(t => t.status === 'in_review');
-    const completedTasks = allTasks.filter(t => t.status === 'completed');
-
-    // Count reviews from list data (no per-task detail calls)
-    let totalReviews = 0;
-    for (const t of allTasks) {
-      totalReviews += (t.reviews_received || 0);
-    }
-
-    document.getElementById('stat-orgs').textContent = orgs.data?.organizations?.length || 0;
-    document.getElementById('stat-principals').textContent = principals.data?.length || 0;
-    document.getElementById('stat-tasks-open').textContent = openTasks.length + inReviewTasks.length;
-    document.getElementById('stat-tasks-completed').textContent = completedTasks.length;
-    document.getElementById('stat-reviews').textContent = totalReviews;
-    document.getElementById('stat-channels').textContent = channels.data?.channels?.length || 0;
-
-    // Opinions count
-    try {
-      const opinions = await api('GET', '/opinions');
-      document.getElementById('stat-opinions').textContent = opinions.data?.opinions?.length || 0;
-    } catch(e) { document.getElementById('stat-opinions').textContent = '0'; }
-
-    // Only re-render tasks table if data changed
-    const tasksHash = JSON.stringify(allTasks.map(t => `${t.id}:${t.status}:${t.reviews_received}`));
-    if (tasksHash !== lastTasksHash) {
-      lastTasksHash = tasksHash;
-      const tbody = document.getElementById('tasks-tbody');
-      const sortedTasks = [...allTasks].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-      tbody.innerHTML = sortedTasks.map(t => `
-        <tr style="cursor:pointer" onclick="showTaskDetail('${t.id}')">
-          <td class="mono-sm id-cell" title="${t.id}">${shortId(t.id)}</td>
-          <td>${(t.description||'').substring(0,40)}${(t.description||'').length>40?'…':''}</td>
-          <td><span class="badge ${t.status}">${t.status}</span></td>
-          <td>${t.reviews_received ?? 0}/${t.requested_reviews || '?'}</td>
-          <td style="color:var(--text2);font-size:11px">${timeAgo(t.created_at)}</td>
-        </tr>
-      `).join('');
-    }
-
-    // Principals — only re-render if data changed (budget fetched lazily)
-    const pList = principals.data || [];
-    const pHash = JSON.stringify(pList.map(p => p.id));
-    if (pHash !== lastPrincipalsHash) {
-      lastPrincipalsHash = pHash;
-      const ptbody = document.getElementById('principals-tbody');
-      ptbody.innerHTML = pList.map(p => `<tr>
-        <td class="mono-sm id-cell" title="${p.id}">${shortId(p.id)}</td>
-        <td>${p.name || '—'}</td>
-        <td style="font-size:11px">${(p.roles||[]).join(', ')}</td>
-        <td style="font-size:11px;color:var(--text2)" id="pchan-${p.id}">…</td>
-        <td id="budget-${p.id}">—</td>
-        <td><button class="btn btn-secondary" style="font-size:10px;padding:2px 6px" onclick="showConnTab('principal-channel');document.getElementById('conn-pc-principal').value='${p.id}'">🔗</button></td>
-      </tr>`).join('');
-      // Fetch budget for each principal in background (non-blocking)
-      fetchBudgets(pList);
-      // Fetch channel subscriptions for each principal
-      fetchPrincipalChannels(pList);
-    }
-
-    // Channels (lightweight, just re-render)
-    const chList = channels.data?.channels || [];
-    document.getElementById('channels-list').innerHTML = chList.map(c => `
-      <div style="padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:12px">
-        <strong style="color:var(--accent)">#</strong> ${c.name} <span style="color:var(--text2);font-size:10px">${c.description ? '— ' + c.description.substring(0,40) : ''}</span>
-      </div>
-    `).join('') || '<div style="color:var(--text2);font-size:12px">No channels</div>';
-
-    // Orgs
-    const oList = orgs.data?.organizations || [];
-    document.getElementById('orgs-list').innerHTML = oList.map(o => `
-      <div style="padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:12px">
-        <strong>${o.name}</strong> <span style="color:var(--text2)">${o.slug || ''}</span>
-      </div>
-    `).join('') || '<div style="color:var(--text2);font-size:12px">No orgs</div>';
-
-    // Channel select dropdown
-    const sel = document.getElementById('task-channel');
-    sel.innerHTML = chList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-
-    // Activity feed — fetch prn_dev budget lazily (non-blocking)
-    fetchDevBudget();
-
-    // Leaderboard (using cached budget data)
-    renderLeaderboard(pList);
-
-    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
-
-  } catch(e) {
-    document.getElementById('status-dot').classList.add('offline');
-    console.error('Refresh error:', e);
-  }
-}
-
-// Background: fetch budget for each principal, update cells individually
-async function fetchBudgets(principals) {
-  for (const p of principals) {
-    try {
-      const bData = await api('GET', `/principals/${p.id}/budget`);
-      if (bData.data) {
-        budgetCache[p.id] = bData.data;
-        const b = bData.data;
-        const pct = b.spent + b.available > 0 ? Math.round(b.available / (b.spent + b.available) * 100) : 0;
-        const el = document.getElementById(`budget-${p.id}`);
-        if (el) {
-          el.innerHTML = `<div>💰 ${b.available} <span style="color:var(--text2);font-size:10px">(earned: ${b.earned})</span></div><div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%"></div></div>`;
-        }
-      }
-    } catch(e) {}
-  }
-  renderLeaderboard(principals);
-}
-
-// Background: fetch dev budget for activity feed
-async function fetchDevBudget() {
-  try {
-    const devBudget = await api('GET', '/agents/agt_dev/budget');
-    if (devBudget.data) {
-      const b = devBudget.data;
-      const budgetEl = document.getElementById('stat-budget');
-      if (budgetEl) budgetEl.textContent = b.available;
-      const subEl = document.getElementById('stat-budget-sub');
-      if (subEl) subEl.textContent = `earned ${b.earned} / spent ${b.spent}`;
-    }
-    if (devBudget.data && devBudget.data.history) {
-      const hist = devBudget.data.history.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,15);
-      document.getElementById('activity-feed').innerHTML = hist.map(h => {
-        const isPositive = h.amount > 0;
-        return `<div class="activity-item">
-          <span class="activity-time">${timeAgo(h.created_at)}</span>
-          <span class="activity-text">${h.action.replace(/_/g,' ')}</span>
-          <span class="activity-amount ${isPositive?'positive':'negative'}">${isPositive?'+':''}${h.amount}</span>
-        </div>`;
-      }).join('') || '<div style="color:var(--text2);font-size:12px;text-align:center;padding:20px">No activity yet</div>';
-    }
-  } catch(e) {}
-}
-
-function renderLeaderboard(pList) {
-  const lbtbody = document.getElementById('leaderboard-tbody');
-  if (!lbtbody) return;
-  const entries = [];
-  for (const p of pList) {
-    const bData = budgetCache[p.id];
-    if (bData) {
-      entries.push({name: p.name || shortId(p.id), earned: bData.earned, available: bData.available});
-    }
-  }
-  entries.sort((a,b) => b.earned - a.earned);
-  lbtbody.innerHTML = entries.map((e, i) => `
-    <tr><td style="color:var(--accent);font-weight:700">${i+1}</td><td>${e.name}</td><td>${e.earned}</td><td>${e.available}</td></tr>
-  `).join('') || '<tr><td colspan="4" style="color:var(--text2);text-align:center">No data</td></tr>';
-}
-
-function showCreateTask() {
-  document.getElementById('create-task-card').style.display = '';
-  document.getElementById('task-desc').focus();
-}
-function hideCreateTask() {
-  document.getElementById('create-task-card').style.display = 'none';
-}
-
-async function submitTask() {
-  const agent = document.getElementById('task-agent').value.trim() || 'agt_dev';
-  const channel = document.getElementById('task-channel').value || 'general-qa';
-  const desc = document.getElementById('task-desc').value.trim();
-  const output = document.getElementById('task-output').value.trim();
-  const reviews = parseInt(document.getElementById('task-reviews').value) || 3;
-  const dims = document.getElementById('task-dims').value.split(',').map(d => d.trim()).filter(Boolean);
-
-  if (!desc || !output) { toast('Description and output are required', 'error'); return; }
-
-  // Auto-subscribe to the channel before submitting
-  try { await api('POST', `/channels/${channel}/subscribe`, null, agent); } catch(e) {}
-
-  try {
-    const res = await api('POST', '/tasks', {
-      task_description: desc,
-      output,
-      channel,
-      requested_reviews: reviews,
-      dimensions: dims,
-    }, agent);
-
-    if (res.status === 'success') {
-      toast(`Task submitted! ${shortId(res.data.id)} (−5 budget)`);
-      hideCreateTask();
-      document.getElementById('task-desc').value = '';
-      document.getElementById('task-output').value = '';
-      refresh();
-    } else {
-      toast(res.error?.message || 'Failed to submit task', 'error');
-    }
-  } catch(e) {
-    toast('Error: ' + e.message, 'error');
-  }
-}
-
-let currentDetailTask = null;
-
-async function showTaskDetail(taskId) {
-  const res = await api('GET', `/tasks/${taskId}`);
-  if (res.status !== 'success') { toast('Task not found', 'error'); return; }
-  const t = res.data;
-  currentDetailTask = t;
-
-  const reviewsHtml = (t.reviews || []).map(r => {
-    const scoresHtml = r.scores ? Object.entries(r.scores).map(([k,v]) => {
-      const color = v >= 8 ? 'var(--accent)' : v >= 5 ? 'var(--text2)' : '#f87171';
-      return `<span style="font-size:11px;margin-right:8px"><span style="color:var(--text3)">${k}:</span> <span style="color:${color};font-weight:600">${v}</span></span>`;
-    }).join('') : '—';
-    const comment = r.comment || '';
-    // Try to extract actual comment from raw JSON if parsing failed
-    let displayComment = comment;
-    if (comment.startsWith('```json')) {
-      try {
-        const match = comment.match(/"comment"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-        if (match) displayComment = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\u[dD][0-9a-fA-F]{4}/g, '');
-      } catch {}
-    }
-    const hasSuggestions = r.suggestions && r.suggestions.length > 0;
-    return `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span class="mono-sm" style="color:var(--text2)">${shortId(r.reviewer_id || r.principal_id)}</span>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="color:var(--accent);font-weight:700;font-size:15px">★ ${r.weighted_overall || '—'}</span>
-          ${r.approved ? '<span style="color:#4ade80;font-size:12px">✅ Approved</span>' : '<span style="color:#f87171;font-size:12px">❌ Rejected</span>'}
-        </div>
-      </div>
-      <div style="margin-bottom:6px">${scoresHtml}</div>
-      <div style="font-size:12px;color:var(--text1);line-height:1.5;margin-bottom:6px;white-space:pre-wrap">${displayComment}</div>
-      ${hasSuggestions ? `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Suggestions</div>
-        ${(r.suggestions||[]).map(s => `<div style="font-size:11px;color:var(--text2);margin-bottom:2px">· ${s}</div>`).join('')}
-      </div>` : ''}
-      <div style="font-size:10px;margin-top:6px;color:var(--text3)">confidence: ${r.reviewer_confidence != null ? r.reviewer_confidence : '?'} · ${timeAgo(r.created_at)}</div>
-    </div>`;
-  }).join('') || '<div style="color:var(--text2);font-size:12px">No reviews yet</div>';
-
-  document.getElementById('task-detail-body').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div>
-        <div class="mono-sm" style="color:var(--text2);margin-bottom:4px">${t.id}</div>
-        <div style="font-size:14px;font-weight:600;margin-bottom:8px">${(t.description||'').substring(0,120)}</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Channel: <span style="color:var(--accent)">#${t.channel}</span> · Created ${timeAgo(t.created_at)}</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span class="badge ${t.status}">${t.status}</span>
-          <span style="font-size:12px;color:var(--text2)">${t.reviews_received||0}/${t.requested_reviews||'?'} reviews</span>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Output</div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;max-height:150px;overflow-y:auto;font-family:var(--font);white-space:pre-wrap">${(t.output||'').substring(0,500)}</div>
-      </div>
-    </div>
-    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <h3 style="font-size:13px;font-weight:600">Reviews (${t.reviews_received||0}/${t.requested_reviews||'?'})</h3>
-        ${t.status === 'open' || t.status === 'in_review' ? `<button class="btn btn-primary btn-sm" onclick="showReviewForm('${t.id}', [${(t.dimensions||[]).map(d=>`'${d}'`).join(',')}])">+ Submit Review</button>` : ''}
-      </div>
-      ${reviewsHtml}
-    </div>
-  `;
-  document.getElementById('task-detail-card').style.display = '';
-}
-
-function hideTaskDetail() {
-  document.getElementById('task-detail-card').style.display = 'none';
-}
-
-function showReviewForm(taskId, dimensions) {
-  currentTaskDims = dimensions;
-  document.getElementById('review-task-id').value = taskId;
-  const sliders = document.getElementById('score-sliders');
-  sliders.innerHTML = dimensions.map(d => `
-    <div class="score-item">
-      <label>${d}</label>
-      <input type="range" class="score-slider" min="1" max="10" value="7" data-dim="${d}" oninput="this.nextElementSibling.textContent=this.value">
-      <div class="score-val" style="font-size:14px">7</div>
-    </div>
-  `).join('');
-
-  // Default to first test reviewer if available
-  if (testReviewers.length > 0) {
-    document.getElementById('review-agent').value = testReviewers[0].agent_id;
-  }
-  document.getElementById('review-card').style.display = '';
-}
-
-function hideReviewForm() {
-  document.getElementById('review-card').style.display = 'none';
-}
-
-async function submitReview() {
-  const taskId = document.getElementById('review-task-id').value;
-  const agentId = document.getElementById('review-agent').value.trim();
-  const overall = parseInt(document.getElementById('review-overall').value);
-  const confidence = parseFloat(document.getElementById('review-confidence').value);
-  const comment = document.getElementById('review-comment').value.trim();
-  const approved = document.getElementById('review-approved').checked;
-
-  if (!agentId) { toast('Agent ID required', 'error'); return; }
-  if (comment.length < 20) { toast('Comment must be at least 20 characters', 'error'); return; }
-  if (comment.length > 1500) { toast('Comment must be under 1500 characters (~200 words)', 'error'); return; }
-  const wordCount = comment.trim().split(/\s+/).length;
-  if (wordCount > 200) { toast(`Comment is ${wordCount} words — max is 200`, 'error'); return; }
-
-  const scores = {};
-  document.querySelectorAll('#score-sliders .score-slider').forEach(s => {
-    scores[s.dataset.dim] = parseInt(s.value);
-  });
-
-  try {
-    const res = await api('POST', `/tasks/${taskId}/reviews`, {
-      scores,
-      weighted_overall: overall,
-      reviewer_confidence: confidence,
-      comment,
-      approved,
-    }, agentId);
-
-    if (res.status === 'success') {
-      toast(`Review submitted! ${shortId(res.data.id)} (+3 budget)`);
-      hideReviewForm();
-      hideTaskDetail();
-      refresh();
-    } else {
-      toast(res.error?.message || 'Review failed', 'error');
-    }
-  } catch(e) {
-    toast('Error: ' + e.message, 'error');
-  }
-}
-
-async function createTestReviewer(count) {
-  for (let i = 0; i < count; i++) {
-    const num = testReviewers.length + 1;
-    try {
-      const org = await api('POST', '/orgs', {name: `DashOrg${num}`, slug: `dash-org-${num}-${Date.now()}`});
-      if (org.status !== 'success') { toast(`Org creation failed: ${org.error?.message || 'unknown'}`, 'error'); continue; }
-      const orgId = org.data.id;
-
-      const prn = await api('POST', '/principals', {org_id: orgId, name: `DashRev${num}`, roles: ['general-reviewer']});
-      if (prn.status !== 'success') { toast(`Principal creation failed: ${prn.error?.message || 'unknown'}`, 'error'); continue; }
-      const prnId = prn.data.id;
-
-      const agt = await api('POST', `/principals/${prnId}/agents`, {principal_id: prnId, name: `DashAgt${num}`});
-      if (agt.status !== 'success') { toast(`Agent creation failed: ${agt.error?.message || 'unknown'}`, 'error'); continue; }
-      const agtId = agt.data.id;
-
-      await api('POST', '/channels/general-qa/subscribe', null, agtId);
-
-      testReviewers.push({agent_id: agtId, principal_id: prnId, org_id: orgId, token: agt.data.token});
-      toast(`Reviewer ${num} created: ${shortId(agtId)}`);
-    } catch(e) {
-      toast(`Failed creating reviewer ${num}: ${e.message}`, 'error');
-    }
-  }
-  refresh();
-}
-
-async function autoReviewAll() {
-  // Ensure agt_dev is subscribed
-  try { await api('POST', '/channels/general-qa/subscribe', null, 'agt_dev'); } catch(e) {}
-
-  const tasksRes = await api('GET', '/tasks');
-  const openTasks = (tasksRes.data?.tasks || []).filter(t => t.status === 'open' || t.status === 'in_review');
-
-  if (testReviewers.length === 0) {
-    toast('Create reviewers first! (click +1/+3/+5)', 'error');
-    return;
-  }
-  if (openTasks.length === 0) {
-    toast('No open/in_review tasks to review', 'error');
-    return;
-  }
-
-  for (const task of openTasks) {
-    const taskDetail = await api('GET', `/tasks/${task.id}`);
-    if (taskDetail.status !== 'success') continue;
-    const ownerPrn = taskDetail.data.principal_id;
-    const requestedReviews = taskDetail.data.requested_reviews || 3;
-    const reviewsReceived = taskDetail.data.reviews_received || 0;
-    const reviewsNeeded = Math.max(0, requestedReviews - reviewsReceived);
-
-    const eligible = testReviewers.filter(r => r.principal_id !== ownerPrn);
-    if (eligible.length === 0) continue;
-
-    for (const reviewer of eligible.slice(0, reviewsNeeded)) {
-      const scores = {};
-      const dims = taskDetail.data.dimensions || ['quality', 'completeness', 'correctness'];
-      dims.forEach(d => { scores[d] = Math.floor(Math.random() * 3) + 7; });
-
-      try {
-        const res = await api('POST', `/tasks/${task.id}/reviews`, {
-          scores,
-          weighted_overall: Math.floor(Math.random() * 3) + 7,
-          reviewer_confidence: 0.7 + Math.random() * 0.3,
-          comment: `The submission meets the quality bar but has room for improvement. Score justification: ${dims.map(d => `${d}=${scores[d]}`).join(', ')}. The core approach is sound — recommend addressing the lower-scoring dimensions before considering this complete.`,
-          approved: true,
-        }, reviewer.agent_id);
-        if (res.status === 'success') {
-          toast(`Auto-reviewed ${shortId(task.id)} from ${shortId(reviewer.agent_id)}`);
-        } else {
-          toast(`Review failed: ${res.error?.message || 'unknown'}`, 'error');
-        }
-      } catch(e) {
-        // May already be reviewed by this principal
-      }
-    }
-  }
-  refresh();
-}
-
-async function fullDemo() {
-  toast('Starting full demo...');
-
-  // Ensure agt_dev is subscribed to general-qa
-  try { await api('POST', '/channels/general-qa/subscribe', null, 'agt_dev'); } catch(e) {}
-
-  // Ensure we have at least 3 reviewers
-  if (testReviewers.length < 3) {
-    await createTestReviewer(3 - testReviewers.length);
-  }
-
-  // Create task as agt_dev
-  const taskRes = await api('POST', '/tasks', {
-    task_description: 'Dashboard demo: test task with auto-generated reviews',
-    output: 'This is a demo submission showcasing Conclave peer review, consensus alignment, and high-score budget bonuses in action',
-    channel: 'general-qa',
-    requested_reviews: 3,
-    dimensions: ['quality', 'completeness', 'correctness'],
-  }, 'agt_dev');
-
-  if (taskRes.status !== 'success') {
-    toast('Failed to create task: ' + (taskRes.error?.message || 'unknown'), 'error');
-    return;
-  }
-
-  const taskId = taskRes.data.id;
-  toast(`Task created: ${shortId(taskId)}`);
-
-  // Get task detail to find owner principal
-  const taskDetail = await api('GET', `/tasks/${taskId}`);
-  const ownerPrn = taskDetail.data.principal_id;
-
-  // Submit reviews from the first 3 eligible reviewers
-  const eligible = testReviewers.filter(r => r.principal_id !== ownerPrn);
-  for (let i = 0; i < Math.min(3, eligible.length); i++) {
-    const reviewer = eligible[i];
-    const dims = taskDetail.data.dimensions || ['quality', 'completeness', 'correctness'];
-    const scores = {};
-    dims.forEach(d => { scores[d] = [8, 9, 9][i] || 8; });
-
-    await new Promise(r => setTimeout(r, 500)); // stagger reviews
-
-    try {
-      await api('POST', `/tasks/${taskId}/reviews`, {
-        scores,
-        weighted_overall: [8, 9, 9][i] || 8,
-        reviewer_confidence: 0.85 + i * 0.05,
-        comment: `Review ${i+1}: The implementation handles the happy path well but needs attention on edge cases. Specific concerns: (1) error paths return generic messages that hide root cause — consider structured error types with codes; (2) no input validation on the public-facing fields — add schema validation before processing. The overall architecture is clean and the core logic is correct.`,
-        approved: true,
-      }, reviewer.agent_id);
-      toast(`Review ${i+1}/3 submitted!`);
-    } catch(e) {
-      toast(`Review ${i+1} failed: ${e.message}`, 'error');
-    }
-  }
-
-  refresh();
-}
-
-// ─── Connection Management ──────────────────────────────────
-
-let connData = { principals: [], agents: [], channels: [] };
-
-function showConnTab(tab) {
-  document.querySelectorAll('.conn-panel').forEach(p => p.style.display = 'none');
-  document.querySelectorAll('#conn-tabs .tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`conn-${tab}`).style.display = 'block';
-  const tabMap = { 'principal-channel': 0, 'principal-agent': 1, 'agent-channel': 2 };
-  document.querySelectorAll('#conn-tabs .tab')[tabMap[tab]].classList.add('active');
-  refreshConnections();
-}
-
-async function refreshConnections() {
-  try {
-    const [prResp, agResp, chResp] = await Promise.all([
       api('GET', '/principals'),
       api('GET', '/agents'),
       api('GET', '/channels'),
+      api('GET', '/tasks'),
     ]);
-    connData.principals = prResp.data || [];
-    connData.agents = agResp.data || [];
-    connData.channels = chResp.data?.channels || [];
+    cache.orgs = orgs.data?.organizations || orgs.data || [];
+    cache.principals = prns.data || [];
+    cache.agents = ags.data || [];
+    cache.channels = chs.data?.channels || [];
+    cache.tasks = tasks.data?.tasks || [];
 
-    // Populate dropdowns
-    populateSelect('conn-pc-principal', connData.principals.map(p => ({ value: p.id, label: p.name || p.id })));
-    populateSelect('conn-pc-channel', connData.channels.map(c => ({ value: c.name, label: c.name })));
-    populateSelect('conn-pa-principal', connData.principals.map(p => ({ value: p.id, label: p.name || p.id })));
-    populateSelect('conn-ac-agent', connData.agents.map(a => ({ value: a.id, label: a.name || a.id })));
-    populateSelect('conn-ac-channel', connData.channels.map(c => ({ value: c.name, label: c.name })));
-
-    // Load current relationships
-    loadPrincipalChannels();
-    loadPrincipalAgents();
-    loadAgentSubscriptions();
+    renderStats();
+    renderTasks();
+    renderPrincipals();
+    renderChannels();
+    populateDropdowns();
+    updateStatus(true);
   } catch(e) {
-    console.error('refreshConnections error:', e);
+    console.error('Refresh error:', e);
+    updateStatus(false);
   }
+  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
 }
 
-function populateSelect(id, options) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+function updateStatus(ok) {
+  document.getElementById('status-dot').className = `status-dot ${ok ? '' : 'offline'}`;
 }
 
-async function loadPrincipalChannels() {
-  const sel = document.getElementById('conn-pc-principal');
-  if (!sel?.value) { document.getElementById('conn-pc-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select a principal</span>'; return; }
-  const pid = sel.value;
-  const principal = connData.principals.find(p => p.id === pid);
-  if (!principal) return;
+// ─── Render Stats ──────────────────────────────────────────────
+function renderStats() {
+  document.getElementById('stat-orgs').textContent = cache.orgs.length;
+  document.getElementById('stat-principals').textContent = cache.principals.length;
+  document.getElementById('stat-agents').textContent = cache.agents.length;
+  document.getElementById('stat-channels').textContent = cache.channels.length;
+  document.getElementById('stat-tasks-open').textContent = cache.tasks.filter(t => t.status === 'open' || t.status === 'in_review').length;
+  document.getElementById('stat-tasks-completed').textContent = cache.tasks.filter(t => t.status === 'completed').length;
+  document.getElementById('stat-reviews').textContent = cache.tasks.reduce((sum, t) => sum + (t.reviews_received || 0), 0);
+  document.getElementById('stat-budget').textContent = '∞';
+}
 
-  // Get agents under this principal, then find their channel subscriptions
-  try {
-    const agentsResp = await api('GET', `/principals/${pid}/agents`);
-    const agents = agentsResp.data?.agents || [];
-    const channelSet = new Set();
-    for (const ag of agents) {
-      try {
-        const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
-        (subs.data?.channels || []).forEach(c => channelSet.add(c));
-      } catch(e) {}
-    }
-    const channels = [...channelSet];
-    document.getElementById('conn-pc-current').innerHTML = channels.length > 0
-      ? `<div style="font-size:11px;color:var(--text2)">Subscribed channels:</div>` +
-        channels.map(c => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:var(--surface2);border-radius:3px;font-size:11px">#${c} <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="unsubscribePrincipalFromChannel('${pid}','${c}')">✕</button></span>`).join('')
-      : '<span style="color:var(--text2);font-size:11px">Not subscribed to any channels</span>';
-  } catch(e) {
-    document.getElementById('conn-pc-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
+// ─── Render Tasks ──────────────────────────────────────────────
+function renderTasks() {
+  const tbody = document.getElementById('tasks-tbody');
+  if (cache.tasks.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text2);text-align:center;padding:20px">No tasks yet</td></tr>';
+    return;
   }
+  tbody.innerHTML = cache.tasks.slice().reverse().map(t => `
+    <tr>
+      <td class="id-cell mono-sm">${shortId(t.id)}</td>
+      <td><span class="channel-tag">#${t.channel || 'general'}</span></td>
+      <td><span class="badge ${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${t.reviews_received || 0}/${t.requested_reviews || 3}</td>
+      <td style="color:var(--text2);font-size:11px">${new Date(t.created_at).toLocaleString()}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="showTaskDetail('${t.id}')">View</button></td>
+    </tr>
+  `).join('');
 }
 
-async function subscribePrincipalToChannel() {
-  const pid = document.getElementById('conn-pc-principal').value;
-  const channel = document.getElementById('conn-pc-channel').value;
-  if (!pid || !channel) return toast('Select a principal and channel', 'error');
-
-  try {
-    // Get agents under this principal
-    const agentsResp = await api('GET', `/principals/${pid}/agents`);
-    const agents = agentsResp.data?.agents || [];
-    if (agents.length === 0) {
-      toast('No agents under this principal — register one first', 'error');
-      return;
-    }
-    // Subscribe all agents under this principal to the channel
-    for (const ag of agents) {
-      await api('POST', `/channels/${channel}/subscribe`, { principal_id: pid });
-      break; // Only need to subscribe once per principal — it's principal-level, not agent-level
-    }
-    toast(`Subscribed ${agents.length} agent(s) to #${channel}`);
-    loadPrincipalChannels();
-  } catch(e) {
-    toast(e.message || 'Failed to subscribe', 'error');
+// ─── Render Principals ──────────────────────────────────────────────
+async function renderPrincipals() {
+  const tbody = document.getElementById('principals-tbody');
+  if (cache.principals.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text2);text-align:center;padding:20px">No principals yet</td></tr>';
+    return;
   }
-}
-
-async function unsubscribePrincipalFromChannel(pid, channel) {
-  try {
-    await api('DELETE', `/channels/${channel}/subscribe`, { principal_id: pid });
-    toast(`Unsubscribed from #${channel}`);
-    loadPrincipalChannels();
-  } catch(e) {
-    toast(e.message || 'Failed to unsubscribe', 'error');
-  }
-}
-
-async function loadPrincipalAgents() {
-  const sel = document.getElementById('conn-pa-principal');
-  if (!sel?.value) { document.getElementById('conn-pa-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select a principal</span>'; return; }
-  const pid = sel.value;
-  try {
-    const agentsResp = await api('GET', `/principals/${pid}/agents`);
-    const agents = agentsResp.data?.agents || [];
-    document.getElementById('conn-pa-current').innerHTML = agents.length > 0
-      ? agents.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:4px;margin-bottom:4px;font-size:11px">
-          <span><strong>${a.name || a.id}</strong> <span style="color:var(--text2)">${a.type || ''} ${a.model ? '· ' + a.model : ''}</span></span>
-          <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="deleteAgent('${a.id}')">✕</button>
-        </div>`).join('')
-      : '<span style="color:var(--text2);font-size:11px">No agents registered</span>';
-  } catch(e) {
-    document.getElementById('conn-pa-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
-  }
-}
-
-async function registerAgent() {
-  const pid = document.getElementById('conn-pa-principal').value;
-  const name = document.getElementById('conn-pa-name').value;
-  const model = document.getElementById('conn-pa-model').value;
-  const provider = document.getElementById('conn-pa-provider').value;
-  const type = document.getElementById('conn-pa-type').value;
-  if (!pid || !name) return toast('Select a principal and enter agent name', 'error');
-
-  try {
-    const resp = await api('POST', `/principals/${pid}/agents`, {
-      name, type, model, provider,
-      llm_url: PROVIDER_URLS[provider] || '',
-      instructions: `You are a ${name}. Review for quality and correctness.`,
-    });
-    toast(`Registered agent ${resp.data?.agent_id || name}`);
-    document.getElementById('conn-pa-name').value = '';
-    loadPrincipalAgents();
-    refresh(); // Refresh main dashboard
-  } catch(e) {
-    toast(e.message || 'Failed to register agent', 'error');
-  }
-}
-
-async function deleteAgent(agentId) {
-  try {
-    await api('DELETE', `/agents/${agentId}`);
-    toast(`Deleted agent ${shortId(agentId)}`);
-    loadPrincipalAgents();
-    refresh();
-  } catch(e) {
-    toast(e.message || 'Failed to delete agent', 'error');
-  }
-}
-
-async function loadAgentSubscriptions() {
-  const sel = document.getElementById('conn-ac-agent');
-  if (!sel?.value) { document.getElementById('conn-ac-current').innerHTML = '<span style="color:var(--text2);font-size:11px">Select an agent</span>'; return; }
-  const aid = sel.value;
-  try {
-    const subs = await api('GET', `/agents/${aid}/subscriptions`);
-    const channels = subs.data?.channels || [];
-    document.getElementById('conn-ac-current').innerHTML = channels.length > 0
-      ? channels.map(c => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:var(--surface2);border-radius:3px;font-size:11px">#${c} <button style="color:var(--red);cursor:pointer;border:none;background:none;font-size:10px" onclick="unsubscribeAgent('${aid}','${c}')">✕</button></span>`).join('')
-      : '<span style="color:var(--text2);font-size:11px">Not subscribed to any channels</span>';
-  } catch(e) {
-    document.getElementById('conn-ac-current').innerHTML = `<span style="color:var(--red);font-size:11px">Error: ${e.message}</span>`;
-  }
-}
-
-async function subscribeAgentToChannel() {
-  const aid = document.getElementById('conn-ac-agent').value;
-  const channel = document.getElementById('conn-ac-channel').value;
-  if (!aid || !channel) return toast('Select an agent and channel', 'error');
-  try {
-    // Find the principal for this agent
-    const agent = connData.agents.find(a => a.id === aid);
-    if (!agent) return toast('Agent not found', 'error');
-    await api('POST', `/channels/${channel}/subscribe`, { principal_id: agent.principal_id || agent.principalId });
-    toast(`Subscribed ${shortId(aid)} to #${channel}`);
-    loadAgentSubscriptions();
-  } catch(e) {
-    toast(e.message || 'Failed to subscribe', 'error');
-  }
-}
-
-async function unsubscribeAgent(aid, channel) {
-  try {
-    await api('DELETE', `/channels/${channel}/subscribe`, { agent_id: aid });
-    toast(`Unsubscribed from #${channel}`);
-    loadAgentSubscriptions();
-  } catch(e) {
-    toast(e.message || 'Failed to unsubscribe', 'error');
-  }
-}
-
-// Fetch channel subscriptions for principals table
-async function fetchPrincipalChannels(principals) {
-  for (const p of principals) {
+  const rows = [];
+  for (const p of cache.principals) {
+    const org = cache.orgs.find(o => o.id === p.org_id);
+    const agents = cache.agents.filter(a => a.principal_id === p.id);
+    const agentNames = agents.map(a => `<span class="agent-tag">${esc(a.name || shortId(a.id))}</span>`).join('');
+    // Get subscribed channels for this principal
+    let channels = [];
     try {
-      const agentsResp = await api('GET', `/principals/${p.id}/agents`);
-      const agents = agentsResp.data?.agents || [];
-      const channelSet = new Set();
       for (const ag of agents) {
-        try {
-          const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
-          (subs.data?.channels || []).forEach(c => channelSet.add(c));
-        } catch(e) {}
-      }
-      const el = document.getElementById(`pchan-${p.id}`);
-      if (el) {
-        const channels = [...channelSet];
-        el.innerHTML = channels.length > 0
-          ? channels.map(c => `<span style="background:var(--surface2);padding:1px 4px;border-radius:2px;font-size:10px">#${c}</span>`).join(' ')
-          : '<span style="color:var(--text2)">—</span>';
+        const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
+        (subs.data?.channels || []).forEach(c => { if (!channels.includes(c)) channels.push(c); });
       }
     } catch(e) {}
+    const channelTags = channels.length > 0 ? channels.map(c => `<span class="channel-tag">#${c}</span>`).join('') : '<span style="color:var(--text2)">—</span>';
+    rows.push(`
+      <tr>
+        <td class="id-cell mono-sm">${shortId(p.id)}</td>
+        <td>${esc(p.name || '—')}</td>
+        <td>${esc(org?.name || shortId(p.org_id))}</td>
+        <td>${(p.roles || []).join(', ')}</td>
+        <td>${agentNames || '<span style="color:var(--text2)">No agents</span>'}</td>
+        <td>${channelTags}</td>
+        <td><button class="btn btn-sm btn-secondary" onclick="deletePrincipal('${p.id}')">Delete</button></td>
+      </tr>
+    `);
   }
+  tbody.innerHTML = rows.join('');
 }
 
-// Auto-refresh every 10 seconds
-refresh();
-loadReviewers();
-setInterval(refresh, 10000);
-setInterval(loadReviewers, 30000);
-
-// ─── Reviewer Config Panel ──────────────────────────────────
-const PROVIDER_URLS = {
-  openai: 'https://api.openai.com/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
-  ollama: 'http://localhost:11434/v1',
-  ollama_cloud: 'https://www.ollama.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
-  together: 'https://api.together.xyz/v1',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  groq: 'https://api.groq.com/openai/v1',
-  vllm: 'http://localhost:8000/v1',
-  litellm: 'http://localhost:4000/v1',
-};
-
-let reviewersData = [];
-let editingAgentId = null;
-
-async function loadReviewers() {
-  try {
-    const res = await fetch(`${API}/agents?per_page=50`);
-    const json = await res.json();
-    const agents = json.data?.items ?? json.data ?? [];
-    reviewersData = agents;
-    const tbody = document.getElementById('reviewers-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = agents.map(a => {
-      const prov = a.provider || '—';
-      const url = a.llm_url || '—';
-      const urlShort = url.length > 30 ? url.slice(0, 30) + '…' : url;
-      const instrShort = a.instructions ? (a.instructions.length > 40 ? a.instructions.slice(0, 40) + '…' : a.instructions) : '—';
-      const skills = a.skills && a.skills.length > 0 ? a.skills.map(s => `<span style="background:rgba(129,140,248,0.15);color:var(--purple);padding:1px 5px;border-radius:3px;font-size:9px;margin-right:2px">${esc(s)}</span>`).join('') : '—';
-      const type = a.type || 'llm';
-      const typeBadge = type === 'code' ? '🔧' : type === 'slim' ? '⚡' : type === 'pipeline' ? '🔗' : '🧠';
-      const typeColor = type === 'code' ? 'var(--green)' : type === 'slim' ? 'var(--warning, #f59e0b)' : type === 'pipeline' ? 'var(--purple)' : 'var(--accent)';
-      return `<tr>
-        <td style="font-size:12px;font-weight:600">${esc(a.name || a.id)}</td>
-        <td style="font-size:11px"><span style="background:${typeColor};color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${typeBadge} ${esc(type)}</span></td>
-        <td style="font-size:12px"><code>${esc(a.model || '—')}</code></td>
-        <td style="font-size:12px">${prov !== '—' ? `<span style="background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${esc(prov)}</span>` : '—'}</td>
-        <td style="font-size:11px;color:var(--text2)" title="${esc(url)}">${esc(urlShort)}</td>
-        <td style="font-size:11px;color:var(--text2)" title="${esc(a.instructions || '')}">${esc(instrShort)}</td>
-        <td style="font-size:11px">${skills}</td>
-        <td><button class="btn btn-secondary" style="font-size:10px;padding:2px 8px" onclick="openReviewerEdit('${a.id}')">Edit</button></td>
-      </tr>`;
-    }).join('');
-  } catch (e) { console.error('loadReviewers error:', e); }
-}
-
-function openReviewerEdit(agentId) {
-  editingAgentId = agentId;
-  const agent = reviewersData.find(a => a.id === agentId);
-  if (!agent) return;
-  document.getElementById('reviewer-edit-agent').textContent = `${agent.name || agent.id}`;
-  document.getElementById('reviewer-edit-type').value = agent.type || 'llm';
-  document.getElementById('reviewer-edit-model').value = agent.model || '';
-  document.getElementById('reviewer-edit-provider').value = agent.provider || '';
-  document.getElementById('reviewer-edit-llm-url').value = agent.llm_url || '';
-  document.getElementById('reviewer-edit-command').value = agent.command || '';
-  document.getElementById('reviewer-edit-steps').value = (agent.steps || []).join(', ');
-  document.getElementById('reviewer-edit-instructions').value = agent.instructions || '';
-  document.getElementById('reviewer-edit-skills').value = (agent.skills || []).join(', ');
-  toggleCommandField();
-  const modal = document.getElementById('reviewer-edit-modal');
-  modal.style.display = 'flex';
-}
-
-function toggleCommandField() {
-  const type = document.getElementById('reviewer-edit-type').value;
-  document.getElementById('command-field-wrapper').style.display = type === 'code' ? 'block' : 'none';
-  document.getElementById('steps-field-wrapper').style.display = type === 'pipeline' ? 'block' : 'none';
-}
-
-function closeReviewerEdit() {
-  document.getElementById('reviewer-edit-modal').style.display = 'none';
-  editingAgentId = null;
-}
-
-async function saveReviewerEdit() {
-  if (!editingAgentId) return;
-  const type = document.getElementById('reviewer-edit-type').value;
-  const model = document.getElementById('reviewer-edit-model').value.trim();
-  const provider = document.getElementById('reviewer-edit-provider').value;
-  const customUrl = document.getElementById('reviewer-edit-llm-url').value.trim();
-  const command = document.getElementById('reviewer-edit-command').value.trim();
-  const stepsRaw = document.getElementById('reviewer-edit-steps').value.trim();
-  const instructions = document.getElementById('reviewer-edit-instructions').value.trim();
-  const skillsRaw = document.getElementById('reviewer-edit-skills').value.trim();
-
-  const body = {};
-  body.type = type;
-  if (model) body.model = model;
-  if (provider && provider !== 'custom') {
-    body.provider = provider;
-    if (!customUrl) body.llm_url = PROVIDER_URLS[provider];
+// ─── Render Channels ──────────────────────────────────────────────
+async function renderChannels() {
+  const tbody = document.getElementById('channels-tbody');
+  if (cache.channels.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text2);text-align:center;padding:20px">No channels yet</td></tr>';
+    return;
   }
-  if (customUrl) body.llm_url = customUrl;
-  if (type === 'code' && command) body.command = command;
-  if (type === 'pipeline' && stepsRaw) {
-    body.steps = stepsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const rows = [];
+  for (const ch of cache.channels) {
+    // Count subscribers
+    let subs = [];
+    try {
+      const subRes = await api('GET', `/channels/${ch.name}/subscribers`);
+      subs = subRes.data?.subscribers || [];
+    } catch(e) {}
+    rows.push(`
+      <tr>
+        <td><span class="channel-tag">#${ch.name}</span></td>
+        <td>${esc(ch.description || '—')}</td>
+        <td>${subs.length > 0 ? subs.map(s => esc(s.name || shortId(s.id))).join(', ') : '<span style="color:var(--text2)">None</span>'}</td>
+        <td>—</td>
+        <td><button class="btn btn-sm btn-secondary" onclick="deleteChannel('${ch.name}')">Delete</button></td>
+      </tr>
+    `);
   }
-  if (instructions) body.instructions = instructions;
-  if (skillsRaw) {
-    body.skills = skillsRaw.split(',').map(s => s.trim()).filter(Boolean);
-  }
-
-  try {
-    const res = await fetch(`${API}/agents/${editingAgentId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      toast(`Error: ${err.error?.message || res.statusText}`, 'error');
-      return;
-    }
-    toast(`Updated ${editingAgentId}`, 'success');
-    closeReviewerEdit();
-    loadReviewers();
-  } catch (e) {
-    toast(`Error: ${e.message}`, 'error');
-  }
+  tbody.innerHTML = rows.join('');
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+// ─── Populate Dropdowns ──────────────────────────────────────────────
+function populateDropdowns() {
+  // Task channel dropdown
+  const taskCh = document.getElementById('task-channel');
+  if (taskCh) taskCh.innerHTML = cache.channels.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || '<option value="general-qa">general-qa</option>';
 
-// ─── Create Forms ──────────────────────────────────────────────
+  // Principal dropdowns
+  const prnOpts = cache.principals.map(p => `<option value="${p.id}">${esc(p.name || shortId(p.id))}</option>`).join('');
+  const selIds = ['principal-org-select', 'reg-agent-principal', 'sub-principal'];
+  selIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = prnOpts || '<option value="">— no principals —</option>';
+  });
+
+  // Channel dropdown
+  const chOpts = cache.channels.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const chSel = document.getElementById('sub-channel');
+  if (chSel) chSel.innerHTML = chOpts || '<option value="general-qa">general-qa</option>';
+}
+
+// ─── Forms ──────────────────────────────────────────────
 function toggleForm(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  const isHidden = el.style.display === 'none';
-  el.style.display = isHidden ? 'block' : 'none';
-  // Populate org dropdown when showing principal form
-  if (id === 'principal-form' && isHidden) {
-    populateOrgDropdown();
-  }
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-async function populateOrgDropdown() {
-  const sel = document.getElementById('principal-org-select');
-  if (!sel) return;
+function showCreateTask() { document.getElementById('create-task-card').style.display = 'block'; }
+function hideCreateTask() { document.getElementById('create-task-card').style.display = 'none'; }
+
+async function createPrincipal() {
+  const name = document.getElementById('principal-name').value.trim();
+  const orgId = document.getElementById('principal-org-select').value;
+  const roles = document.getElementById('principal-roles').value.split(',').map(r => r.trim()).filter(Boolean);
+  if (!name) return toast('Name required', 'error');
+  if (!orgId) return toast('Select an organization', 'error');
   try {
-    const res = await api('GET', '/orgs');
-    const orgs = res.data?.organizations || res.data || [];
-    sel.innerHTML = orgs.map(o => `<option value="${o.id}">${o.name} (${o.slug})</option>`).join('');
-    if (orgs.length === 0) {
-      sel.innerHTML = '<option value="">— no orgs yet —</option>';
-    }
-  } catch(e) {
-    sel.innerHTML = '<option value="">— error loading orgs —</option>';
-  }
+    const res = await api('POST', '/principals', { org_id: orgId, name, roles });
+    toast(`Principal ${res.data?.id || 'created'}`);
+    toggleForm('principal-form');
+    refresh();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function createChannel() {
   const name = document.getElementById('channel-name').value.trim();
   const desc = document.getElementById('channel-desc').value.trim();
-  if (!name) { toast('Channel name is required', 'error'); return; }
-  if (!/^[a-z0-9-]+$/.test(name)) { toast('Channel name must be lowercase with dashes only', 'error'); return; }
-
+  if (!name) return toast('Name required', 'error');
+  if (!/^[a-z0-9-]+$/.test(name)) return toast('Lowercase letters, numbers, dashes only', 'error');
   try {
-    const res = await api('POST', '/channels', { name, description: desc || undefined });
-    if (res.status === 'success' || res.data) {
-      toast(`Channel "${name}" created!`);
-      document.getElementById('channel-name').value = '';
-      document.getElementById('channel-desc').value = '';
-      toggleForm('channel-form');
-      refresh();
-    } else {
-      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
-    }
-  } catch(e) {
-    toast(`Error: ${e.message}`, 'error');
-  }
+    await api('POST', '/channels', { name, description: desc || undefined });
+    toast(`Channel #${name} created`);
+    toggleForm('channel-form');
+    refresh();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
-async function createOrg() {
-  const name = document.getElementById('org-name').value.trim();
-  const slug = document.getElementById('org-slug').value.trim();
-  const desc = document.getElementById('org-desc').value.trim();
-  if (!name) { toast('Organization name is required', 'error'); return; }
-  if (!slug) { toast('Slug is required', 'error'); return; }
-  if (!/^[a-z0-9-]+$/.test(slug)) { toast('Slug must be lowercase with dashes only', 'error'); return; }
-
+async function registerAgentFromForm() {
+  const principalId = document.getElementById('reg-agent-principal').value;
+  const name = document.getElementById('reg-agent-name').value.trim();
+  const type = document.getElementById('reg-agent-type').value;
+  const model = document.getElementById('reg-agent-model').value.trim();
+  const provider = document.getElementById('reg-agent-provider').value;
+  const llmUrl = document.getElementById('reg-agent-llm-url').value.trim();
+  const instructions = document.getElementById('reg-agent-instructions').value.trim();
+  if (!principalId || !name) return toast('Principal and name required', 'error');
   try {
-    const res = await api('POST', '/orgs', { name, slug, description: desc || undefined });
-    if (res.status === 'success' || res.data) {
-      toast(`Org "${name}" created!`);
-      document.getElementById('org-name').value = '';
-      document.getElementById('org-slug').value = '';
-      document.getElementById('org-desc').value = '';
-      toggleForm('org-form');
-      refresh();
-    } else {
-      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
-    }
-  } catch(e) {
-    toast(`Error: ${e.message}`, 'error');
-  }
+    const res = await api('POST', '/agents/register', {
+      principal_id: principalId, name, type, model, provider,
+      llm_url: llmUrl || undefined,
+      instructions: instructions || `You are ${name}. Review for quality and correctness.`,
+    });
+    toast(`Agent ${res.data?.id || name} registered`);
+    document.getElementById('reg-agent-name').value = '';
+    refresh();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
-async function createPrincipal() {
-  const name = document.getElementById('principal-name').value.trim();
-  const orgId = document.getElementById('principal-org-select').value;
-  const rolesStr = document.getElementById('principal-roles').value.trim();
-  if (!name) { toast('Principal name is required', 'error'); return; }
-  if (!orgId) { toast('Select an organization first (create one in Channels & Orgs)', 'error'); return; }
-  const roles = rolesStr ? rolesStr.split(',').map(r => r.trim()).filter(Boolean) : ['general-reviewer'];
-
+async function subscribePrincipal() {
+  const principalId = document.getElementById('sub-principal').value;
+  const channel = document.getElementById('sub-channel').value;
+  if (!principalId || !channel) return toast('Select both', 'error');
   try {
-    const res = await api('POST', '/principals', { name, org_id: orgId, roles });
-    if (res.status === 'success' || res.data) {
-      const prnId = res.data.id;
-      toast(`Principal "${name}" created! (${shortId(prnId)})`);
-      document.getElementById('principal-name').value = '';
-      document.getElementById('principal-roles').value = 'general-reviewer';
-
-      // Auto-create an agent for this principal
-      try {
-        const agtRes = await api('POST', `/principals/${prnId}/agents`, { principal_id: prnId, name: `${name}_agent` });
-        if (agtRes.status === 'success' || agtRes.data) {
-          toast(`Agent "${name}_agent" auto-created`, 'success');
-          // Auto-subscribe to general-qa if channel exists
-          try { await api('POST', '/channels/general-qa/subscribe', null, agtRes.data.id); } catch(e) {}
-        }
-      } catch(e) {
-        // Agent creation is optional, don't block
-      }
-
-      toggleForm('principal-form');
-      refresh();
-    } else {
-      toast(`Failed: ${res.error?.message || 'unknown error'}`, 'error');
-    }
-  } catch(e) {
-    toast(`Error: ${e.message}`, 'error');
-  }
+    await api('POST', `/channels/${channel}/subscribe`, { principal_id: principalId });
+    toast(`Subscribed to #${channel}`);
+    document.getElementById('sub-status').innerHTML = `<span style="color:var(--accent)">✓ Subscribed</span>`;
+    refresh();
+  } catch(e) { toast(e.message, 'error'); }
 }
+
+async function submitTask() {
+  const channel = document.getElementById('task-channel').value;
+  const desc = document.getElementById('task-desc').value.trim();
+  const output = document.getElementById('task-output').value.trim();
+  const reviews = parseInt(document.getElementById('task-reviews').value) || 3;
+  const dims = document.getElementById('task-dims').value.split(',').map(d => d.trim()).filter(Boolean);
+  if (!desc || !output) return toast('Description and output required', 'error');
+  try {
+    const res = await api('POST', '/tasks', {
+      channel, description: desc, output, requested_reviews: reviews, dimensions: dims,
+    }, 'agt_dev');
+    toast(`Task ${res.data?.id} submitted`);
+    hideCreateTask();
+    refresh();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function showTaskDetail(id) {
+  const t = cache.tasks.find(x => x.id === id);
+  if (!t) return;
+  const reviewsRes = await api('GET', `/tasks/${id}/reviews`);
+  const reviews = reviewsRes.data?.reviews || [];
+  document.getElementById('task-detail-body').innerHTML = `
+    <div style="margin-bottom:12px"><strong>Channel:</strong> #${t.channel || 'general'}</div>
+    <div style="margin-bottom:12px"><strong>Status:</strong> <span class="badge ${t.status}">${t.status}</span></div>
+    <div style="margin-bottom:12px"><strong>Description:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(t.description || '—')}</pre></div>
+    <div style="margin-bottom:12px"><strong>Output:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(t.output || '—')}</pre></div>
+    <div style="margin-bottom:12px"><strong>Reviews (${reviews.length}/${t.requested_reviews || 3}):</strong></div>
+    ${reviews.map(r => `
+      <div style="background:var(--surface2);padding:10px;border-radius:4px;margin-bottom:8px;font-size:11px">
+        <div><strong>${esc(r.reviewer_name || shortId(r.reviewer_id))}</strong> — Score: ${r.weighted_overall}/10</div>
+        <div style="color:var(--text2);margin-top:4px">${esc(r.comment || '—')}</div>
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('task-detail-card').style.display = 'block';
+}
+function hideTaskDetail() { document.getElementById('task-detail-card').style.display = 'none'; }
+
+async function deletePrincipal(id) {
+  if (!confirm('Delete this principal?')) return;
+  try { await api('DELETE', `/principals/${id}`); toast('Deleted'); refresh(); }
+  catch(e) { toast(e.message, 'error'); }
+}
+async function deleteChannel(name) {
+  if (!confirm(`Delete channel #${name}?`)) return;
+  try { await api('DELETE', `/channels/${name}`); toast('Deleted'); refresh(); }
+  catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Init ──────────────────────────────────────────────
+refresh();
+setInterval(refresh, 15000);
 </script>
 </body>
 </html>
