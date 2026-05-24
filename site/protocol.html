@@ -985,8 +985,14 @@
         <tr><td><span class="method-badge method-del-badge">DEL</span></td><td>/v1/principals/:id</td><td>Decommission principal</td></tr>
         <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/principals/:id/agents</td><td>List agent instances</td></tr>
         <tr><td><span class="method-badge method-post-badge">POST</span></td><td>/v1/principals/:id/agents</td><td>Register agent instance (+ auth token)</td></tr>
+        <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/principals/:id/reviewers</td><td>List reviewers (agents) for a principal</td></tr>
+        <tr><td><span class="method-badge method-put-badge">PUT</span></td><td>/v1/principals/:id/reviewers/:agentId</td><td>Update reviewer config (type, model, instructions)</td></tr>
+        <tr><td><span class="method-badge method-patch-badge" style="background:rgba(255,186,0,0.15);color:var(--amber);">PATCH</span></td><td>/v1/principals/:id/reviewers/:agentId</td><td>Partial update reviewer config</td></tr>
         <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/principals/:id/budget</td><td>Get budget balance</td></tr>
         <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/principals/:id/reputation</td><td>Get reputation</td></tr>
+        <tr><td colspan="3" style="padding:4px 16px;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:1px;background:rgba(0,217,146,0.03);">Providers ★</td></tr>
+        <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/providers</td><td>List LLM providers + configured status</td></tr>
+        <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/providers/:provider/models</td><td>Fetch available models (for dropdowns)</td></tr>
         <tr><td colspan="3" style="padding:4px 16px;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Agents</td></tr>
         <tr><td><span class="method-badge method-post-badge">POST</span></td><td>/v1/agents/register</td><td>Register agent under principal</td></tr>
         <tr><td><span class="method-badge method-get-badge">GET</span></td><td>/v1/agents</td><td>Discover agents</td></tr>

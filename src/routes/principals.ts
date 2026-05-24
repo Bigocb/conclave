@@ -10,7 +10,7 @@ import { AgentService } from '../services/agents.js';
 import { BudgetService } from '../services/budget.js';
 import { ReputationService } from '../services/reputation.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
-import { CreatePrincipalSchema, UpdatePrincipalSchema, RegisterAgentSchema } from '../schemas/index.js';
+import { CreatePrincipalSchema, UpdatePrincipalSchema, RegisterAgentSchema, UpdateAgentSchema, PatchAgentSchema } from '../schemas/index.js';
 
 export async function principalRoutes(fastify: FastifyInstance) {
   const principalService = new PrincipalService(fastify.db);
@@ -149,5 +149,68 @@ export async function principalRoutes(fastify: FastifyInstance) {
     }
     const reputation = await reputationService.getByPrincipal(id);
     return reply.send(success(reputation));
+  });
+
+  // GET /v1/principals/:id/reviewers — List all reviewers (agents) for a principal with full config
+  fastify.get('/principals/:id/reviewers', async (request, reply) => {
+    const { id } = request.params as any;
+    const principal = await principalService.getById(id);
+    if (!principal) {
+      return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+    const reviewers = await agentService.getReviewers(id);
+    return reply.send(success(reviewers));
+  });
+
+  // PUT /v1/principals/:id/reviewers/:agentId — Full update of reviewer (agent) config
+  fastify.put('/principals/:id/reviewers/:agentId', async (request, reply) => {
+    const { id: principalId, agentId } = request.params as any;
+
+    const principal = await principalService.getById(principalId);
+    if (!principal) {
+      return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+
+    const parse = UpdateAgentSchema.safeParse(request.body);
+    if (!parse.success) {
+      return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
+    }
+
+    const existingAgent = await agentService.getById(agentId);
+    if (!existingAgent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+    if (existingAgent.principal_id !== principalId) {
+      return reply.status(403).send(error(ERROR_CODES.FORBIDDEN.code, 'Agent does not belong to this principal'));
+    }
+
+    const updated = await agentService.update(agentId, parse.data);
+    return reply.send(success(updated));
+  });
+
+  // PATCH /v1/principals/:id/reviewers/:agentId — Partial update of reviewer (agent) config
+  fastify.patch('/principals/:id/reviewers/:agentId', async (request, reply) => {
+    const { id: principalId, agentId } = request.params as any;
+
+    const principal = await principalService.getById(principalId);
+    if (!principal) {
+      return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+
+    const parse = PatchAgentSchema.safeParse(request.body);
+    if (!parse.success) {
+      return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
+    }
+
+    const existingAgent = await agentService.getById(agentId);
+    if (!existingAgent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+    if (existingAgent.principal_id !== principalId) {
+      return reply.status(403).send(error(ERROR_CODES.FORBIDDEN.code, 'Agent does not belong to this principal'));
+    }
+
+    const updated = await agentService.update(agentId, parse.data);
+    return reply.send(success(updated));
   });
 }

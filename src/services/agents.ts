@@ -79,6 +79,12 @@ export class AgentService {
       .where(eq(schema.agents.id, id));
   }
 
+  async getReviewers(principalId: string) {
+    const rows = await this.db.select().from(schema.agents)
+      .where(and(eq(schema.agents.principalId, principalId), eq(schema.agents.status, 'active')));
+    return rows.map(r => this.formatAgent(r));
+  }
+
   async list(filters: { org?: string; principal?: string; status?: string; page?: number; perPage?: number }) {
     const page = filters.page ?? 1;
     const perPage = filters.perPage ?? 20;

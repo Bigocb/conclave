@@ -21,6 +21,7 @@ import { spotCheckRoutes } from '../routes/spot-check.js';
 import { orgRoutes } from '../routes/orgs.js';
 import { healthRoutes } from '../routes/health.js';
 import { fleetRoutes } from '../routes/fleet.js';
+import { providerRoutes } from '../routes/providers.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {
@@ -126,6 +127,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(budgetRoutes, { prefix: '/v1' });
   await fastify.register(spotCheckRoutes, { prefix: '/v1' });
   await fastify.register(orgRoutes, { prefix: '/v1' });
+  await fastify.register(providerRoutes, { prefix: '/v1' });
 
   // Fleet routes (only when fleet manager is provided)
   if (fleetManager) {

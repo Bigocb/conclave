@@ -246,6 +246,8 @@
     <a href="#how-it-works">How It Works</a>
     <a href="#use-cases">Use Cases</a>
     <a href="#backends">Backends</a>
+    <a href="#panel-of-views">Panel of Views</a>
+    <a href="#fleet">Fleet</a>
     <a href="protocol.html">Protocol Docs</a>
     <a href="dashboard.html" class="nav-secondary">Dashboard</a>
     <a href="https://github.com/Bigocb/conclave" class="nav-cta">GitHub →</a>
@@ -471,7 +473,129 @@
 
 <hr class="divider">
 
-<!-- MCP INTEGRATION -->
+<!-- PANEL OF VIEWS -->
+<section class="section" id="panel-of-views">
+  <div class="section-label">Panel of Views</div>
+  <div class="section-title">The same code, three completely different lenses.</div>
+  <div class="section-desc">
+    Most code review tools give you one opinion. Conclave lets you configure a <strong>panel of expert reviewers</strong> — each with different instructions, different specialties, and different scoring criteria. Same artifact, radically different insights.
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 32px;">
+    <div class="feature-card" style="border-left: 3px solid var(--rose);">
+      <div class="feature-icon">🛡️</div>
+      <h3 style="font-size: 15px;">Security Auditor</h3>
+      <p style="color: var(--text2); font-size: 14px; margin-bottom: 8px;">Instructions: <em>"Focus on injection vectors, auth bypass, and data leaks. Be paranoid."</em></p>
+      <div style="background: var(--bg); border-radius: 8px; padding: 12px; font-family: var(--mono); font-size: 12px; color: var(--text3);">
+        <div style="display: flex; justify-content: space-between;"><span>security</span><span style="color: var(--rose);">2/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>correctness</span><span style="color: var(--rose);">3/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>coverage</span><span style="color: var(--amber);">5/10</span></div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--rose);">❌ REJECTED — "SQL injection on line 42"</div>
+      </div>
+    </div>
+    <div class="feature-card" style="border-left: 3px solid var(--cyan);">
+      <div class="feature-icon">⚡</div>
+      <h3 style="font-size: 15px;">Performance Reviewer</h3>
+      <p style="color: var(--text2); font-size: 14px; margin-bottom: 8px;">Instructions: <em>"Focus on algorithmic complexity, memory allocation, and N+1 queries. Flag anything O(n²) or worse."</em></p>
+      <div style="background: var(--bg); border-radius: 8px; padding: 12px; font-family: var(--mono); font-size: 12px; color: var(--text3);">
+        <div style="display: flex; justify-content: space-between;"><span>efficiency</span><span style="color: var(--amber);">6/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>completeness</span><span style="color: var(--green);">8/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>scalability</span><span style="color: var(--amber);">5/10</span></div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--amber);">⚠️ NEEDS WORK — "N+1 query in the loop"</div>
+      </div>
+    </div>
+    <div class="feature-card" style="border-left: 3px solid var(--green);">
+      <div class="feature-icon">📖</div>
+      <h3 style="font-size: 15px;">Readability Coach</h3>
+      <p style="color: var(--text2); font-size: 14px; margin-bottom: 8px;">Instructions: <em>"Focus on naming, cognitive load, and abstractions. Is this code understandable by a junior dev in 6 months?"</em></p>
+      <div style="background: var(--bg); border-radius: 8px; padding: 12px; font-family: var(--mono); font-size: 12px; color: var(--text3);">
+        <div style="display: flex; justify-content: space-between;"><span>readability</span><span style="color: var(--green);">8/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>naming</span><span style="color: var(--green);">9/10</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>coherence</span><span style="color: var(--green);">7/10</span></div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--green);">✅ APPROVED — "Clean, well-named functions"</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 32px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+      <span style="font-family: var(--mono); font-size: 12px; color: var(--purple); background: rgba(167,139,250,0.1); padding: 2px 8px; border-radius: 4px;">fleet.yaml</span>
+      <span style="font-size: 14px; font-weight: 600;">Same reviewer type, different instructions</span>
+    </div>
+    <pre style="font-family: var(--mono); font-size: 13px; color: var(--text2); line-height: 1.7; overflow-x: auto;"><code><span style="color: var(--text3)">reviewers:</span>
+  <span style="color: var(--text3)">- name:</span> <span style="color: var(--green)">"Security Auditor"</span>
+    <span style="color: var(--cyan)">type:</span> <span style="color: var(--green)">llm</span>
+    <span style="color: var(--cyan)">model:</span> <span style="color: var(--green)">deepseek-v4-flash</span>
+    <span style="color: var(--cyan)">channel:</span> <span style="color: var(--green)">security-review</span>
+    <span style="color: var(--cyan)">instructions:</span> <span style="color: var(--green)">"Focus on injection vectors, auth bypass, and data leaks. Be paranoid."</span>
+
+  <span style="color: var(--text3)">- name:</span> <span style="color: var(--green)">"Performance Reviewer"</span>
+    <span style="color: var(--cyan)">type:</span> <span style="color: var(--green)">llm</span>
+    <span style="color: var(--cyan)">model:</span> <span style="color: var(--green)">deepseek-v4-flash</span>
+    <span style="color: var(--cyan)">channel:</span> <span style="color: var(--green)">code-review</span>
+    <span style="color: var(--cyan)">instructions:</span> <span style="color: var(--green)">"Focus on algorithmic complexity and memory allocation. Flag O(n²) or worse."</span>
+
+  <span style="color: var(--text3)">- name:</span> <span style="color: var(--green)">"Readability Coach"</span>
+    <span style="color: var(--cyan)">type:</span> <span style="color: var(--green)">llm</span>
+    <span style="color: var(--cyan)">model:</span> <span style="color: var(--green)">glm-5</span>
+    <span style="color: var(--cyan)">channel:</span> <span style="color: var(--green)">code-review</span>
+    <span style="color: var(--cyan)">instructions:</span> <span style="color: var(--green)">"Focus on naming, cognitive load, and abstractions."</span></code></pre>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FLEET MANAGER -->
+<section class="section" id="fleet">
+  <div class="section-label">Fleet Manager</div>
+  <div class="section-title">Auto-dispatch reviewers. Zero config changes.</div>
+  <div class="section-desc">
+    The Fleet Manager runs alongside Conclave and automatically dispatches reviews.
+    Define your reviewers in <code>fleet.yaml</code>, start the fleet, and every submitted task
+    gets picked up by the right reviewer within seconds.
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 32px;">
+    <div class="feature-card" style="border-left: 3px solid var(--green);">
+      <div class="feature-icon">🤖</div>
+      <h3>Auto-Polling</h3>
+      <p>Each reviewer polls its subscribed channels every 30 seconds. New tasks are picked up automatically — no webhooks, no manual dispatch.</p>
+    </div>
+    <div class="feature-card" style="border-left: 3px solid var(--cyan);">
+      <div class="feature-icon">🔌</div>
+      <h3>Multi-Provider</h3>
+      <p>Connect OpenAI, Ollama Cloud, Anthropic, or any OpenAI-compatible endpoint. Choose the model per reviewer. Mix local and cloud models.</p>
+    </div>
+    <div class="feature-card" style="border-left: 3px solid var(--purple);">
+      <div class="feature-icon">📊</div>
+      <h3>Live Dashboard</h3>
+      <p><code>Reviewers: 3/3 | Active: 1 | Completed: 12 | Uptime: 45m</code> — see what's happening in real time. Failed reviews auto-retry on the next poll cycle.</p>
+    </div>
+    <div class="feature-card" style="border-left: 3px solid var(--amber);">
+      <div class="feature-icon">🎯</div>
+      <h3>Channel Routing</h3>
+      <p>Route tasks to specialized reviewers via channels: <code>security-review</code>, <code>code-review</code>, <code>architecture</code>. Each reviewer subscribes to the channels it knows best.</p>
+    </div>
+  </div>
+
+  <div style="margin-top: 32px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto;">
+    <div style="color: var(--text3); margin-bottom: 8px;">$ npx tsx src/fleet/index.ts start --config fleet.yaml</div>
+    <div style="color: var(--green);">🔧 Provisioning fleet...</div>
+    <div style="color: var(--text2);">  Creating principal: Security Scanner</div>
+    <div style="color: var(--text2);">  Agent registered: agt_8d9c... under prn_8d9c...</div>
+    <div style="color: var(--text2);">  Subscribed: prn_8d9c... → code-review, security-review</div>
+    <div style="color: var(--green);">✅ Fleet provisioned</div>
+    <div style="color: var(--text3); margin-top: 8px;">🚀 Starting fleet...</div>
+    <div style="color: var(--text2);">  🤖 Security Scanner (auto) — polling every 30s</div>
+    <div style="color: var(--text2);">  🤖 Code Reviewer (auto) — polling every 30s</div>
+    <div style="color: var(--text2);">  🤖 General Reviewer (auto) — polling every 30s</div>
+    <div style="color: var(--green);">✅ Fleet running</div>
+    <div style="color: var(--text3); margin-top: 8px;">[10:25:25 PM] Reviewers: 3/3 Active: 1 Completed: 0</div>
+    <div style="color: var(--text2);">  📡 Code Reviewer polled code-review: 1 tasks</div>
+    <div style="color: var(--text2);">  🎯 Code Reviewer found task tsk_7165... from general-qa</div>
+    <div style="color: var(--green); margin-top: 4px;">  ✅ Code Reviewer: Auto-reviewed task tsk_7165... (overall: 2)</div>
+  </div>
+</section>
 <section class="section" id="mcp">
   <div class="section-label">MCP Integration</div>
   <div class="section-title">Three tools. Ten-line integration.</div>

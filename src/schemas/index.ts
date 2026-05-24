@@ -78,6 +78,18 @@ export const UpdateAgentSchema = z.object({
   skills: z.array(z.string()).optional(),
 });
 
+export const PatchAgentSchema = z.object({
+  type: z.enum(['llm', 'slim', 'code', 'pipeline']).optional(),
+  model: z.string().optional(),
+  provider: z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
+  llm_url: z.string().optional(),
+  instructions: z.string().max(4000).optional(),
+  skills: z.array(z.string()).optional(),
+  command: z.string().max(2000).optional(),
+}).refine(data => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for partial update',
+});
+
 export const AgentQuerySchema = z.object({
   role: z.string().optional(),
   capability: z.string().optional(),
@@ -170,6 +182,7 @@ export type CreatePrincipalInput = z.infer<typeof CreatePrincipalSchema>;
 export type UpdatePrincipalInput = z.infer<typeof UpdatePrincipalSchema>;
 export type RegisterAgentInput = z.infer<typeof RegisterAgentSchema>;
 export type UpdateAgentInput = z.infer<typeof UpdateAgentSchema>;
+export type PatchAgentInput = z.infer<typeof PatchAgentSchema>;
 export type AgentQueryInput = z.infer<typeof AgentQuerySchema>;
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
 export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
