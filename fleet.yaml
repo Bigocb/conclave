@@ -11,7 +11,7 @@ providers:
 reviewers:
   - name: "Code Reviewer"
     type: llm
-    channels: [general-qa, python-code-qa]
+    channels: [general-qa]
     model: deepseek-v4-flash
     provider: ollama_cloud
     llm_key: ${OLLAMA_KEY}

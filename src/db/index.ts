@@ -25,14 +25,8 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
   console.log('[initDb] PostgreSQL connected');
 
   try {
-    console.log('[initDb] Pushing schema to ensure tables exist...');
-    // Drop old unprefixed tables if they exist (migration from pre-clv_ schema)
-    await client`DROP TABLE IF EXISTS spot_checks, reputation_snapshots, opinion_responses, opinions, reviews, tasks, channel_subscribers, channel_subscriptions, channels, budget_history, attention_budgets, agents, principals, organizations CASCADE`;
-    // Also drop clv_ tables to recreate with correct schema (safe on cold start, seeds re-insert)
-    await client`DROP TABLE IF EXISTS clv_spot_checks, clv_reputation_snapshots, clv_opinion_responses, clv_opinions, clv_reviews, clv_tasks, clv_channel_subscriptions, clv_channels, clv_budget_history, clv_attention_budgets, clv_agents, clv_principals, clv_organizations CASCADE`;
-    console.log('[initDb] Old tables dropped (if any), recreating with correct schema');
-
-    // Create tables if they don't exist using raw SQL
+    console.log('[initDb] Ensuring tables exist...');
+    // Create tables if they don't exist (safe for re-runs — IF NOT EXISTS skips existing)
     await client`CREATE TABLE IF NOT EXISTS clv_organizations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
