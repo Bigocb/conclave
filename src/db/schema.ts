@@ -13,7 +13,7 @@ export const organizations = pgTable('clv_organizations', {
   description: text('description'),
   policies: text('policies'),                 // JSON
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
 });
 
 // ─── Principals (durable identity layer) ────────────────────
@@ -26,7 +26,7 @@ export const principals = pgTable('clv_principals', {
   metadata: text('metadata'),                   // JSON object
   status: text('status').notNull().default('active'), // active | decommissioned
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
 });
 
 // ─── Agents (ephemeral instances under a principal) ────────
@@ -45,7 +45,7 @@ export const agents = pgTable('clv_agents', {
   token: text('token').notNull().unique(),
   status: text('status').notNull().default('active'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
 });
 
 // ─── Attention Budgets (owned by principals) ────────────────
@@ -101,7 +101,7 @@ export const tasks = pgTable('clv_tasks', {
   metadata: text('metadata'),                    // JSON
   budgetSpent: integer('budget_spent').notNull().default(5),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
 });
 
 // ─── Reviews ────────────────────────────────────────────────

@@ -132,6 +132,8 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
+    // Make updated_at nullable for existing tables (Drizzle $defaultFn may omit it from inserts)
+    await client`ALTER TABLE clv_reviews ALTER COLUMN updated_at DROP NOT NULL`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL REFERENCES clv_agents(id),
