@@ -710,17 +710,39 @@ async function showTaskDetail(taskId) {
   const t = res.data;
   currentDetailTask = t;
 
-  const reviewsHtml = (t.reviews || []).map(r => `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span class="mono-sm" style="color:var(--text2)">${shortId(r.principal_id)}</span>
-        <span style="color:var(--accent);font-weight:700">★ ${r.weighted_overall}</span>
+  const reviewsHtml = (t.reviews || []).map(r => {
+    const scoresHtml = r.scores ? Object.entries(r.scores).map(([k,v]) => {
+      const color = v >= 8 ? 'var(--accent)' : v >= 5 ? 'var(--text2)' : '#f87171';
+      return `<span style="font-size:11px;margin-right:8px"><span style="color:var(--text3)">${k}:</span> <span style="color:${color};font-weight:600">${v}</span></span>`;
+    }).join('') : '—';
+    const comment = r.comment || '';
+    // Try to extract actual comment from raw JSON if parsing failed
+    let displayComment = comment;
+    if (comment.startsWith('```json')) {
+      try {
+        const match = comment.match(/"comment"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (match) displayComment = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\u[dD][0-9a-fA-F]{4}/g, '');
+      } catch {}
+    }
+    const hasSuggestions = r.suggestions && r.suggestions.length > 0;
+    return `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="mono-sm" style="color:var(--text2)">${shortId(r.reviewer_id || r.principal_id)}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:var(--accent);font-weight:700;font-size:15px">★ ${r.weighted_overall || '—'}</span>
+          ${r.approved ? '<span style="color:#4ade80;font-size:12px">✅ Approved</span>' : '<span style="color:#f87171;font-size:12px">❌ Rejected</span>'}
+        </div>
       </div>
-      <div style="font-size:11px;margin-top:4px">${(r.scores ? Object.entries(r.scores).map(([k,v]) => `${k}: ${v}`).join(' · ') : '—')}</div>
-      <div style="font-size:12px;margin-top:4px;color:var(--text2)">${(r.comment||'').substring(0,100)}</div>
-      <div style="font-size:10px;margin-top:4px;color:var(--text2)">${r.approved ? '✅ Approved' : '❌ Rejected'} · confidence ${r.reviewer_confidence || '?'} · ${timeAgo(r.created_at)}</div>
-    </div>
-  `).join('') || '<div style="color:var(--text2);font-size:12px">No reviews yet</div>';
+      <div style="margin-bottom:6px">${scoresHtml}</div>
+      <div style="font-size:12px;color:var(--text1);line-height:1.5;margin-bottom:6px;white-space:pre-wrap">${displayComment}</div>
+      ${hasSuggestions ? `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Suggestions</div>
+        ${(r.suggestions||[]).map(s => `<div style="font-size:11px;color:var(--text2);margin-bottom:2px">· ${s}</div>`).join('')}
+      </div>` : ''}
+      <div style="font-size:10px;margin-top:6px;color:var(--text3)">confidence: ${r.reviewer_confidence != null ? r.reviewer_confidence : '?'} · ${timeAgo(r.created_at)}</div>
+    </div>`;
+  }).join('') || '<div style="color:var(--text2);font-size:12px">No reviews yet</div>';
 
   document.getElementById('task-detail-body').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
