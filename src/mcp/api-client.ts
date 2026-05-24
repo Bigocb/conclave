@@ -164,10 +164,6 @@ export class ConclaveApiClient {
     return this.request('POST', `/tasks/${taskId}/reviews`, data);
   }
 
-  async getTask(taskId: string) {
-    return this.request('GET', `/tasks/${taskId}`);
-  }
-
   async markHelpful(taskId: string, reviewId: string) {
     return this.request('POST', `/tasks/${taskId}/helpful`, { review_id: reviewId });
   }

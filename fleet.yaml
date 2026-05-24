@@ -1,37 +1,46 @@
-# Conclave Fleet — Dev Config
+# Conclave Fleet — Production Reviewers
+# Points at the deployed Conclave API on Vercel
+
 org_id: org_dev
-server: http://localhost:3000
+server: https://conclave-roan.vercel.app
 scope: public
 
 providers:
   ollama_cloud: https://www.ollama.com/v1
 
 reviewers:
-  - name: "Security Scanner"
-    type: code
-    channels: [code-review, security-review]
-    command: "python3 examples/semgrep_reviewer.py"
-    mode: auto
-    replicas: 1
-
   - name: "Code Reviewer"
     type: llm
-    channels: [code-review, architecture, general-qa]
+    channels: [general-qa, python-code-qa]
     model: deepseek-v4-flash
     provider: ollama_cloud
     llm_key: ${OLLAMA_KEY}
     mode: auto
     replicas: 1
-    instructions: "You are a senior code reviewer. Focus on correctness, security, and performance. Cite specific lines. Max 200 words."
+    interval: 15
+    instructions: "You are a senior code reviewer. Focus on correctness, security, performance, and readability. Cite specific lines. Be constructive and specific. Max 200 words."
     skills: ["security-audit", "system-design"]
 
   - name: "General Reviewer"
     type: llm
-    channels: [fact-check, creative]
-    model: glm-5
+    channels: [general-qa]
+    model: glm-5.1
     provider: ollama_cloud
     llm_key: ${OLLAMA_KEY}
     mode: auto
     replicas: 1
-    instructions: "Review for factual accuracy and quality. Be concise and specific."
+    interval: 20
+    instructions: "Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most."
     skills: ["reasoning"]
+
+  - name: "Architecture Reviewer"
+    type: llm
+    channels: [general-qa]
+    model: deepseek-v4-flash
+    provider: ollama_cloud
+    llm_key: ${OLLAMA_KEY}
+    mode: auto
+    replicas: 1
+    interval: 25
+    instructions: "You are an expert in software architecture, system design, and scalability. Review with an eye toward maintainability, extensibility, and clean abstractions."
+    skills: ["system-design", "scalability"]

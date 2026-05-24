@@ -273,10 +273,10 @@ export class FleetManager extends EventEmitter {
       }
 
       // 4. Load prompt template
-      let prompt = DEFAULT_REVIEW_PROMPT;
+      let prompt: string = DEFAULT_REVIEW_PROMPT;
       if (reviewer.prompt) {
         try {
-          prompt = loadPromptTemplate(reviewer.prompt);
+          prompt = loadPromptTemplate(reviewer.prompt) ?? DEFAULT_REVIEW_PROMPT;
         } catch {
           console.warn(`  ⚠ Custom prompt not found for ${reviewer.name}, using default`);
         }
@@ -470,7 +470,7 @@ export class FleetManager extends EventEmitter {
           reviewInput,
           async (stepName: string, input: ReviewInput) => {
             // Find the step's process
-            const stepProc = [...this.processes.values()].find(p => p.reviewerName === stepName);
+            const stepProc = Array.from(this.processes.values()).find(p => p.reviewerName === stepName);
             if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
             const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
             const stepType = stepProc.type || 'llm';

@@ -12,7 +12,15 @@
  */
 
 import { execFile } from 'child_process';
-import { AgentRecord } from '../services/agents.js';
+
+// AgentRecord type used by reviewer backends
+export type AgentRecord = {
+  model?: string | null;
+  instructions?: string | null;
+  skills?: string[] | null;
+  command?: string | null;
+  type?: string | null;
+};
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -75,7 +83,7 @@ export async function runLlmReview(
       throw new Error(`LLM ${res.status}: ${text.slice(0, 200)}`);
     }
 
-    const json = await res.json();
+    const json: any = await res.json();
     const content = json.choices?.[0]?.message?.content || '';
     return parseLlmReviewResponse(content, input.dimensions);
   } finally {
@@ -209,7 +217,7 @@ export async function runPipelineReview(
     weighted_overall: Math.round(avgOverall * 10) / 10,
     reviewer_confidence: bestConfidence,
     comment: lastComment.slice(0, 1500),
-    suggestions: [...new Set(allSuggestions)],
+    suggestions: Array.from(new Set(allSuggestions)),
   };
 }
 
