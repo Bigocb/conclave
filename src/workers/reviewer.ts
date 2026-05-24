@@ -48,7 +48,10 @@ Score each requested dimension from 1-10 (integers only). Provide a weighted ove
 Rate your confidence in this review (0-1, where 1 = very confident).
 Give a concise comment (20-1500 chars) and specific suggestions.
 
-Respond in EXACTLY this JSON format (no markdown, no backticks):
+IMPORTANT: Respond with ONLY a JSON object. No markdown, no backticks, no explanation before or after the JSON.
+The response must start with { and end with }.
+
+JSON format:
 {
   "scores": { "dimension_name": 7 },
   "weighted_overall": 7,
@@ -141,40 +144,62 @@ async function callLLM(opts: {
 // ─── Parse review ─────────────────────────────────────────────
 
 function parseReviewResponse(raw: string): ReviewResult | null {
-  // Strip markdown fences
   let cleaned = raw.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
 
+  // Strip markdown fences (```json ... ```)
+  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```$/m, '');
+
+  // Try direct parse first
   try {
     const parsed = JSON.parse(cleaned);
-    return {
-      scores: parsed.scores ?? {},
-      weighted_overall: parsed.weighted_overall ?? parsed.overall ?? 5,
-      reviewer_confidence: parsed.reviewer_confidence ?? parsed.confidence ?? 0.5,
-      comment: parsed.comment ?? parsed.summary ?? '',
-      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-      approved: parsed.approved ?? false,
-    };
-  } catch {
-    // Try to find JSON object in the response
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          scores: parsed.scores ?? {},
-          weighted_overall: parsed.weighted_overall ?? parsed.overall ?? 5,
-          reviewer_confidence: parsed.reviewer_confidence ?? parsed.confidence ?? 0.5,
-          comment: parsed.comment ?? parsed.summary ?? '',
-          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-          approved: parsed.approved ?? false,
-        };
-      } catch { return null; }
-    }
-    return null;
+    return normalizeReview(parsed);
+  } catch { /* not pure JSON */ }
+
+  // Try to find a JSON code block in markdown
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeBlockMatch) {
+    try {
+      return normalizeReview(JSON.parse(codeBlockMatch[1].trim()));
+    } catch { /* not valid JSON in code block */ }
   }
+
+  // Find the outermost { ... } — use brace counting to handle nested JSON
+  const firstBrace = cleaned.indexOf('{');
+  if (firstBrace === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = firstBrace; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"' && !escape) { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        // Found a complete JSON object
+        try {
+          return normalizeReview(JSON.parse(cleaned.slice(firstBrace, i + 1)));
+        } catch { return null; }
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeReview(parsed: any): ReviewResult {
+  return {
+    scores: parsed.scores ?? {},
+    weighted_overall: Number(parsed.weighted_overall ?? parsed.overall ?? 5),
+    reviewer_confidence: Number(parsed.reviewer_confidence ?? parsed.confidence ?? 0.5),
+    comment: String(parsed.comment ?? parsed.summary ?? ''),
+    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+    approved: Boolean(parsed.approved),
+  };
 }
 
 // ─── Config Parsing ───────────────────────────────────────────
