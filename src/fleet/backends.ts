@@ -52,7 +52,7 @@ export async function runLlmReview(
   timeoutMs = 60000,
 ): Promise<ReviewOutput> {
   const systemPrompt = buildLlmSystemPrompt(input);
-  const userPrompt = input.output;
+  const userPrompt = input.output || input.task_description || 'No output provided';
 
   const body = {
     model: agent.model || 'gpt-4o-mini',

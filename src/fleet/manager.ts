@@ -119,7 +119,7 @@ async function callLLM(opts: {
   });
 
   if (!resp.ok) {
-    const body = await resp.text();
+    const body = await resp.text().catch(() => '');
     throw new Error(`LLM API error ${resp.status}: ${body.slice(0, 200)}`);
   }
 
