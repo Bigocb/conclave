@@ -4,7 +4,9 @@
   "framework": null,
   "rewrites": [
     { "source": "/v1/:match*", "destination": "/api/index" },
-    { "source": "/health", "destination": "/api/index" }
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/protocol", "destination": "/protocol.html" }
   ],
   "functions": {
     "api/index.ts": {
