@@ -56,6 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!headers['content-type']) {
       headers['content-type'] = 'application/json';
     }
+    // Fix Content-Length to match our re-serialized body (Vercel auto-parses JSON,
+    // so the original Content-Length may not match our JSON.stringify output)
+    headers['content-length'] = String(Buffer.byteLength(body, 'utf-8'));
   }
 
   const response = await app.inject({
