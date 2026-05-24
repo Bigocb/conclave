@@ -80,8 +80,9 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`CREATE TABLE IF NOT EXISTS clv_budget_history (
       id TEXT PRIMARY KEY,
       principal_id TEXT NOT NULL REFERENCES clv_principals(id),
+      action TEXT NOT NULL,
       amount INTEGER NOT NULL,
-      reason TEXT NOT NULL,
+      related_id TEXT,
       created_at TEXT NOT NULL
     )`;
     await client`CREATE TABLE IF NOT EXISTS clv_channels (
