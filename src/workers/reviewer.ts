@@ -144,7 +144,7 @@ async function callLLM(opts: {
 
 // ─── Parse review ─────────────────────────────────────────────
 
-function parseReviewResponse(raw: string): ReviewResult | null {
+function parseReviewResponse(raw: string): ReviewResult {
   let cleaned = raw.trim();
 
   // Strip markdown fences (```json ... ```)
@@ -166,7 +166,10 @@ function parseReviewResponse(raw: string): ReviewResult | null {
 
   // Find the outermost { ... } — use brace counting to handle nested JSON
   const firstBrace = cleaned.indexOf('{');
-  if (firstBrace === -1) return null;
+  if (firstBrace === -1) {
+    // No JSON at all — return fallback with raw text as comment
+    return { scores: {}, weighted_overall: 5, reviewer_confidence: 0.3, comment: raw.slice(0, 1500), suggestions: [], approved: false };
+  }
 
   let depth = 0;
   let inString = false;
@@ -184,12 +187,21 @@ function parseReviewResponse(raw: string): ReviewResult | null {
         // Found a complete JSON object
         try {
           return normalizeReview(JSON.parse(cleaned.slice(firstBrace, i + 1)));
-        } catch { return null; }
+        } catch {
+          return { scores: {}, weighted_overall: 5, reviewer_confidence: 0.3, comment: raw.slice(0, 1500), suggestions: [], approved: false };
+        }
       }
     }
   }
 
-  return null;
+  return {
+    scores: {},
+    weighted_overall: 5,
+    reviewer_confidence: 0.3,
+    comment: raw.slice(0, 1500),
+    suggestions: [],
+    approved: false,
+  };
 }
 
 function normalizeReview(parsed: any): ReviewResult {
@@ -476,14 +488,14 @@ export class ReviewerWorker {
         console.log(`  💀 Task ${task.id} failed ${attempts} times — marking as failed`);
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'failed', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb
+          SET status = 'failed', metadata = (COALESCE(metadata, '{}')::jsonb || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb)::text
           WHERE id = ${task.id}
         `;
       } else {
         // Put task back to open with retry info
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb
+          SET status = 'open', metadata = (COALESCE(metadata, '{}')::jsonb || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb)::text
           WHERE id = ${task.id}
         `;
       }
@@ -535,8 +547,10 @@ export class ReviewerWorker {
     });
 
     const review = parseReviewResponse(rawResponse);
-    if (!review) {
-      throw new Error(`Failed to parse LLM review response: ${rawResponse.slice(0, 100)}`);
+    // parseReviewResponse always returns a ReviewResult now (fallback for unparsable text)
+    const isFallback = review.weighted_overall === 5 && Object.keys(review.scores).length === 0;
+    if (isFallback) {
+      console.log(`  ⚠️  LLM response not valid JSON — storing raw text as comment (confidence: 0.3)`);
     }
 
     // Normalize confidence 0-10 → 0-1
