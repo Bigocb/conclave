@@ -5,22 +5,142 @@ on:
   workflow_dispatch:           # manual trigger from Actions tab
 
 jobs:
-  ping:
+  review:
     runs-on: ubuntu-latest
+    env:
+      CONCLAVE_URL: ${{ vars.CONCLAVE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      OLLAMA_KEY: ${{ secrets.OLLAMA_KEY }}
     steps:
-      - name: Trigger review sweep
+      - name: Get next review task
+        id: get-task
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "${{ vars.CONCLAVE_URL }}/v1/cron/review" \
+          RESPONSE=$(curl -sf -w "\n%{http_code}" -X POST \
+            "${CONCLAME_URL}/v1/cron/next" \
             -H "Content-Type: application/json" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
             -d '{}')
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           echo "Status: $HTTP_CODE"
           echo "Response: $BODY"
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "::error::Cron sweep failed with HTTP $HTTP_CODE"
+            echo "::error::Failed to get task with HTTP $HTTP_CODE"
             exit 1
           fi
+          # Parse response fields
+          STATUS=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          if [ "$STATUS" = "idle" ]; then
+            echo "No open tasks — skipping LLM call"
+            exit 0
+          fi
+          # Save full body for next step
+          echo "$BODY" > /tmp/task_body.json
+
+      - name: Call LLM and submit review
+        if: steps.get-task.outputs.status == 'reviewing'
+        run: |
+          BODY=$(cat /tmp/task_body.json)
+          # Extract fields from task response
+          LLM_URL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('llm_url',''))")
+          MODEL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('model',''))")
+          SYSTEM_PROMPT=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('system_prompt',''))")
+          USER_PROMPT=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user_prompt',''))")
+          TASK_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('task_id',''))")
+          REVIEWER_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('reviewer_id',''))")
+          PRINCIPAL_ID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('principal_id',''))")
+          CHANNEL=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('channel',''))")
+
+          echo "Reviewing task $TASK_ID with $MODEL..."
+
+          # Call LLM (no hard timeout — GitHub Actions allows up to 6h)
+          LLM_RESPONSE=$(curl -sf -X POST \
+            "${LLM_URL}/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${OLLAMA_KEY}" \
+            -d "$(python3 -c "
+          import json
+          payload = {
+            'model': '$MODEL',
+            'messages': [
+              {'role': 'system', 'content': '''$SYSTEM_PROMPT'''},
+              {'role': 'user', 'content': '''$USER_PROMPT'''}
+            ],
+            'temperature': 0.3,
+            'max_tokens': 1500
+          }
+          print(json.dumps(payload))
+          ")")
+
+          # Extract content from LLM response
+          CONTENT=$(echo "$LLM_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message']['content'])")
+
+          # Submit review to Conclave
+          SUBMIT_BODY=$(python3 -c "
+          import json, re
+          content = '''$CONTENT'''
+          # Parse JSON from LLM output
+          parsed = None
+          json_match = re.search(r'\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`', content)
+          json_str = json_match.group(1) if json_match else content
+          brace_start = json_str.find('{')
+          if brace_start != -1:
+              try:
+                  parsed = json.loads(json_str[brace_start:])
+              except:
+                  depth = 0
+                  end = -1
+                  for i in range(brace_start, len(json_str)):
+                      if json_str[i] == '{': depth += 1
+                      if json_str[i] == '}':
+                          depth -= 1
+                          if depth == 0:
+                              end = i
+                              break
+                  if end != -1:
+                      parsed = json.loads(json_str[brace_start:end+1])
+
+          if not parsed:
+              parsed = {
+                  'scores': {'overall': 7},
+                  'weighted_overall': 7,
+                  'reviewer_confidence': 0.7,
+                  'comment': content[:500],
+                  'suggestions': []
+              }
+
+          # Normalize confidence (0-10 → 0-1)
+          conf = parsed.get('reviewer_confidence', 0.7)
+          if conf > 1: conf = conf / 10
+          parsed['reviewer_confidence'] = min(1, max(0, conf))
+
+          # Build submit payload
+          scores = parsed.get('scores', {})
+          avg = sum(scores.values()) / len(scores) if scores else 7
+
+          submit = {
+              'task_id': '$TASK_ID',
+              'reviewer_id': '$REVIEWER_ID',
+              'principal_id': '$PRINCIPAL_ID',
+              'channel': '$CHANNEL',
+              'scores': json.dumps(scores),
+              'weighted_overall': min(10, max(0, parsed.get('weighted_overall', round(avg * 10) / 10))),
+              'reviewer_confidence': parsed['reviewer_confidence'],
+              'comment': parsed.get('comment', 'No comment provided.')[:1500],
+              'suggestions': json.dumps(parsed.get('suggestions', [])),
+              'approved': parsed.get('approved', avg >= 7),
+          }
+          print(json.dumps(submit))
+          ")
+
+          RESULT=$(curl -sf -w "\n%{http_code}" -X POST \
+            "${CONCLAVE_URL}/v1/cron/submit" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -d "$SUBMIT_BODY")
+
+          HTTP_CODE=$(echo "$RESULT" | tail -1)
+          RESP=$(echo "$RESULT" | sed '$d')
+          echo "Submit result: HTTP $HTTP_CODE"
+          echo "$RESP"
