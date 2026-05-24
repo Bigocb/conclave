@@ -164,8 +164,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
         reviewerConfidence: Math.min(1, Math.max(0, body.reviewer_confidence ?? 0.7)),
         comment: (body.comment || 'No comment provided.').slice(0, 1500),
         suggestions: typeof body.suggestions === 'string' ? body.suggestions : JSON.stringify(body.suggestions || []),
-        approved: body.approved ?? false,
-        status: 'submitted',
+        approved: body.approved ? 1 : 0,
       });
 
       // Check if task has enough reviews → complete it
