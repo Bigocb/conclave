@@ -64,7 +64,14 @@ export class TaskService {
     const rows = conditions.length > 0
       ? await this.db.select().from(schema.tasks).where(and(...conditions)).orderBy(desc(schema.tasks.createdAt)).limit(50)
       : await this.db.select().from(schema.tasks).orderBy(desc(schema.tasks.createdAt)).limit(50);
-    return rows.map(r => this.formatTask(r));
+    
+    // Enrich each task with reviews_received count
+    const enriched = await Promise.all(rows.map(async r => {
+      const reviewCount = await this.getReviewCountForTask(r.id);
+      const task = this.formatTask(r);
+      return { ...task, reviews_received: reviewCount };
+    }));
+    return enriched;
   }
 
   async updateStatus(id: string, status: string) {
