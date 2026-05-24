@@ -11,16 +11,8 @@ services:
       - key: PORT
         value: 3000
       - key: DATABASE_URL
-        fromDatabase:
-          name: conclave-db
-          property: connectionString
+        sync: false
       - key: CONCLAVE_JWT_SECRET
         generateValue: true
-      - key: OLLAMA_KEY
-        sync: false
-
-databases:
-  - name: conclave-db
-    plan: starter
-    user: conclave
-    databaseName: conclave
+      - key: CONCLAVE_MODE
+        value: self-hosted
