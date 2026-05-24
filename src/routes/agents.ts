@@ -132,4 +132,24 @@ export async function agentRoutes(fastify: FastifyInstance) {
     await agentService.deactivate(id);
     return reply.send(success({ decommissioned: true, id }));
   });
+
+  // GET /v1/agents/:id/subscriptions — Get channels this agent's principal is subscribed to
+  fastify.get('/agents/:id/subscriptions', async (request, reply) => {
+    const { id } = request.params as any;
+    const agent = await agentService.getById(id);
+    if (!agent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+    const db = (fastify as any).db;
+    const { channelSubscriptions, channels } = await import('../db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const subs = await db.select({
+      channelId: channelSubscriptions.channelId,
+      channelName: channels.name,
+    }).from(channelSubscriptions)
+      .innerJoin(channels, eq(channelSubscriptions.channelId, channels.id))
+      .where(eq(channelSubscriptions.principalId, agent.principal_id));
+    return reply.send(success({ channels: subs.map(s => s.channelName) }));
+  });
+
 }

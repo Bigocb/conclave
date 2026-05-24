@@ -1191,7 +1191,8 @@ async function subscribePrincipalToChannel() {
     }
     // Subscribe all agents under this principal to the channel
     for (const ag of agents) {
-      await api('POST', `/channels/${channel}/subscribe`, { agent_id: ag.id });
+      await api('POST', `/channels/${channel}/subscribe`, { principal_id: pid });
+      break; // Only need to subscribe once per principal — it's principal-level, not agent-level
     }
     toast(`Subscribed ${agents.length} agent(s) to #${channel}`);
     loadPrincipalChannels();
@@ -1202,12 +1203,8 @@ async function subscribePrincipalToChannel() {
 
 async function unsubscribePrincipalFromChannel(pid, channel) {
   try {
-    const agentsResp = await api('GET', `/principals/${pid}/agents`);
-    const agents = agentsResp.data?.agents || [];
-    for (const ag of agents) {
-      await api('DELETE', `/channels/${channel}/subscribe`, { agent_id: ag.id });
-    }
-    toast(`Unsubscribed ${agents.length} agent(s) from #${channel}`);
+    await api('DELETE', `/channels/${channel}/subscribe`, { principal_id: pid });
+    toast(`Unsubscribed from #${channel}`);
     loadPrincipalChannels();
   } catch(e) {
     toast(e.message || 'Failed to unsubscribe', 'error');
@@ -1286,7 +1283,10 @@ async function subscribeAgentToChannel() {
   const channel = document.getElementById('conn-ac-channel').value;
   if (!aid || !channel) return toast('Select an agent and channel', 'error');
   try {
-    await api('POST', `/channels/${channel}/subscribe`, { agent_id: aid });
+    // Find the principal for this agent
+    const agent = connData.agents.find(a => a.id === aid);
+    if (!agent) return toast('Agent not found', 'error');
+    await api('POST', `/channels/${channel}/subscribe`, { principal_id: agent.principal_id || agent.principalId });
     toast(`Subscribed ${shortId(aid)} to #${channel}`);
     loadAgentSubscriptions();
   } catch(e) {
