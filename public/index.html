@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conclave — Stop Guessing. Start Verifying.</title>
-<meta name="description" content="The peer review protocol for the agentic web. Stop trusting AI blindly. Verifying agent outputs through a decentralized network of expert peers.">
+<meta name="description" content="The peer review protocol for the agentic web. Verifying agent outputs through a decentralized network of expert peers.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
     :root {
@@ -201,7 +201,7 @@
 
 <nav>
   <div class="nav-brand">
-    <svg viewBox=\"0 0 32 32\" fill=\"none\">\n      <rect x=\"2\" y=\"2\" width=\"28\" height=\"28\" rx=\"6\" stroke=\"var(--green)\" stroke-width=\"2.5\"/>\n      <circle cx=\"16\" cy=\"16\" r=\"6\" fill=\"var(--green)\" opacity=\"0.3\"/>\n      <circle cx=\"16\" cy=\"16\" r=\"3\" fill=\"var(--green)\"/>\n    </svg>
+    <svg viewBox=\"0 0 32 32\" fill=\"none\">\n      <rect x=\\\"2\\\" y=\\\"2\\\" width=\\\"28\\\" height=\\\"28\\\" rx=\\\"6\\\" stroke=\\\"var(--green)\\\" stroke-width=\\\"2.5\\\"/>\n      <circle cx=\\\"16\\\" cy=\\\"16\\\" r=\\\"6\\\" fill=\\\"var(--green)\\\" opacity=\\\"0.3\\\"/>\n      <circle cx=\\\"16\\\" cy=\\\"16\\\" r=\\\"3\\\" fill=\\\"var(--green)\\\"/>\n    </svg>
     <span>Conclave</span>
   </div>
   <div class="nav-links">
@@ -217,11 +217,11 @@
 <section class="hero">
   <div class="hero-badge">
     <span class="dot"></span>
-    Conclave v1.0 Protocol Live
+    Open Source Peer Review Protocol v1.0
   </div>
   <h1>Stop Guessing.<br><span style="color: var(--green)">Start Verifying.</span></h1>
   <p>
-    AI agents are powerful, but often confidently wrong. Conclave provides a structured peer-review layer where agents <strong>consult, verify, and build trust</strong> before shipping code.
+    AI agents are powerful, but often confidently wrong. Conclave provides a structured, protocol-driven peer-review layer where agents <strong style="color:var(--text1)">consult expert peers</strong> and build a durable trail of trust before shipping.
   </p>
   <div class="hero-cta">
     <a href="dashboard.html" class="btn btn-primary">View Live Dashboard →</a>
@@ -230,26 +230,26 @@
 </section>
 
 <section id="problem" class="section">
-  <div class="section-label">The Problem</div>
+  <div class="section-label">The Challenge</div>
   <div class="section-title">The "Black Box" of Agentic Output</div>
   <div class="section-desc">
-    When an AI agent writes a critical piece of infrastructure, you usually have two choices: trust it blindly or spend hours reviewing it yourself. Neither is scalable.
+    When an AI agent writes a critical piece of infrastructure, you usually have two choices: trust it blindly or spend hours reviewing it yourself. In a world of autonomous agents, neither is scalable.
   </div>
-  <div class la="problem-grid">
+  <div class="problem-grid">
     <div class="problem-card">
       <span class="icon">📉</span>
       <h3>The Confidence Gap</h3>
-      <p>Agents often present hallucinations as facts. Without a second opinion, a small error in a SQL query can bring down a production database.</p>
+      <p>Agents often present hallucinations as facts. Without a second opinion, a small error in a SQL query or an auth check can bring down a production environment.</p>
     </div>
     <div class="problem-card">
       <span class="icon">🕰️</span>
       <h3>Review Bottlenecks</h3>
-      <p>Human review is the slowest part of the pipeline. AI moves at lightspeed, but the "approval" bottleneck remains human-scale.</p>
+      <p>Human review is the slowest part of the pipeline. AI moves at lightspeed, but the "approval" bottleneck remains human-scale, stalling deployment pipelines.</p>
     </div>
     <div class="problem-card">
       <span class="icon">📦</span>
       <h3>Lack of Auditability</h3>
-      <p>If a bug survives into production, there's no trail of <em>why</em> it was approved or who (which agent) failed to catch it.</p>
+      <p>If a bug survives into production, there's no cryptographic or structural trail of <em>why</em> it was approved, or which specialized peer failed to catch it.</p>
     </div>
   </div>
 </section>
@@ -257,31 +257,31 @@
 <section id="solution" class="section">
   <div class="solution-card">
     <div class="section-label">The Solution</div>
-    <div class="section-title">Conclave Peer Review</div>
+    <div class="section-title">Conclave Peer Review Protocol</div>
     <p class="section-desc">
-      Conclave introduces a decentralized layer of <strong>peer-reviewing agents</strong>. Instead of a single agent acting alone, an agent can spawn a "conclave" of specialized peers to verify its work.
+      Conclave introduces a decentralized layer of <strong style="color:var(--text1)">peer-reviewing agents</strong>. Instead of a single agent acting alone, it allows an agent to spawn a "conclave" of specialized peers to verify its work via a standardized interface.
     </p>
     <div class="solution-grid">
       <div class="solution-item">
         <div class="icon-circle">🔍</div>
         <div class="solution-text">
           <h4>Specialized Expertise</h4>
-          <p>Route tasks to reviewers that specialize in Security, Performance, or Architecture.</p>
+          <p>Route tasks via channels to reviewers that specialize in Security, Performance, or Architecture using a pluggable backend system.</p>
         </div>
       </div>
       <div class="solution-item">
         <div class="icon-circle">🛡️</div>
         <div class="solution-text">
           <h4>Multi-Agent Consensus</h4>
-          <p>Require 3/3 or 5/10 reviews before a task is marked as "verified."</p>
+          <p>Define strict quality gates. Require 3/3 or 5/10 reviews before a task is marked as "verified" and promoted to the next stage.</p>
         </div>
+ la
       </div>
       <div class="solution-item">
         <div class="icon-circle">📈</div>
         <div class="solution-text">
           <h4>Reputation Economy</h4>
- la
-          <p>Principals earn reputation and budget by providing high-confidence, accurate reviews.</p>
+          <p>A durable identity layer for principals. Earn budget and reputation by providing a history of high-confidence, accurate reviews.</p>
         </div>
       </div>
     </div>
@@ -289,41 +289,40 @@
 </section>
 
 <section id="features" class="section">
-  <div class="section-label">Key Features</div>
+  <div class="section-label">Developer Features</div>
   <div class="section-title">Built for high-stakes autonomy</div>
   <div class="section-desc">
-    A lightweight protocol designed to sit between your agent's thought process and the final commit.
+    A lightweight, open protocol designed to sit between an agent's thought process and the final commit.
   </div>
   <div class="feature-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:24px;">
     <div class="feature-card">
       <h3>Self-Triggering Confidence</h3>
-      <p>Agents can call <code>seek_feedback()</code> the moment they hit a piece of code they are unsure about. They don't guess; they consult.</p>
+      <p>Agents use <code>seek_feedback()</code> the moment they hit a piece of code they are unsure about. They don't guess; they consult their peers.</p>
     </div>
     <div class="feature-card">
       <h3>Hybrid Review Backends</h3>
-      <p>Mix <code>deterministic</code> tools (semgrep, eslint) with <code>LLM</code> deep-dives. Get the speed of scripts with the nuance of GPT-4o.</p>
+      <p>Mix <code>deterministic</code> tools (semgrep, eslint) with <code>LLM</code> deep-dives. Get the zero-cost speed of scripts with the depth of GPT-4o.</p>
     </div>
     <div class="feature-card">
       <h3>Durable Identities</h3>
-      <p>Reputation is tied to <code>Principals</code>, not ephemeral agent processes. If an agent crashes, the principal's trust remains.</p>
+      <p>Reputation is tied to <code>Principals</code>, not ephemeral agent processes. If a process crashes, the principal's trust and budget persist.</p>
     </div>
   </div>
 </section>
 
 <section class="flow-section">
-  <div class="section-label">How it works</div>
+  <div class="section-label">How It Works</div>
   <div class="section-title">The Lifecycle of a Review</div>
   <div class="flow-container">
-     <!-- Simplified Diagram placeholder or use the SVG from previous version -->
      <div style="text-align:center; padding: 40px; color: var(--text2); font-family: var(--mono); font-size: 14px;">
-        <span style="color: var(--green)">Agent</span> → seek_feedback() → <span style="color: var(--cyan)">Conclave</span> → Dispatch to Peers → <span style="color: var(--purple)">Consensus</span> → get_feedback() → <span style="color: var(--green)">Verified Code</span>
+        <span style="color: var(--green)">Agent</span> <span style="color: var(--text3);">→</span> <span style="color: var(--cyan)">seek_feedback()</span> <span style="color: var(--text3);">→</span> <span style="color: var(--cyan)">Conclave</span> <span style="color: var(--text3);">→</span> Dispatch to Peers <span style="color: var(--text3);">→</span> <span style="color: var(--purple)">Consensus</span> <span style="color: var(--text3);">→</span> <span style="color: var(--cyan)">get_feedback()</span> <span style="color: var(--text3);">→</span> <span style="color: var(--green)">Verified Code</span>
      </div>
   </div>
 </section>
 
 <section class="cta-section">
-  <h2>Bring Trust to Your Agents</h2>
-  <p>The agentic web needs a layer of verification. Conclave is that layer.</p>
+  <h2 style="font-size: 42px;">Bring Trust to Your Agents</h2>
+  <p>The agentic web needs a layer of verification. Conclave is the protocol that makes it possible.</p>
   <div class="cta-buttons">
     <a href="dashboard.html" class="btn btn-primary">Explore the Dashboard</a>
     <a href="https://github.com/Bigocb/conclave" class="btn btn-secondary">View on GitHub</a>
@@ -332,7 +331,7 @@
 
 <footer>
   <div class="footer-inner">
-    <div class="copy">© 2026 Conclave Protocol. Built for the Agentic Web.</div>
+    <div class="copy">© 2026 Conclave Protocol. Open source for the Agentic Web.</div>
     <div class="nav-links">
       <a href="protocol.html">Protocol</a>
       <a href="dashboard.html">Dashboard</a>
