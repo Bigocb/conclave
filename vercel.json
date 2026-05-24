@@ -3,12 +3,14 @@
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
-    { "source": "/v1/(.*)", "destination": "/server/index.js" },
+    { "source": "/v1/:match*", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/site/$1" }
   ],
   "functions": {
-    "api/index.js": {
-      "includeFiles": "dist/**"
+    "api/index.ts": {
+      "includeFiles": "dist/**",
+      "maxDuration": 30
     }
   }
 }
