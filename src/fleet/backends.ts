@@ -15,6 +15,7 @@ import { execFile } from 'child_process';
 
 // AgentRecord type used by reviewer backends
 export type AgentRecord = {
+  name?: string | null;
   model?: string | null;
   instructions?: string | null;
   skills?: string[] | null;
@@ -61,7 +62,7 @@ export async function runLlmReview(
       { role: 'user', content: userPrompt.slice(0, 12000) },
     ],
     temperature: 0.3,
-    max_tokens: 800,
+    max_tokens: 1500,
   };
 
   const controller = new AbortController();
@@ -85,6 +86,7 @@ export async function runLlmReview(
 
     const json: any = await res.json();
     const content = json.choices?.[0]?.message?.content || '';
+    console.log(`[LLM] Raw response for ${agent.name} (${content.length} chars):`, content.slice(0, 500));
     return parseLlmReviewResponse(content, input.dimensions);
   } finally {
     clearTimeout(timer);
@@ -289,11 +291,28 @@ function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOu
     jsonStr = fenceMatch[1].trim();
   }
 
-  // Find JSON object in the response
+  // Find JSON object in the response — handle nested braces by tracking depth
   const braceStart = jsonStr.indexOf('{');
-  const braceEnd = jsonStr.lastIndexOf('}');
-  if (braceStart !== -1 && braceEnd !== -1) {
-    jsonStr = jsonStr.slice(braceStart, braceEnd + 1);
+  if (braceStart !== -1) {
+    let depth = 0;
+    let braceEnd = -1;
+    let inString = false;
+    let escapeNext = false;
+    for (let i = braceStart; i < jsonStr.length; i++) {
+      const ch = jsonStr[i];
+      if (escapeNext) { escapeNext = false; continue; }
+      if (ch === '\\' && inString) { escapeNext = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      if (ch === '}') {
+        depth--;
+        if (depth === 0) { braceEnd = i; break; }
+      }
+    }
+    if (braceEnd !== -1) {
+      jsonStr = jsonStr.slice(braceStart, braceEnd + 1);
+    }
   }
 
   try {
@@ -313,14 +332,44 @@ function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOu
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
     };
   } catch {
-    // Fallback: couldn't parse JSON, return minimal review
-    return {
-      scores: Object.fromEntries(dimensions.map(d => [d, 5])),
-      weighted_overall: 5,
-      reviewer_confidence: 0.3,
-      comment: content.slice(0, 1500) || 'Review produced unparsable output.',
-      suggestions: [],
-    };
+    // Second attempt: try to repair truncated JSON by closing open braces
+    try {
+      let repaired = jsonStr;
+      // Count open vs close braces
+      const openBraces = (repaired.match(/{/g) || []).length;
+      const closeBraces = (repaired.match(/}/g) || []).length;
+      const openBrackets = (repaired.match(/\[/g) || []).length;
+      const closeBrackets = (repaired.match(/]/g) || []).length;
+      // Close unclosed strings
+      const unescapedQuotes = (repaired.match(/(?<!\\)"/g) || []).length;
+      if (unescapedQuotes % 2 !== 0) repaired += '"';
+      // Close unclosed brackets and braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+      
+      const parsed = JSON.parse(repaired);
+      const scores: Record<string, number> = {};
+      for (const dim of dimensions) {
+        const val = parsed.scores?.[dim];
+        scores[dim] = typeof val === 'number' ? Math.min(10, Math.max(0, Math.round(val))) : 5;
+      }
+      return {
+        scores,
+        weighted_overall: Math.min(10, Math.max(0, parsed.weighted_overall ?? 5)),
+        reviewer_confidence: Math.min(1, Math.max(0, parsed.reviewer_confidence ?? 0.7)),
+        comment: (parsed.comment || 'No comment provided.').slice(0, 1500),
+        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      };
+    } catch {
+      // Fallback: couldn't parse JSON, return review with the raw content as comment
+      return {
+        scores: Object.fromEntries(dimensions.map(d => [d, 5])),
+        weighted_overall: 5,
+        reviewer_confidence: 0.3,
+        comment: content.slice(0, 1500) || 'Review produced unparsable output.',
+        suggestions: [],
+      };
+    }
   }
 }
 
