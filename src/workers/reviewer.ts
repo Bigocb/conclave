@@ -281,24 +281,27 @@ export class ReviewerWorker {
     console.log(`  📋 Cache refreshed: ${this.agentCache.size} agents, ${this.channelSubs.size} channels subscribed`);
   }
 
-  /** Find eligible agents for a task's channel, excluding agents that already reviewed */
+  /** Find eligible agents for a task's channel, excluding agents that already reviewed or failed */
   private async findEligibleAgent(task: TaskRow): Promise<(AgentRow & { principal_id: string }) | null> {
     await this.refreshCache();
 
     // 1. Find principals subscribed to this channel
     const subs = this.channelSubs.get(task.channel) ?? [];
 
-    // 2. Get agents belonging to those principals
-    const eligible = subs
-      .map(sub => this.agentCache.get(sub.principal_id) ?? Array.from(this.agentCache.values()).find(a => a.principal_id === sub.principal_id))
-      .filter((a): a is AgentRow & { principal_id: string } => {
-        if (!a) return false;
-        // Can't review your own task (different principal)
-        if (a.principal_id === task.principal_id) return false;
-        // Must have an LLM config
-        if (!a.model && !this.config.model) return false;
-        return true;
-      });
+    // 2. Get ALL agents belonging to those principals (not just one per principal)
+    const allAgents = Array.from(this.agentCache.values());
+    const eligible: (AgentRow & { principal_id: string })[] = [];
+    for (const sub of subs) {
+      for (const agent of allAgents) {
+        if (agent.principal_id === sub.principal_id && agent.status === 'active') {
+          // Can't review your own task (different principal)
+          if (agent.principal_id === task.principal_id) continue;
+          // Must have an LLM config
+          if (!agent.model && !this.config.model) continue;
+          eligible.push(agent as AgentRow & { principal_id: string });
+        }
+      }
+    }
 
     if (eligible.length === 0) return null;
 
@@ -308,14 +311,18 @@ export class ReviewerWorker {
     `;
     const reviewedBy = new Set(existingReviews.map((r: any) => r.reviewer_id));
 
-    const notYetReviewed = eligible.filter(a => !reviewedBy.has(a.id));
+    // 4. Also exclude agents that previously failed on this task (tracked in metadata)
+    const meta = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+    const failedAgents: string[] = meta.failed_agents || [];
 
-    // 4. If we still have candidates, pick one (round-robin via random for now)
+    const notYetReviewed = eligible.filter(a => !reviewedBy.has(a.id) && !failedAgents.includes(a.id));
+
+    // 5. If we still have candidates, pick one randomly
     if (notYetReviewed.length > 0) {
       return notYetReviewed[Math.floor(Math.random() * notYetReviewed.length)];
     }
 
-    // All subscribed agents already reviewed — fall back to worker's default agent
+    // All subscribed agents already reviewed or failed — no eligible agent
     return null;
   }
 
@@ -449,29 +456,34 @@ export class ReviewerWorker {
 
     const task = result[0] as any as TaskRow;
     this.activeReviews++;
+    let chosenAgentId: string | null = null;
 
     try {
       console.log(`  🎯 Reviewing task ${task.id}: ${(task.description || '').slice(0, 60)}...`);
-      await this.reviewTask(task);
+      chosenAgentId = await this.reviewTask(task);
       this.totalReviewed++;
     } catch (err: any) {
       console.error(`  ❌ Review failed for task ${task.id}:`, err.message);
-      // Increment retry counter — if too many failures, mark as failed permanently
+      // Track which agent failed so we don't retry with the same one
       const meta = typeof task.metadata === 'string' ? JSON.parse(task.metadata || '{}') : (task.metadata || {});
+      const failedAgents: string[] = meta.failed_agents || [];
+      if (chosenAgentId && !failedAgents.includes(chosenAgentId)) {
+        failedAgents.push(chosenAgentId);
+      }
       const attempts = (meta.review_attempts || 0) + 1;
-      const maxAttempts = 3;
+      const maxAttempts = 6; // More attempts since we cycle through different agents
       if (attempts >= maxAttempts) {
         console.log(`  💀 Task ${task.id} failed ${attempts} times — marking as failed`);
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'failed', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message })}::jsonb
+          SET status = 'failed', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb
           WHERE id = ${task.id}
         `;
       } else {
-        // Put task back to open with retry counter
+        // Put task back to open with retry info
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message })}::jsonb
+          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_attempts: attempts, review_error: err.message, failed_agents: failedAgents })}::jsonb
           WHERE id = ${task.id}
         `;
       }
@@ -482,7 +494,7 @@ export class ReviewerWorker {
 
   // ─── Review a task ────────────────────────────────────────
 
-  private async reviewTask(task: TaskRow): Promise<void> {
+  private async reviewTask(task: TaskRow): Promise<string | null> {
     // Find an eligible agent for this task's channel
     const agent = await this.findEligibleAgent(task);
 
@@ -490,7 +502,7 @@ export class ReviewerWorker {
       console.log(`  ⏭️  No eligible agent for channel '${task.channel}' — skipping task ${task.id}`);
       // Put it back to open so it can be picked up later or by a default worker
       await this.sql`UPDATE clv_tasks SET status = 'open' WHERE id = ${task.id}`;
-      return;
+      return null;
     }
 
     console.log(`  🤖 Using agent ${agent.name} (${agent.model || this.config.model}) for principal ${agent.principal_id}`);
@@ -585,6 +597,8 @@ export class ReviewerWorker {
       // More reviews needed — keep in_review so other agents can pick it up
       console.log(`  📝 Task ${task.id}: ${currentCount}/${task.requested_reviews} reviews — still in_review. review=${reviewId} agent=${agent.name}`);
     }
+
+    return agent.id;
   }
 }
 
