@@ -83,32 +83,34 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     secret: fullConfig.jwtSecret,
   });
 
-  // Auth hook — extract agent ID from JWT or use dev default
-  // In local mode, supports X-Agent-Id header to simulate different agents
+  // Auth hook — extract agent ID from JWT or X-Agent-Id header
+  // In local mode, X-Agent-Id header simulates different agents
+  // In cloud mode, X-Agent-Id header is used by MCP clients and API keys
   fastify.addHook('preHandler', async (request, reply) => {
+    const headerAgentId = request.headers['x-agent-id'] as string | undefined;
+
     if (fullConfig.mode === 'local') {
-      // Allow X-Agent-Id header to simulate different agents in local mode
-      const overrideAgentId = request.headers['x-agent-id'] as string | undefined;
-      (request as any).agentId = overrideAgentId || 'agt_dev';
+      (request as any).agentId = headerAgentId || 'agt_dev';
       (request as any).principalId = 'prn_dev';
       (request as any).adminId = 'admin_dev';
       return;
     }
 
-    try {
-      // Public routes that don't need auth
-      const publicPaths = ['/health', '/v1/health'];
-      if (publicPaths.includes(request.url)) return;
+    // Public routes that don't need auth
+    const publicPaths = ['/health', '/v1/health'];
+    if (publicPaths.includes(request.url)) return;
 
+    // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
+    try {
       await request.jwtVerify();
       const payload = request.user as any;
       (request as any).agentId = payload.agentId || payload.sub;
       (request as any).principalId = payload.principalId;
       (request as any).adminId = payload.adminId;
     } catch {
-      // Allow unauthenticated requests for now (v1)
-      (request as any).agentId = 'agt_anon';
-      (request as any).principalId = 'prn_anon';
+      // No valid JWT — fall back to X-Agent-Id header or anonymous
+      (request as any).agentId = headerAgentId || 'agt_anon';
+      (request as any).principalId = headerAgentId ? undefined : 'prn_anon';
     }
   });
 
