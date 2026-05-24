@@ -308,11 +308,11 @@ export class ReviewerWorker {
     // This prevents duplicate reviews across multiple worker instances
     const result = await this.sql`
       UPDATE clv_tasks
-      SET status = 'reviewing'
+      SET status = 'in_review'
       WHERE id = (
         SELECT id FROM clv_tasks
-        WHERE status = 'pending'
-        ORDER BY created_at ASC
+        WHERE status = 'open'
+        ORDER BY priority DESC, created_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
       )
@@ -334,7 +334,7 @@ export class ReviewerWorker {
       try {
         await this.sql`
           UPDATE clv_tasks
-          SET status = 'pending', metadata = COALESCE(metadata, '{}'::jsonb) || '{"review_error": ${err.message}}'::jsonb
+          SET status = 'open', metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ review_error: err.message })}::jsonb
           WHERE id = ${task.id}
         `;
       } catch { /* best effort */ }
