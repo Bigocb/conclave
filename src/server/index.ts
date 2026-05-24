@@ -54,7 +54,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   const fullConfig: ConclaveConfig = { ...DEFAULT_CONFIG, ...config };
 
   // Initialize database (preserve existing data — only create schema if missing)
-  const db: ConclaveDb = initDb(fullConfig.database.url);
+  const db: ConclaveDb = initDb(fullConfig.database);
 
   const fastify = Fastify({
     logger: {

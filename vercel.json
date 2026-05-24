@@ -1,0 +1,14 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/v1/(.*)", "destination": "/server/index.js" },
+    { "source": "/(.*)", "destination": "/site/$1" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "dist/**"
+    }
+  }
+}

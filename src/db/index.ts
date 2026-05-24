@@ -1,52 +1,76 @@
 /**
  * Conclave — Database connection module
- * Creates and initializes the Drizzle ORM database connection.
+ * Supports both SQLite (local) and PostgreSQL (production/Render).
+ * Configured via DATABASE_TYPE env var or config.database.type.
  */
 
 import BetterSqlite3 from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
+import { drizzle as drizzlePg } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as schema from './schema.js';
+import * as schemaPg from './schema.pg.js';
 
-export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>>;
+export type SqliteDb = ReturnType<typeof drizzleSqlite<typeof schema>>;
+export type PgDb = ReturnType<typeof drizzlePg<typeof schemaPg>>;
+export type ConclaveDb = SqliteDb | PgDb;
 
-/**
- * Create a Drizzle database instance connected to a SQLite file.
- */
-export function createDb(dbPath: string): ConclaveDb {
+// ─── SQLite (local dev) ────────────────────────────────────
+
+export function createSqliteDb(dbPath: string): SqliteDb {
   const sqlite = new BetterSqlite3(dbPath);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
-  return drizzle(sqlite, { schema });
+  return drizzleSqlite(sqlite, { schema });
 }
 
+// ─── PostgreSQL (production) ───────────────────────────────
+
+export function createPgDb(connectionString: string): PgDb {
+  const client = postgres(connectionString, {
+    ssl: 'require',
+    max: 10,
+  });
+  return drizzlePg(client, { schema: schemaPg });
+}
+
+// ─── Unified init ──────────────────────────────────────────
+
 /**
- * Initialize the database by creating tables if they don't exist.
- * Reads and executes the schema.sql file.
+ * Initialize the database.
+ * - SQLite: creates tables if they don't exist, runs migrations, seeds defaults.
+ * - PostgreSQL: assumes tables are created via drizzle-kit migrate.
  */
-export function initDb(dbPath: string): ConclaveDb {
+export function initDb(config: { type: 'sqlite' | 'postgres'; url: string }): ConclaveDb {
+  if (config.type === 'postgres') {
+    console.log(`[initDb] Using PostgreSQL: ${config.url.replace(/:[^:@]+@/, ':***@')}`);
+    const db = createPgDb(config.url);
+    console.log('[initDb] PostgreSQL connected — assuming migrations are up to date');
+    return db;
+  }
+
+  // SQLite path (local dev)
+  const dbPath = config.url;
   const dir = path.dirname(dbPath);
   if (dir && !fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Read and execute schema.sql to create tables
   const thisDir = path.dirname(new URL(import.meta.url).pathname);
-  console.log('[initDb] Resolved dir:', thisDir);
   const schemaSqlPath = path.join(thisDir, 'schema.sql');
-  console.log('[initDb] Looking for schema at:', schemaSqlPath);
   const schemaSql = fs.readFileSync(schemaSqlPath, 'utf-8');
 
   const sqlite = new BetterSqlite3(dbPath);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
 
-  // Execute the entire schema SQL at once — SQLite handles multi-statement
+  // Create tables if they don't exist
   sqlite.exec(schemaSql);
 
-  // Migrations for existing DBs (idempotent — ALTER TABLE ADD COLUMN is safe if column exists)
+  // Migrations for existing DBs
   const migrations = [
     'ALTER TABLE agents ADD COLUMN provider TEXT',
     'ALTER TABLE agents ADD COLUMN llm_url TEXT',
@@ -59,13 +83,15 @@ export function initDb(dbPath: string): ConclaveDb {
     try { sqlite.exec(sql); } catch (_) { /* column already exists */ }
   }
 
-  // Seed default channels & dev org/principal/agent
+  // Seed defaults
   seedChannels(sqlite);
   seedDevDefaults(sqlite);
 
   sqlite.close();
-  return createDb(dbPath);
+  return createSqliteDb(dbPath);
 }
+
+// ─── Seeding (SQLite only — PG is seeded via migrations) ────
 
 const DEFAULT_CHANNELS = [
   { name: 'code-review', description: 'Code artifacts, PRs, and implementation reviews', default_dimensions: '["correctness","completeness","efficiency","readability","security"]' },
@@ -97,7 +123,6 @@ function seedChannels(sqlite: BetterSqlite3.Database) {
 function seedDevDefaults(sqlite: BetterSqlite3.Database) {
   const now = new Date().toISOString();
 
-  // Seed dev org if not exists
   const orgCount = (sqlite.prepare("SELECT count(*) as count FROM organizations WHERE id = 'org_dev'").get() as any).count;
   if (orgCount === 0) {
     sqlite.prepare(
@@ -105,7 +130,6 @@ function seedDevDefaults(sqlite: BetterSqlite3.Database) {
     ).run('org_dev', 'Dev Organization', 'dev', 'Default organization for local development', '{}', now, now);
   }
 
-  // Seed dev principal if not exists
   const principalCount = (sqlite.prepare("SELECT count(*) as count FROM principals WHERE id = 'prn_dev'").get() as any).count;
   if (principalCount === 0) {
     sqlite.prepare(
@@ -113,7 +137,6 @@ function seedDevDefaults(sqlite: BetterSqlite3.Database) {
     ).run('prn_dev', 'org_dev', 'Dev Principal', '["general-reviewer"]', '[]', '{}', 'active', now, now);
   }
 
-  // Seed dev principal budget if not exists
   const budgetCount = (sqlite.prepare("SELECT count(*) as count FROM attention_budgets WHERE principal_id = 'prn_dev'").get() as any).count;
   if (budgetCount === 0) {
     sqlite.prepare(
@@ -121,7 +144,6 @@ function seedDevDefaults(sqlite: BetterSqlite3.Database) {
     ).run('prn_dev', 15, 0, 5, now);
   }
 
-  // Seed dev agent under the principal if not exists
   const agentCount = (sqlite.prepare("SELECT count(*) as count FROM agents WHERE id = 'agt_dev'").get() as any).count;
   if (agentCount === 0) {
     sqlite.prepare(
