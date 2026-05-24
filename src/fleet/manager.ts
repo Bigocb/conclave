@@ -390,6 +390,10 @@ export class FleetManager extends EventEmitter {
           // Skip if already reviewed by this principal (local dedup)
           if (proc.reviewedTaskIds.has(taskId)) continue;
 
+          // Skip tasks that are already completed or have enough reviews
+          const taskStatus = feedItem.status;
+          if (taskStatus === 'completed' || taskStatus === 'cancelled') continue;
+
           // Skip own org's tasks in private mode
           if (this.config.scope === 'private' && feedItem.org_id && feedItem.org_id !== this.config.org_id) {
             continue;

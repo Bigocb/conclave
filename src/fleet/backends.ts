@@ -327,7 +327,7 @@ function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOu
     return {
       scores,
       weighted_overall: Math.min(10, Math.max(0, parsed.weighted_overall ?? 5)),
-      reviewer_confidence: Math.min(1, Math.max(0, parsed.reviewer_confidence ?? 0.7)),
+      reviewer_confidence: Math.min(1, Math.max(0, ((parsed.reviewer_confidence ?? 0.7) > 1 ? (parsed.reviewer_confidence / 10) : parsed.reviewer_confidence))),
       comment: (parsed.comment || 'No comment provided.').slice(0, 1500),
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
     };
@@ -356,7 +356,7 @@ function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOu
       return {
         scores,
         weighted_overall: Math.min(10, Math.max(0, parsed.weighted_overall ?? 5)),
-        reviewer_confidence: Math.min(1, Math.max(0, parsed.reviewer_confidence ?? 0.7)),
+        reviewer_confidence: Math.min(1, Math.max(0, ((parsed.reviewer_confidence ?? 0.7) > 1 ? (parsed.reviewer_confidence / 10) : parsed.reviewer_confidence))),
         comment: (parsed.comment || 'No comment provided.').slice(0, 1500),
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       };
