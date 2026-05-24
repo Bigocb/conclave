@@ -3,14 +3,10 @@
  * 
  * Bootstraps the Fastify app once (cached across cold starts),
  * then uses fastify.inject() to handle each request.
- * 
- * On first cold start, also runs drizzle-kit push to ensure
- * the database schema is up-to-date (since we can't do this
- * at build time when DATABASE_URL isn't available).
+ * Schema push happens inside initDb() on first cold start.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { execSync } from 'node:child_process';
 
 let app: any = null;
 let initPromise: Promise<void> | null = null;
@@ -20,23 +16,6 @@ async function initApp() {
   if (initPromise) { await initPromise; return; }
 
   initPromise = (async () => {
-    // Push schema to DB on first cold start
-    // This ensures tables exist without needing a separate migration step
-    if (process.env.DATABASE_URL) {
-      try {
-        console.log('Pushing database schema...');
-        execSync('npx drizzle-kit push', {
-          stdio: 'inherit',
-          env: { ...process.env },
-          timeout: 30000,
-        });
-        console.log('Schema push complete.');
-      } catch (err) {
-        console.error('Schema push failed (tables may already exist):', err);
-        // Continue anyway — tables might already be up to date
-      }
-    }
-
     // Dynamic import of the compiled server
     const serverModule = await import('../dist/server/index.js');
     const config = {
