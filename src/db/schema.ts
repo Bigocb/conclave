@@ -140,7 +140,7 @@ export const opinionResponses = pgTable('opinion_responses', {
   id: text('id').primaryKey(),                   // rsp_<uuidv7>
   opinionId: text('opinion_id').notNull().references(() => opinions.id),
   respondentId: text('respondent_id').notNull().references(() => agents.id),
-  principalId: text('principal_id').notNull().references(() => opinions.principalId),
+  principalId: text('principal_id').notNull().references(() => principals.id),
   response: text('response').notNull(),
   confidence: doublePrecision('confidence').notNull(),
   reasoning: text('reasoning'),
