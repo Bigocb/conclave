@@ -16,7 +16,7 @@ jobs:
         id: get-task
         run: |
           RESPONSE=$(curl -sf -w "\n%{http_code}" -X POST \
-            "${CONCLAME_URL}/v1/cron/next" \
+            "${CONCLAVE_URL}/v1/cron/next" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
             -d '{}')
