@@ -27,7 +27,7 @@ program
       await startServer({
         port: parseInt(opts.port),
         host: opts.host,
-        database: { type: 'sqlite', url: opts.db },
+        database: { url: opts.db },
         jwtSecret: opts.jwtSecret || process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret',
       });
     } catch (err) {
@@ -47,7 +47,7 @@ program
         mode: 'local',
         port: parseInt(opts.port),
         host: '0.0.0.0',
-        database: { type: 'sqlite', url: './conclave-local.db' },
+        database: { url: './conclave-local.db' },
       });
     } catch (err) {
       console.error('Failed to start server:', err);

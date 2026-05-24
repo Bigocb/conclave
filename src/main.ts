@@ -1,6 +1,7 @@
 /**
  * Conclave — Entry point
  * Starts the server when run directly.
+ * Uses PostgreSQL only — set DATABASE_URL env var.
  */
 
 import { startServer } from './server/index.js';
@@ -10,8 +11,7 @@ const config = {
   port: parseInt(process.env.CONCLAVE_PORT || '3000'),
   host: process.env.CONCLAVE_HOST || '0.0.0.0',
   database: {
-    type: 'sqlite' as const,
-    url: process.env.CONCLAVE_DB || './conclave-local.db',
+    url: process.env.DATABASE_URL || 'postgres://localhost:5432/conclave',
   },
   jwtSecret: process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret-change-in-production',
 };

@@ -8,7 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
-import { initDb, createDb, type ConclaveDb } from '../db/index.js';
+import { initDb, type ConclaveDb } from '../db/index.js';
 
 import { principalRoutes } from '../routes/principals.js';
 import { agentRoutes } from '../routes/agents.js';
@@ -29,8 +29,7 @@ export interface ConclaveConfig {
   port: number;
   host: string;
   database: {
-    type: 'sqlite' | 'postgres';
-    url: string;
+    url: string;  // PostgreSQL connection string
   };
   jwtSecret: string;
   rateLimit?: {
@@ -44,8 +43,7 @@ const DEFAULT_CONFIG: ConclaveConfig = {
   port: 3000,
   host: '0.0.0.0',
   database: {
-    type: 'sqlite',
-    url: './conclave-local.db',
+    url: process.env.DATABASE_URL || 'postgres://localhost:5432/conclave',
   },
   jwtSecret: 'conclave-dev-secret-change-in-production',
 };
@@ -53,8 +51,8 @@ const DEFAULT_CONFIG: ConclaveConfig = {
 export async function createServer(config: Partial<ConclaveConfig> = {}, fleetManager?: FleetManager) {
   const fullConfig: ConclaveConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Initialize database (preserve existing data — only create schema if missing)
-  const db: ConclaveDb = initDb(fullConfig.database);
+  // Initialize database (PG connection — async)
+  const { db, close: closeDb } = await initDb(fullConfig.database);
 
   const fastify = Fastify({
     logger: {
@@ -149,7 +147,7 @@ export async function startServer(config: Partial<ConclaveConfig> = {}) {
   console.log('  ╚══════════════════════════════════════╝');
   console.log('');
   console.log(`  Mode:     ${fullConfig.mode}`);
-  console.log(`  Database: ${fullConfig.database.type} @ ${fullConfig.database.url}`);
+  console.log(`  Database: ${fullConfig.database.url.replace(/:[^:@]+@/, ':***@')}`);
   console.log(`  Listen:   http://${fullConfig.host}:${fullConfig.port}`);
   console.log(`  Health:   http://${fullConfig.host}:${fullConfig.port}/v1/health`);
   console.log('');
