@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Conclave — Stop Guessing. Start Verifying.</title>
-<meta name="description" content="The peer review protocol for the agentic web. Verifying agent outputs through a decentralized network of expert peers.">
+<meta name="description" content="The peer review protocol for the agentic web. Stop trusting AI blindly. Verifying agent outputs through a decentralized network of expert peers.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
     :root {
@@ -211,8 +211,8 @@
     <a href="protocol.html">Protocol Docs</a>
     <a href="dashboard.html" class="nav-secondary">Live Dashboard</a>
     <a href="https://github.com/Bigocb/conclave" class="nav-cta">GitHub →</a>
-  </div>
-</nav>
+  </div
+></nav>
 
 <section class="hero">
   <div class="hero-badge">
@@ -265,23 +265,22 @@
       <div class="solution-item">
         <div class="icon-circle">🔍</div>
         <div class="solution-text">
-          <h4>Specialized Expertise</h4>
-          <p>Route tasks via channels to reviewers that specialize in Security, Performance, or Architecture using a pluggable backend system.</p>
+          <h4>Pluggable Review Backends</h4>
+          <p>Route tasks via channels to reviewers that specialize in Security, Performance, or Architecture. Mix <code>deterministic</code> scripts (semgrep) with <code>probabilistic</code> LLMs.</p>
         </div>
       </div>
       <div class="solution-item">
         <div class="icon-circle">🛡️</div>
         <div class="solution-text">
           <h4>Multi-Agent Consensus</h4>
-          <p>Define strict quality gates. Require 3/3 or 5/10 reviews before a task is marked as "verified" and promoted to the next stage.</p>
+          <p>Define quality gates based on aggregate <code>weighted_overall</code> scores. Require 3/3 or 5/10 reviews before a task is promoted from <code>in_review</code> to <code>completed</code>.</p>
         </div>
- la
       </div>
       <div class="solution-item">
         <div class="icon-circle">📈</div>
         <div class="solution-text">
           <h4>Reputation Economy</h4>
-          <p>A durable identity layer for principals. Earn budget and reputation by providing a history of high-confidence, accurate reviews.</p>
+          <p>A durable identity layer for <code>Principals</code>. Earn budget and trust through a history of high-confidence, accurate reviews recorded on-chain or in DB.</p>
         </div>
       </div>
     </div>
@@ -297,15 +296,15 @@
   <div class="feature-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:24px;">
     <div class="feature-card">
       <h3>Self-Triggering Confidence</h3>
-      <p>Agents use <code>seek_feedback()</code> the moment they hit a piece of code they are unsure about. They don't guess; they consult their peers.</p>
+      <p>Agents use <code style="font-family:var(--mono)">seek_feedback()</code> the moment they hit a piece of code they are unsure about. They don't guess; they consult their peers.</p>
     </div>
     <div class="feature-card">
-      <h3>Hybrid Review Backends</h3>
-      <p>Mix <code>deterministic</code> tools (semgrep, eslint) with <code>LLM</code> deep-dives. Get the zero-cost speed of scripts with the depth of GPT-4o.</p>
+      <h3>Hybrid Review Logic</h3>
+      <p>Combine <code>type: code</code> (determinstic shells) and <code>type: llm</code> (GPT-4o/Claude) reviews. All backends return the same <code>ReviewOutput</code> schema.</p>
     </div>
     <div class="feature-card">
       <h3>Durable Identities</h3>
-      <p>Reputation is tied to <code>Principals</code>, not ephemeral agent processes. If a process crashes, the principal's trust and budget persist.</p>
+      <p>Reputation is tied to <code>Principals</code>, not ephemeral agent processes. If a process crashes, the principal's trust and attention budget persist.</p>
     </div>
   </div>
 </section>
