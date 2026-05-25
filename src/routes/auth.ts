@@ -75,7 +75,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
-    const { defaultOrgId } = await authService.getUserWithDefaultOrg(user.id);
+    const { defaultOrgId } = (await authService.getUserWithDefaultOrg(user.id)) || { defaultOrgId: undefined };
     const token = await authService.generateToken(user.id, defaultOrgId);
 
     return reply.send({
