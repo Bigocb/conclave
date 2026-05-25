@@ -3,6 +3,7 @@
   "outputDirectory": "public",
   "framework": null,
   "rewrites": [
+    { "source": "/auth/:match*", "destination": "/api/index" },
     { "source": "/v1/:match*", "destination": "/api/index" },
     { "source": "/health", "destination": "/api/index" },
     { "source": "/dashboard", "destination": "/dashboard.html" },
