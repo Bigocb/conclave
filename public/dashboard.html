@@ -257,7 +257,13 @@
                 if (!name || !orgName) return alert('Name and Organization are required.');
 
                 try {
-                    const data = await apiRequest('/auth/register', 'POST', { name, email, password, orgName });
+                    const data = await apiRequest('/auth/register', 'POST', { 
+                        name, 
+                        email, 
+                        password, 
+                        orgName 
+                    });
+                    console.log('Registration response:', data);
                     STATE.token = data.token;
                     STATE.orgId = data.orgId;
                     localStorage.setItem('clv_token', data.token);
@@ -265,6 +271,7 @@
                     hideAuth();
                     refreshUI();
                 } catch (e) {
+                    console.error('Registration error detail:', e);
                     alert('Registration failed. Email might be taken.');
                 }
             }
