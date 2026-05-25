@@ -1,661 +1,427 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conclave — Dashboard</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#2a2a3a;
-  --text:#e0e0e8;--text2:#8888a0;--accent:#10b981;--accent2:#059669;
-  --red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;--purple:#8b5cf6;
-  --font:'JetBrains Mono','Fira Code',monospace;
-  --sans:'Inter',system-ui,-apple-system,sans-serif;
-}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;min-height:100vh}
-a{color:var(--accent);text-decoration:none}
-code,pre,.mono{font-family:var(--font)}
-
-/* Header */
-.header{border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100}
-.header h1{font-size:18px;font-weight:700;letter-spacing:-0.5px}
-.header h1 span{color:var(--accent)}
-.header-right{display:flex;align-items:center;gap:12px}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite;display:inline-block}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.status-dot.offline{background:var(--red);animation:none}
-.mode-badge{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)}
-
-/* Main Tabs */
-.main-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 24px;background:var(--surface)}
-.main-tabs .tab{padding:12px 20px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
-.main-tabs .tab:hover{color:var(--text)}
-.main-tabs .tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface2)}
-
-/* Main Layout */
-.main{padding:20px 24px;max-width:1600px;margin:0 auto}
-@media(max-width:900px){.main{padding:12px}}
-
-/* Cards */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px}
-.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-header h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2)}
-.card-header h2 .icon{margin-right:6px}
-.card-body{padding:16px}
-.card.full-width{grid-column:1/-1}
-
-/* Stats Row */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
-.stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center}
-.stat-value{font-size:28px;font-weight:700;color:var(--accent);line-height:1.1}
-.stat-value.red{color:var(--red)}
-.stat-value.yellow{color:var(--yellow)}
-.stat-value.blue{color:var(--blue)}
-.stat-value.purple{color:var(--purple)}
-.stat-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px}
-.stat-sub{font-size:10px;color:var(--text2);margin-top:2px}
-
-/* Tables */
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;padding:8px 12px;color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;border-bottom:1px solid var(--border)}
-td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
-tr:last-child td{border-bottom:none}
-tr:hover{background:var(--surface2)}
-.mono-sm{font-family:var(--font);font-size:11px}
-.id-cell{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-/* Status Badges */
-.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
-.badge.open{background:#1e3a5f;color:#60a5fa}
-.badge.in_review{background:#1e3a2f;color:var(--accent)}
-.badge.completed{background:#14532d;color:#4ade80}
-.badge.failed{background:#451a03;color:var(--yellow)}
-
-/* Forms */
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px}
-.form-group input,.form-group textarea,.form-group select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;transition:border-color 0.2s}
-.form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--accent)}
-.form-group textarea{min-height:60px;resize:vertical}
-.btn{padding:8px 16px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;text-transform:uppercase;letter-spacing:0.3px}
-.btn-primary{background:var(--accent);color:#000}
-.btn-primary:hover{background:var(--accent2)}
-.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
-.btn-secondary:hover{background:var(--border)}
-.btn-sm{padding:4px 10px;font-size:11px}
-.btn-row{display:flex;gap:8px;margin-top:12px}
-
-/* Toast */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 20px;font-size:13px;z-index:200;transform:translateY(100px);opacity:0;transition:all 0.3s}
-.toast.show{transform:translateY(0);opacity:1}
-.toast.success{border-color:var(--accent)}
-.toast.error{border-color:var(--red)}
-
-/* Scrollable */
-.scrollable{max-height:500px;overflow-y:auto}
-.scrollable::-webkit-scrollbar{width:4px}
-.scrollable::-webkit-scrollbar-track{background:transparent}
-.scrollable::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-
-/* Agent tags */
-.agent-tag{display:inline-block;padding:2px 6px;margin:1px;background:var(--surface2);border-radius:3px;font-size:10px;margin-right:4px}
-.channel-tag{display:inline-block;padding:2px 6px;margin:1px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;font-size:10px;color:var(--accent)}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Conclave</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg: #06090f;
+            --bg2: #0c111b;
+            --bg3: #131a2b;
+            --border: #1e2d4a;
+            --green: #00d98b;
+            --cyan: #22d3ee;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: #e8edf5;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(12, 17, 27, 0.8); backdrop-filter: blur(12px); }
+        .sidebar-item.active { background: rgba(0, 217, 139, 0.1); color: var(--green); border-right: 2px solid var(--green); }
+    </style>
 </head>
-<body>
+<body class="min-h-screen flex">
 
-<div class="header">
-  <h1>⬡ <span>Conclave</span> Dashboard</h1>
-  <div class="header-right">
-    <span class="mode-badge" id="mode-badge">LIVE</span>
-    <span class="status-dot" id="status-dot" title="API Connected"></span>
-    <span style="font-size:11px;color:var(--text2)" id="last-refresh"></span>
-  </div>
-</div>
-
-<div class="main-tabs" id="main-tabs">
-  <div class="tab active" onclick="showMainTab('overview')">📊 Overview</div>
-  <div class="tab" onclick="showMainTab('principals')">👤 Principals</div>
-  <div class="tab" onclick="showMainTab('channels')">📡 Channels</div>
-</div>
-
-<div class="main">
-
-<!-- ==================== OVERVIEW TAB ==================== -->
-<div id="tab-overview" class="main-tab-panel">
-  <!-- Stats -->
-  <div class="card full-width">
-    <div class="card-body" style="padding:12px 16px">
-      <div class="stats-grid">
-        <div class="stat"><div class="stat-value" id="stat-orgs">—</div><div class="stat-label">Organizations</div></div>
-        <div class="stat"><div class="stat-value blue" id="stat-principals">—</div><div class="stat-label">Principals</div></div>
-        <div class="stat"><div class="stat-value yellow" id="stat-agents">—</div><div class="stat-label">Agents</div></div>
-        <div class="stat"><div class="stat-value" id="stat-channels">—</div><div class="stat-label">Channels</div></div>
-        <div class="stat"><div class="stat-value yellow" id="stat-tasks-open">—</div><div class="stat-label">Open Tasks</div></div>
-        <div class="stat"><div class="stat-value purple" id="stat-tasks-completed">—</div><div class="stat-label">Completed</div></div>
-        <div class="stat"><div class="stat-value" id="stat-reviews">—</div><div class="stat-label">Reviews</div></div>
-        <div class="stat"><div class="stat-value" id="stat-budget">—</div><div class="stat-label">prn_dev Budget</div></div>
-      </div>
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-center mb-6">
+                <div class="w-12 h-12 bg-green-500/20 border border-green-500/50 rounded-lg flex items-center justify-center text-green-500">
+                    <i data-lucide="shield-check"></i>
+                </div>
+            </div>
+            <h2 id="auth-title" class="text-2xl font-bold text-center mb-2">Conclave Identity</h2>
+            <p id="auth-subtitle" class="text-gray-400 text-center mb-8 text-sm">Enter credentials to access your fleet control plane.</p>
+            
+            <div id="auth-form" class="space-y-4">
+                <div id="reg-fields" class="hidden space-y-4 mb-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                        <input id="reg-name" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white focus:border-green-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Organization Name</label>
+                        <input id="reg-org" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white focus:border-green-500 outline-none transition-all">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                    <input id="login-email" type="email" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white focus:border-green-500 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                    <input id="login-pass" type="password" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white focus:border-green-500 outline-none transition-all">
+                </div>
+                <button id="btn-login" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Access Dashboard</button>
+                <div class="text-center mt-4">
+                    <a href="/auth/google" class="text-xs text-gray-400 hover:text-white flex items-center justify-center gap-2">
+                        <i data-lucide="log-in" class="w-3 h-3"></i> Continue with Google
+                    </a>
+                    <button onclick="toggleAuthMode('register')" class="text-xs text-green-500 hover:text-green-400 mt-4 underline">Create new account</button>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- Tasks -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon">📋</span> Tasks</h2>
-      <button class="btn btn-primary btn-sm" onclick="showCreateTask()">+ New Task</button>
+    <!-- Sidebar -->
+    <aside class="w-64 border-r border-[#1e2d4a] h-screen flex flex-col glass sticky top-0">
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-8 h-8 bg-green-500 rounded flex items-center justify-center text-black font-bold text-xs">C</div>
+            <span class="font-bold text-lg tracking-tight">Conclave</span>
+        </div>
+        
+        <nav class="flex-1 px-3 space-y-1 mt-4">
+            <a href="#" onclick="switchView('fleet')" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:bg-white/5">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Fleet Overview
+            </a>
+            <a href="#" onclick="switchView('vault')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="key" class="w-4 h-4"></i> Trust Vault
+            </a>
+            <a href="#" onclick="switchView('tasks')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="list-checks" class="w-4 h-4"></i> Task Feed
+            </a>
+            <a href="#" onclick="switchView('org')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="users" class="w-4 h-4"></i> Organization
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-[#1e2d4a] space-y-4">
+            <div class="p-3 bg-white/5 rounded-lg border border-white/10">
+                <p class="text-[10px] font-bold text-gray-500 uppercase">Current Org</p>
+                <p id="display-org" class="text-xs font-mono text-green-400 truncate">Loading...</p>
+            </div>
+            <button id="btn-logout" class="w-full flex items-center gap-3 px-4 py-2 text-xs text-gray-400 hover:text-white transition-all text-left">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Agent Deployment Modal -->
+    <div id="deploy-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Deploy Verification Agent</h2>
+                <button onclick="toggleDeployModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Name</label>
+                    <input id="deploy-name" type="text" placeholder="e.g. Axiom-Alpha" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
+                    <select id="deploy-model" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                        <option value="deepseek-v3">DeepSeek V3</option>
+                        <option value="llama-3-70b">Llama 3 70B</option>
+                    </select>
+                </div>
+                <div class="pt-4">
+                    <button id="btn-confirm-deploy" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Initialize Agent</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body scrollable" style="padding:0">
-      <table><thead><tr><th>ID</th><th>Channel</th><th>Status</th><th>Reviews</th><th>Created</th><th>Actions</th></tr></thead><tbody id="tasks-tbody"></tbody></table>
-    </div>
-  </div>
-
-  <!-- Activity Feed -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon">📜</span> Recent Activity</h2>
-    </div>
-    <div class="card-body scrollable" id="activity-feed">
-      <div style="color:var(--text2);font-size:12px">Loading...</div>
-    </div>
-  </div>
-
-  <!-- Create Task Form -->
-  <div class="card full-width" id="create-task-card" style="display:none">
-    <div class="card-header">
-      <h2><span class="icon">✏️</span> Submit Task for Review</h2>
-      <button class="btn btn-secondary btn-sm" onclick="hideCreateTask()">✕ Close</button>
-    </div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label>Channel</label>
-          <select id="task-channel"></select>
+    <main class="flex-1 overflow-y-auto p-8">
+        <div id="view-fleet">
+            <header class="flex justify-between items-center mb-12">
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight">Fleet Overview</h1>
+                    <p class="text-gray-400 text-sm">Orchestrating your verification network.</p>
+                </div>
+                <button id="btn-add-agent" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Deploy Agent
+                </button>
+            </header>
+            <div id="agent-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Skeleton cards -->
+                <div class="animate-pulse bg-[#0c111b] border border-[#1e2d4a] h-48 rounded-2xl"></div>
+                <div class="animate-pulse bg-[#0c111b] border border-[#1e2d4a] h-48 rounded-2xl"></div>
+                <div class="animate-pulse bg-[#0c111b] border border-[#1e2d4a] h-48 rounded-2xl"></div>
+            </div>
         </div>
-        <div class="form-group">
-          <label>Requested Reviews</label>
-          <input type="number" id="task-reviews" value="3" min="1" max="10">
+
+        <div id="view-vault" class="hidden">
+            <header class="mb-12">
+                <h1 class="text-3xl font-extrabold tracking-tight">Trust Vault</h1>
+                <p class="text-gray-400 text-sm">Secure your provider keys with AES-256 encryption.</p>
+            </header>
+            <div class="max-w-2xl bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6">
+                <div class="flex gap-4 mb-8">
+                    <input id="vault-provider" type="text" placeholder="Provider (e.g. openai)" class="flex-1 bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                    <input id="vault-key" type="password" placeholder="API Key" class="flex-1 bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                    <button id="btn-save-key" class="bg-green-500 text-black font-bold px-6 py-3 rounded-lg text-sm hover:bg-cyan-400 transition-all">Save Key</button>
+                </div>
+                <div id="vault-list" class="space-y-3">
+                    <!-- Keys appear here -->
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="form-group">
-        <label>Description</label>
-        <textarea id="task-desc" placeholder="Describe what you want reviewed..."></textarea>
-      </div>
-      <div class="form-group">
-        <label>Output</label>
-        <textarea id="task-output" placeholder="The actual output/content to be reviewed..."></textarea>
-      </div>
-      <div class="form-group">
-        <label>Dimensions (comma-separated)</label>
-        <input type="text" id="task-dims" value="quality,completeness,correctness">
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="submitTask()">Submit Task (−5 budget)</button>
-        <button class="btn btn-secondary" onclick="hideCreateTask()">Cancel</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Task Detail -->
-  <div class="card full-width" id="task-detail-card" style="display:none">
-    <div class="card-header">
-      <h2><span class="icon">🔍</span> Task Detail</h2>
-      <button class="btn btn-secondary btn-sm" onclick="hideTaskDetail()">✕ Close</button>
-    </div>
-    <div class="card-body" id="task-detail-body"></div>
-  </div>
-</div>
-
-<!-- ==================== PRINCIPALS TAB ==================== -->
-<div id="tab-principals" class="main-tab-panel" style="display:none">
-  <div class="card full-width">
-    <div class="card-header">
-      <h2><span class="icon">👤</span> Principals</h2>
-      <button class="btn btn-primary btn-sm" onclick="toggleForm('principal-form')">+ New Principal</button>
-    </div>
-    <div class="card-body" style="padding:0">
-      <!-- Principal Form -->
-      <div id="principal-form" style="display:none;margin:12px;padding:12px;background:var(--surface2);border:1px solid var(--blue);border-radius:6px">
-        <h4 style="font-size:12px;color:var(--blue);margin:0 0 10px;text-transform:uppercase">New Principal</h4>
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" id="principal-name" placeholder="e.g. MyReviewer">
+        <div id="view-tasks" class="hidden">
+            <header class="mb-12">
+                <h1 class="text-3xl font-extrabold tracking-tight">Task Feed</h1>
+                <p class="text-gray-400 text-sm">Monitor verification progress and peer consensus.</p>
+            </header>
+            <div id="task-list" class="space-y-4">
+                <!-- Tasks appear here -->
+            </div>
         </div>
-        <div class="form-group">
-          <label>Organization</label>
-          <select id="principal-org-select"></select>
+
+        <div id="view-org" class="hidden">
+            <header class="mb-12">
+                <h1 class="text-3xl font-extrabold tracking-tight">Organization</h1>
+                <p class="text-gray-400 text-sm">Manage your workspace and member access.</p>
+            </header>
+            <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6 max-w-3xl">
+                <div id="org-details" class="space-y-4">
+                    <!-- Org info here -->
+                </div>
+            </div>
         </div>
-        <div class="form-group">
-          <label>Roles</label>
-          <input type="text" id="principal-roles" value="general-reviewer" placeholder="general-reviewer, code-reviewer">
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="createPrincipal()">Create</button>
-          <button class="btn btn-secondary" onclick="toggleForm('principal-form')">Cancel</button>
-        </div>
-      </div>
-      <table><thead><tr><th>ID</th><th>Name</th><th>Org</th><th>Roles</th><th>Agents</th><th>Subscribed Channels</th><th>Actions</th></tr></thead><tbody id="principals-tbody"></tbody></table>
-    </div>
-  </div>
+    </main>
 
-  <div class="card full-width">
-    <div class="card-header">
-      <h2><span class="icon">🤖</span> Register Agent</h2>
-    </div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="form-group">
-          <label>Principal</label>
-          <select id="reg-agent-principal"></select>
-        </div>
-        <div class="form-group">
-          <label>Agent Name</label>
-          <input type="text" id="reg-agent-name" placeholder="e.g. Code Reviewer #1">
-        </div>
-        <div class="form-group">
-          <label>Type</label>
-          <select id="reg-agent-type">
-            <option value="llm">LLM Reviewer</option>
-            <option value="slim">Slim (Fast)</option>
-            <option value="code">Code (Command)</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="form-group">
-          <label>Model</label>
-          <input type="text" id="reg-agent-model" value="deepseek-v4-flash" placeholder="e.g. glm-5.1">
-        </div>
-        <div class="form-group">
-          <label>Provider</label>
-          <select id="reg-agent-provider">
-            <option value="ollama_cloud">Ollama Cloud</option>
-            <option value="openai">OpenAI</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="groq">Groq</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>LLM URL (optional)</label>
-          <input type="text" id="reg-agent-llm-url" placeholder="Custom endpoint">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Instructions</label>
-        <textarea id="reg-agent-instructions" placeholder="You are a senior code reviewer..."></textarea>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="registerAgentFromForm()">Register Agent</button>
-      </div>
-    </div>
-  </div>
-</div>
+    <script>
+        // --- State Management ---
+        const STATE = {
+            token: localStorage.getItem('clv_token'),
+            orgId: localStorage.getItem('clv_orgId'),
+            apiBase: window.location.origin,
+        };
 
-<!-- ==================== CHANNELS TAB ==================== -->
-<div id="tab-channels" class="main-tab-panel" style="display:none">
-  <div class="card full-width">
-    <div class="card-header">
-      <h2><span class="icon">📡</span> Channels</h2>
-      <button class="btn btn-primary btn-sm" onclick="toggleForm('channel-form')">+ New Channel</button>
-    </div>
-    <div class="card-body" style="padding:0">
-      <!-- Channel Form -->
-      <div id="channel-form" style="display:none;margin:12px;padding:12px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px">
-        <h4 style="font-size:12px;color:var(--accent);margin:0 0 10px;text-transform:uppercase">New Channel</h4>
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" id="channel-name" placeholder="e.g. code-review">
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <textarea id="channel-desc" placeholder="What is this channel for?"></textarea>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="createChannel()">Create</button>
-          <button class="btn btn-secondary" onclick="toggleForm('channel-form')">Cancel</button>
-        </div>
-      </div>
-      <table><thead><tr><th>Name</th><th>Description</th><th>Subscribers</th><th>Tasks Today</th><th>Actions</th></tr></thead><tbody id="channels-tbody"></tbody></table>
-    </div>
-  </div>
+        // --- API Wrapper ---
+        async function apiRequest(endpoint, method = 'GET', body = null) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (STATE.token) headers['Authorization'] = `Bearer ${STATE.token}`;
 
-  <div class="card full-width">
-    <div class="card-header">
-      <h2><span class="icon">🔗</span> Subscribe Principal to Channel</h2>
-    </div>
-    <div class="card-body">
-      <p style="font-size:11px;color:var(--text2);margin-bottom:12px">Subscribe a principal's agents to a channel so they receive review tasks from it.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="form-group">
-          <label>Principal</label>
-          <select id="sub-principal"></select>
-        </div>
-        <div class="form-group">
-          <label>Channel</label>
-          <select id="sub-channel"></select>
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="subscribePrincipal()">Subscribe</button>
-      <div id="sub-status" style="margin-top:12px"></div>
-    </div>
-  </div>
-</div>
+            const config = {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null,
+            };
 
-</div>
+            const res = await fetch(`${STATE.apiBase}${endpoint}`, config);
+            if (res.status === 401) {
+                showAuth();
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
 
-<div class="toast" id="toast"></div>
+        // --- Auth Logic ---
+        let AUTH_MODE = 'login';
 
-<script>
-const API = '/v1';
-let cache = { orgs: [], principals: [], agents: [], channels: [], tasks: [], reviews: [] };
+        function toggleAuthMode(mode) {
+            AUTH_MODE = mode;
+            const isReg = mode === 'register';
+            document.getElementById('auth-title').innerText = isReg ? 'Join Conclave' : 'Conclave Identity';
+            document.getElementById('auth-subtitle').innerText = isReg ? 'Establish your identity and organization.' : 'Enter credentials to access your fleet control plane.';
+            document.getElementById('reg-fields').classList.toggle('hidden', !isReg);
+            document.getElementById('btn-login').innerText = isReg ? 'Create Account' : 'Access Dashboard';
+        }
 
-// ─── Tab Navigation ──────────────────────────────────────────────
-function showMainTab(tab) {
-  document.querySelectorAll('.main-tab-panel').forEach(p => p.style.display = 'none');
-  document.querySelectorAll('.main-tabs .tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).style.display = 'block';
-  const idx = {overview:0,principals:1,channels:2}[tab];
-  document.querySelectorAll('.main-tabs .tab')[idx].classList.add('active');
-  refresh();
-}
+        function showAuth() {
+            document.getElementById('auth-overlay').classList.remove('hidden');
+        }
 
-// ─── API Helper ──────────────────────────────────────────────
-async function api(method, path, body, agentId) {
-  const headers = {'Content-Type':'application/json'};
-  if (agentId) headers['X-Agent-Id'] = agentId;
-  const res = await fetch(`${API}${path}`, {method, headers, body: body ? JSON.stringify(body) : undefined});
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error?.message || res.statusText);
-  return json;
-}
+        function hideAuth() {
+            document.getElementById('auth-overlay').classList.add('hidden');
+        }
 
-function toast(msg, type='success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast show ${type}`;
-  setTimeout(() => t.className = 'toast', 3000);
-}
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-pass').value;
+            
+            if (AUTH_MODE === 'login') {
+                try {
+                    const data = await apiRequest('/auth/login', 'POST', { email, password });
+                    STATE.token = data.token;
+                    STATE.orgId = data.orgId;
+                    localStorage.setItem('clv_token', data.token);
+                    localStorage.setItem('clv_orgId', data.orgId);
+                    hideAuth();
+                    refreshUI();
+                } catch (e) {
+                    alert('Login failed. Please check your credentials.');
+                }
+            } else {
+                const name = document.getElementById('reg-name').value;
+                const orgName = document.getElementById('reg-org').value;
+                if (!name || !orgName) return alert('Name and Organization are required.');
 
-function shortId(id) { return id?.slice(0,8) + '…' || '—'; }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+                try {
+                    const data = await apiRequest('/auth/register', 'POST', { name, email, password, orgName });
+                    STATE.token = data.token;
+                    STATE.orgId = data.orgId;
+                    localStorage.setItem('clv_token', data.token);
+                    localStorage.setItem('clv_orgId', data.orgId);
+                    hideAuth();
+                    refreshUI();
+                } catch (e) {
+                    alert('Registration failed. Email might be taken.');
+                }
+            }
+        }
 
-// ─── Refresh Data ──────────────────────────────────────────────
-async function refresh() {
-  try {
-    const [orgs, prns, ags, chs, tasks] = await Promise.all([
-      api('GET', '/orgs'),
-      api('GET', '/principals'),
-      api('GET', '/agents'),
-      api('GET', '/channels'),
-      api('GET', '/tasks'),
-    ]);
-    cache.orgs = orgs.data?.organizations || orgs.data || [];
-    cache.principals = prns.data || [];
-    cache.agents = ags.data || [];
-    cache.channels = chs.data?.channels || [];
-    cache.tasks = tasks.data?.tasks || [];
+        // --- View Switching ---
+        function switchView(viewId) {
+            const views = ['fleet', 'vault', 'tasks', 'org'];
+            views.forEach(v => {
+                document.getElementById(`view-${v}`).classList.toggle('hidden', v !== viewId);
+            });
 
-    renderStats();
-    renderTasks();
-    renderPrincipals();
-    renderChannels();
-    populateDropdowns();
-    updateStatus(true);
-  } catch(e) {
-    console.error('Refresh error:', e);
-    updateStatus(false);
-  }
-  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
-}
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active', 'text-white');
+                item.classList.add('text-gray-400');
+                if (item.textContent.toLowerCase().includes(viewId)) {
+                    item.classList.add('active');
+                    item.classList.remove('text-gray-400');
+                }
+            });
+        }
 
-function updateStatus(ok) {
-  document.getElementById('status-dot').className = `status-dot ${ok ? '' : 'offline'}`;
-}
+        // --- Vault Logic ---
+        async function saveVaultKey() {
+            const provider = document.getElementById('vault-provider').value;
+            const key = document.getElementById('vault-key').value;
 
-// ─── Render Stats ──────────────────────────────────────────────
-function renderStats() {
-  document.getElementById('stat-orgs').textContent = cache.orgs.length;
-  document.getElementById('stat-principals').textContent = cache.principals.length;
-  document.getElementById('stat-agents').textContent = cache.agents.length;
-  document.getElementById('stat-channels').textContent = cache.channels.length;
-  document.getElementById('stat-tasks-open').textContent = cache.tasks.filter(t => t.status === 'open' || t.status === 'in_review').length;
-  document.getElementById('stat-tasks-completed').textContent = cache.tasks.filter(t => t.status === 'completed').length;
-  document.getElementById('stat-reviews').textContent = cache.tasks.reduce((sum, t) => sum + (t.reviews_received || 0), 0);
-  document.getElementById('stat-budget').textContent = '∞';
-}
+            if (!provider || !key) return alert('Both provider and key are required.');
 
-// ─── Render Tasks ──────────────────────────────────────────────
-function renderTasks() {
-  const tbody = document.getElementById('tasks-tbody');
-  if (cache.tasks.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text2);text-align:center;padding:20px">No tasks yet</td></tr>';
-    return;
-  }
-  tbody.innerHTML = cache.tasks.slice().reverse().map(t => `
-    <tr>
-      <td class="id-cell mono-sm">${shortId(t.id)}</td>
-      <td><span class="channel-tag">#${t.channel || 'general'}</span></td>
-      <td><span class="badge ${t.status}">${t.status.replace('_',' ')}</span></td>
-      <td>${t.reviews_received || 0}/${t.requested_reviews || 3}</td>
-      <td style="color:var(--text2);font-size:11px">${new Date(t.created_at).toLocaleString()}</td>
-      <td><button class="btn btn-sm btn-secondary" onclick="showTaskDetail('${t.id}')">View</button></td>
-    </tr>
-  `).join('');
-}
+            try {
+                await apiRequest('/v1/vault/key', 'POST', { provider, key });
+                document.getElementById('vault-provider').value = '';
+                document.getElementById('vault-key').value = '';
+                await refreshVault();
+            } catch (e) {
+                alert('Failed to save key to vault.');
+            }
+        }
 
-// ─── Render Principals ──────────────────────────────────────────────
-async function renderPrincipals() {
-  const tbody = document.getElementById('principals-tbody');
-  if (cache.principals.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text2);text-align:center;padding:20px">No principals yet</td></tr>';
-    return;
-  }
-  const rows = [];
-  for (const p of cache.principals) {
-    const org = cache.orgs.find(o => o.id === p.org_id);
-    const agents = cache.agents.filter(a => a.principal_id === p.id);
-    const agentNames = agents.map(a => `<span class="agent-tag">${esc(a.name || shortId(a.id))}</span>`).join('');
-    // Get subscribed channels for this principal
-    let channels = [];
-    try {
-      for (const ag of agents) {
-        const subs = await api('GET', `/agents/${ag.id}/subscriptions`);
-        (subs.data?.channels || []).forEach(c => { if (!channels.includes(c)) channels.push(c); });
-      }
-    } catch(e) {}
-    const channelTags = channels.length > 0 ? channels.map(c => `<span class="channel-tag">#${c}</span>`).join('') : '<span style="color:var(--text2)">—</span>';
-    rows.push(`
-      <tr>
-        <td class="id-cell mono-sm">${shortId(p.id)}</td>
-        <td>${esc(p.name || '—')}</td>
-        <td>${esc(org?.name || shortId(p.org_id))}</td>
-        <td>${(p.roles || []).join(', ')}</td>
-        <td>${agentNames || '<span style="color:var(--text2)">No agents</span>'}</td>
-        <td>${channelTags}</td>
-        <td><button class="btn btn-sm btn-secondary" onclick="deletePrincipal('${p.id}')">Delete</button></td>
-      </tr>
-    `);
-  }
-  tbody.innerHTML = rows.join('');
-}
+        async function refreshVault() {
+            const list = document.getElementById('vault-list');
+            try {
+                const data = await apiRequest('/v1/vault/keys');
+                const keys = data.data || [];
+                list.innerHTML = keys.length ? '' : '<p class=\"text-gray-500 text-center py-8\">No keys stored in vault.</p>';
+                
+                keys.forEach(k => {
+                    list.innerHTML += `
+                        <div class=\"flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg\">
+                            <div class=\"flex items-center gap-3\">
+                                <i data-lucide=\"key\" class=\"w-4 h-4 text-green-400\"></i>
+                                <span class=\"font-mono text-sm\">${k.provider}</span>
+                            </div>\n                            <span class=\"text-[10px] text-gray-500 uppercase\">Encrypted</span>
+                        </div>\n                    `;
+                });
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Vault refresh failed', e);
+            }
+        }
 
-// ─── Render Channels ──────────────────────────────────────────────
-async function renderChannels() {
-  const tbody = document.getElementById('channels-tbody');
-  if (cache.channels.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text2);text-align:center;padding:20px">No channels yet</td></tr>';
-    return;
-  }
-  const rows = [];
-  for (const ch of cache.channels) {
-    // Count subscribers
-    let subs = [];
-    try {
-      const subRes = await api('GET', `/channels/${ch.name}/subscribers`);
-      subs = subRes.data?.subscribers || [];
-    } catch(e) {}
-    rows.push(`
-      <tr>
-        <td><span class="channel-tag">#${ch.name}</span></td>
-        <td>${esc(ch.description || '—')}</td>
-        <td>${subs.length > 0 ? subs.map(s => esc(s.name || shortId(s.id))).join(', ') : '<span style="color:var(--text2)">None</span>'}</td>
-        <td>—</td>
-        <td><button class="btn btn-sm btn-secondary" onclick="deleteChannel('${ch.name}')">Delete</button></td>
-      </tr>
-    `);
-  }
-  tbody.innerHTML = rows.join('');
-}
+        // --- Task Logic ---
+        async function refreshTasks() {
+            const list = document.getElementById('task-list');
+            try {
+                const data = await apiRequest('/v1/tasks');
+                const tasks = data.data || [];
+                list.innerHTML = tasks.length ? '' : '<p class=\"text-gray-500 text-center py-8\">No tasks found in the feed.</p>';
+                
+                tasks.forEach(t => {
+                    const statusColor = t.status === 'completed' ? 'text-green-400' : 'text-yellow-400';
+                    list.innerHTML += `
+                        <div class=\"p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl\">
+                            <div class=\"flex justify-between items-center mb-2\">
+                                <span class=\"text-xs font-mono text-gray-500\">${t.id}</span>
+                                <span class=\"text-xs font-bold ${statusColor} uppercase\">${t.status}</span>
+                            </div>\n                            <div class=\"text-sm mb-4 text-gray-300\">${t.input}</div>
+                            <div class=\"flex justify-between items-center text-xs\">
+                                <span class=\"text-gray-500\">Agent: ${t.agent_id}</span>
+                                <span class=\"font-bold text-green-400\">Score: ${t.score || 'N/A'}</span>
+                            </div>\n                        </div>\n                    `;
+                });
+            } catch (e) {
+                console.error('Task feed refresh failed', e);
+            }
+        }
 
-// ─── Populate Dropdowns ──────────────────────────────────────────────
-function populateDropdowns() {
-  // Task channel dropdown
-  const taskCh = document.getElementById('task-channel');
-  if (taskCh) taskCh.innerHTML = cache.channels.map(c => `<option value="${c.name}">${c.name}</option>`).join('') || '<option value="general-qa">general-qa</option>';
+        function toggleDeployModal() {
+            document.getElementById('deploy-modal').classList.toggle('hidden');
+        }
 
-  // Principal dropdowns
-  const prnOpts = cache.principals.map(p => `<option value="${p.id}">${esc(p.name || shortId(p.id))}</option>`).join('');
-  const selIds = ['principal-org-select', 'reg-agent-principal', 'sub-principal'];
-  selIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = prnOpts || '<option value="">— no principals —</option>';
-  });
+        async function deployAgent() {
+            const name = document.getElementById('deploy-name').value;
+            const model = document.getElementById('deploy-model').value;
+            if (!name) return alert('Agent name is required.');
 
-  // Channel dropdown
-  const chOpts = cache.channels.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  const chSel = document.getElementById('sub-channel');
-  if (chSel) chSel.innerHTML = chOpts || '<option value="general-qa">general-qa</option>';
-}
+            try {
+                await apiRequest('/v1/agents', 'POST', { name, model });
+                toggleDeployModal();
+                refreshUI();
+            } catch (e) {
+                alert('Deployment failed. Check logs.');
+            }
+        }
 
-// ─── Forms ──────────────────────────────────────────────
-function toggleForm(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
-}
+        // --- UI Refresh ---
+        async function refreshUI() {
+            document.getElementById('display-org').innerText = STATE.orgId || 'No Org Linked';
+            
+            const grid = document.getElementById('agent-grid');
+            try {
+                const data = await apiRequest('/v1/agents');
+                const agents = data.data || [];
+                
+                grid.innerHTML = agents.length ? '' : '<p class=\"text-gray-500 col-span-full text-center py-12\">No agents deployed in this organization.</p>';
+                
+                agents.forEach(agent => {
+                    grid.innerHTML += `
+                        <div class=\"bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all group\">
+                            <div class=\"flex justify-between items-start mb-4\">
+                                <div class=\"w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-gray-400 group-hover:text-green-400 transition-colors\">
+                                    <i data-lucide=\"bot\" class=\"w-5 h-5\"></i>
+                                </div>
+                                <span class=\"text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500\">${agent.id}</span>
+                            </div>
+                            <h3 class=\"font-bold text-lg mb-1\">${agent.name}</h3>
+                            <p class=\"text-xs text-gray-400 mb-4\">Model: <span class=\"text-green-400\">${agent.model}</span></p>
+                            <div class=\"flex items-center justify-between pt-4 border-t border-[#1e2d4a]\">
+                                <span class=\"text-[11px] font-bold text-gray-500 uppercase tracking-widest\">Status: Active</span>
+                                <button class=\"p-2 hover:bg-white/10 rounded-md transition-all\">
+                                    <i data-lucide=\"settings\" class=\"w-4 h-4 text-gray-500\"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Failed to load agents', e);
+            }
+        }
 
-function showCreateTask() { document.getElementById('create-task-card').style.display = 'block'; }
-function hideCreateTask() { document.getElementById('create-task-card').style.display = 'none'; }
+        // --- Initial Setup ---
+        document.getElementById('btn-login').onclick = handleLogin;
+        document.getElementById('btn-logout').onclick = () => {
+            localStorage.clear();
+            window.location.reload();
+        };
+        document.getElementById('btn-save-key').onclick = saveVaultKey;
+        document.getElementById('btn-add-agent').onclick = toggleDeployModal;
+        document.getElementById('btn-confirm-deploy').onclick = deployAgent;
 
-async function createPrincipal() {
-  const name = document.getElementById('principal-name').value.trim();
-  const orgId = document.getElementById('principal-org-select').value;
-  const roles = document.getElementById('principal-roles').value.split(',').map(r => r.trim()).filter(Boolean);
-  if (!name) return toast('Name required', 'error');
-  if (!orgId) return toast('Select an organization', 'error');
-  try {
-    const res = await api('POST', '/principals', { org_id: orgId, name, roles });
-    toast(`Principal ${res.data?.id || 'created'}`);
-    toggleForm('principal-form');
-    refresh();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function createChannel() {
-  const name = document.getElementById('channel-name').value.trim();
-  const desc = document.getElementById('channel-desc').value.trim();
-  if (!name) return toast('Name required', 'error');
-  if (!/^[a-z0-9-]+$/.test(name)) return toast('Lowercase letters, numbers, dashes only', 'error');
-  try {
-    await api('POST', '/channels', { name, description: desc || undefined });
-    toast(`Channel #${name} created`);
-    toggleForm('channel-form');
-    refresh();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function registerAgentFromForm() {
-  const principalId = document.getElementById('reg-agent-principal').value;
-  const name = document.getElementById('reg-agent-name').value.trim();
-  const type = document.getElementById('reg-agent-type').value;
-  const model = document.getElementById('reg-agent-model').value.trim();
-  const provider = document.getElementById('reg-agent-provider').value;
-  const llmUrl = document.getElementById('reg-agent-llm-url').value.trim();
-  const instructions = document.getElementById('reg-agent-instructions').value.trim();
-  if (!principalId || !name) return toast('Principal and name required', 'error');
-  try {
-    const res = await api('POST', '/agents/register', {
-      principal_id: principalId, name, type, model, provider,
-      llm_url: llmUrl || undefined,
-      instructions: instructions || `You are ${name}. Review for quality and correctness.`,
-    });
-    toast(`Agent ${res.data?.id || name} registered`);
-    document.getElementById('reg-agent-name').value = '';
-    refresh();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function subscribePrincipal() {
-  const principalId = document.getElementById('sub-principal').value;
-  const channel = document.getElementById('sub-channel').value;
-  if (!principalId || !channel) return toast('Select both', 'error');
-  try {
-    await api('POST', `/channels/${channel}/subscribe`, { principal_id: principalId });
-    toast(`Subscribed to #${channel}`);
-    document.getElementById('sub-status').innerHTML = `<span style="color:var(--accent)">✓ Subscribed</span>`;
-    refresh();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function submitTask() {
-  const channel = document.getElementById('task-channel').value;
-  const desc = document.getElementById('task-desc').value.trim();
-  const output = document.getElementById('task-output').value.trim();
-  const reviews = parseInt(document.getElementById('task-reviews').value) || 3;
-  const dims = document.getElementById('task-dims').value.split(',').map(d => d.trim()).filter(Boolean);
-  if (!desc || !output) return toast('Description and output required', 'error');
-  try {
-    const res = await api('POST', '/tasks', {
-      channel, description: desc, output, requested_reviews: reviews, dimensions: dims,
-    }, 'agt_dev');
-    toast(`Task ${res.data?.id} submitted`);
-    hideCreateTask();
-    refresh();
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function showTaskDetail(id) {
-  const t = cache.tasks.find(x => x.id === id);
-  if (!t) return;
-  // Get full task details including reviews
-  const taskRes = await api('GET', `/tasks/${id}`);
-  const task = taskRes.data;
-  const reviews = task.reviews || [];
-  document.getElementById('task-detail-body').innerHTML = `
-    <div style="margin-bottom:12px"><strong>Channel:</strong> #${task.channel || 'general'}</div>
-    <div style="margin-bottom:12px"><strong>Status:</strong> <span class="badge ${task.status}">${task.status}</span></div>
-    <div style="margin-bottom:12px"><strong>Reviews:</strong> ${reviews.length}/${task.requested_reviews || 3}</div>
-    <div style="margin-bottom:12px"><strong>Description:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(task.description || '—')}</pre></div>
-    <div style="margin-bottom:12px"><strong>Output:</strong><br><pre style="background:var(--bg);padding:12px;border-radius:4px;overflow-x:auto;font-size:11px">${esc(task.output || '—')}</pre></div>
-    ${reviews.length > 0 ? `<div style="margin-bottom:12px"><strong>Reviews:</strong></div>` : ''}
-    ${reviews.map(r => `
-      <div style="background:var(--surface2);padding:10px;border-radius:4px;margin-bottom:8px;font-size:11px">
-        <div><strong>${esc(r.reviewer_name || shortId(r.reviewer_id))}</strong> — Score: ${r.weighted_overall}/10</div>
-        <div style="color:var(--text2);margin-top:4px">${esc(r.comment || '—')}</div>
-      </div>
-    `).join('')}
-  `;
-  document.getElementById('task-detail-card').style.display = 'block';
-}
-function hideTaskDetail() { document.getElementById('task-detail-card').style.display = 'none'; }
-
-async function deletePrincipal(id) {
-  if (!confirm('Delete this principal?')) return;
-  try { await api('DELETE', `/principals/${id}`); toast('Deleted'); refresh(); }
-  catch(e) { toast(e.message, 'error'); }
-}
-async function deleteChannel(name) {
-  if (!confirm(`Delete channel #${name}?`)) return;
-  try { await api('DELETE', `/channels/${name}`); toast('Deleted'); refresh(); }
-  catch(e) { toast(e.message, 'error'); }
-}
-
-// ─── Init ──────────────────────────────────────────────
-refresh();
-setInterval(refresh, 15000);
-</script>
+        window.onload = () => {
+            lucide.createIcons();
+            if (!STATE.token) showAuth();
+            else refreshUI();
+        };
+    </script>
 </body>
 </html>
