@@ -121,7 +121,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(healthRoutes);
 
   // Auth routes (no prefix for registration/login)
-  await fastify.register(authRoutes);
+    await fastify.register(authRoutes, { prefix: '/auth' });
 
   // API routes (path-based versioning: /v1/)
   await fastify.register(principalRoutes, { prefix: '/v1' });
