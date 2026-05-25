@@ -3,6 +3,8 @@ import { VaultService } from '../services/vault.js';
 import { authenticate } from '../middleware/auth.js';
 
 export async function vaultRoutes(fastify: FastifyInstance) {
+  const vault = new VaultService(fastify.db);
+  
   // All vault routes are protected
   fastify.addHook('preHandler', authenticate);
 
@@ -19,7 +21,7 @@ export async function vaultRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const vaultId = await VaultService.upsertKey(orgId, provider, key);
+      const vaultId = await vault.upsertKey(orgId, provider, key);
       return reply.send({ 
         message: 'Provider key updated successfully', 
         vaultId 
@@ -37,7 +39,7 @@ export async function vaultRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'No active organization associated with this session' });
     }
 
-    const key = await VaultService.getKey(orgId, provider);
+    const key = await vault.getKey(orgId, provider);
     if (!key) {
       return reply.status(404).send({ error: 'No key found for this provider in organization' });
     }
