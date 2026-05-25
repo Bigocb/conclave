@@ -25,25 +25,29 @@ export async function authRoutes(fastify: FastifyInstance) {
     const passwordHash = await authService.hashPassword(password);
     const userId = `usr_${uuidv7()}`;
 
-    const newUser = await db.insert(users).values({
-      id: userId,
-      email,
-      passwordHash,
-      fullSName: fullName,
-    }).returning().then(res => res[0]);
+    const { newUser, orgId } = await db.transaction(async (tx) => {
+      const user = await tx.insert(users).values({
+        id: userId,
+        email,
+        passwordHash,
+        fullSName: fullName,
+      }).returning().then(res => res[0]);
 
-    const orgId = `org_${uuidv7()}`;
-    await db.insert(organizations).values({
-      id: orgId,
-      ownerId: userId,
-      name: orgName || `${fullName || email}'s Organization`,
-      slug: (orgName ? orgName.toLowerCase().replace(/\s+/g, '-') : email.split('@')[0]) + '-' + uuidv7().slice(0, 4),
-    });
+      const oId = `org_${uuidv7()}`;
+      await tx.insert(organizations).values({
+        id: oId,
+        ownerId: userId,
+        name: orgName || `${fullName || email}'s Organization`,
+        slug: (orgName ? orgName.toLowerCase().replace(/\\s+/g, '-') : email.split('@')[0]) + '-' + uuidv7().slice(0, 4),
+      });
 
-    await db.insert(organizationMembers).values({
-      orgId: orgId,
-      userId: userId,
-      role: 'owner',
+      await tx.insert(organizationMembers).values({
+        orgId: oId,
+        userId: userId,
+        role: 'owner',
+      });
+
+      return { newUser: user, orgId: oId };
     });
 
     const token = await authService.generateToken(userId, orgId);
