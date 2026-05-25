@@ -148,8 +148,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { defaultOrgId } = (await authService.getUserWithDefaultOrg(user.id)) || { defaultOrgId: undefined };
-      const sessionToken = await authService.generateToken(user.id, defaultOrgId);
+      const { defaultOrgId } = (await authService.getUserWithDefaultOrg(user!.id)) || { defaultOrgId: undefined };
+      const sessionToken = await authService.generateToken(user!.id, defaultOrgId);
 
       // Redirect back to frontend with token
       return reply.redirect(`/?token=${sessionToken}`);

@@ -7,8 +7,11 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.js';
+import { orgVault } from './vault.js';
 
-export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>>;
+export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>> & {
+  query: any; // Rough type to stop the RelationalQuery a-la 'orgVault' errors
+};
 
 // Singleton instance to be used by services and routes
 export let db: ConclaveDb;

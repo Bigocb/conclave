@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { db } from '../db/index.js';
 import { orgVault } from '../db/vault.js';
 import { eq } from 'drizzle-orm';
-import { v7 as uuidv7 } from 'uuidv7';
+import { v7 as uuidv7 } from 'uuid';
 
 const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!'; // Should be 32 bytes
 const IV_LENGTH = 16;
@@ -39,13 +39,12 @@ export const VaultService = {
     const encryptedValue = this.encrypt(key);
     
     const existing = await db.query.orgVault.findFirst({
-      where: (vault, { and, eq }) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
+      where: (vault: any, { and, eq }: any) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
     });
 
     if (existing) {
       await db.update(orgVault)
-        .set({ encryptedValue, updatedAt: new Date().toISOString() })
-        .where(eq(orgVault.id, existing.id));
+        .set({ encryptedValue, updatedAt: new Date().toISOString() as any })\n        .where(eq(orgVault.id, existing.id));
       return existing.id;
     }
 
@@ -64,7 +63,7 @@ export const VaultService = {
    */
   async getKey(orgId: string, provider: string): Promise<string | null> {
     const record = await db.query.orgVault.findFirst({
-      where: (vault, { and, eq }) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
+      where: (vault: any, { and, eq }: any) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
     });
 
     if (!record) return null;
