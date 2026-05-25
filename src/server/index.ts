@@ -101,7 +101,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     }
 
     // Public routes that don't need auth
-    const publicPaths = ['/health', '/v1/health', '/auth/register', '/auth/login'];
+    const publicPaths = ['/health', '/v1/health', '/auth/register', '/auth/login', '/register', '/login'];
     if (publicPaths.includes(request.url)) return;
 
     // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
