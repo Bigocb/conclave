@@ -89,6 +89,9 @@
             <a href="#" onclick="switchView('org')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
                 <i data-lucide="users" class="w-4 h-4"></i> Organization
             </a>
+            <a href="#" onclick="switchView('factory')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="factory" class="w-4 h-4"></i> Agent Factory
+            </a>
         </nav>
 
         <div class="p-4 border-t border-[#1e2d4a] space-y-4">
@@ -184,6 +187,32 @@
                 <div id="org-details" class="space-y-4">
                     <!-- Org info here -->
                 </div>
+            </div>
+        <div id="view-factory" class="hidden">
+            <header class="flex justify-between items-center mb-12">
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight">Agent Factory</h1>
+                    <p class="text-gray-400 text-sm">Provision and manage your agentic workforce</p>
+                </div>
+                <button onclick="toggleFactoryModal(true)" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Register Agent
+                </button>
+            </header>
+            <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-white/5 text-gray-400 text-xs uppercase border-b border-[#1e2d4a] font-bold">
+                        <tr>
+                            <th class="p-4">Agent Name</th>
+                            <th class="p-4">Provider/Model</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4">ID</th>
+                            <th class="p-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="factory-agent-list">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
@@ -284,7 +313,7 @@
 
         // --- View Switching ---
         function switchView(viewId) {
-            const views = ['fleet', 'vault', 'tasks', 'org'];
+            const views = ['fleet', 'vault', 'tasks', 'org', 'factory'];
             views.forEach(v => {
                 document.getElementById(`view-${v}`).classList.toggle('hidden', v !== viewId);
             });
@@ -298,6 +327,56 @@
                 }
             });
         }
+
+
+        // --- Agent Factory Logic ---
+        function toggleFactoryModal(show) {
+            document.getElementById('factory-modal').classList.toggle('hidden', !show);
+        }
+
+        async function refreshFactory() {
+            const list = document.getElementById('factory-agent-list');
+            try {
+                const data = await apiRequest('/v1/agents');
+                const agents = data.data || [];
+                list.innerHTML = agents.length ? '' : '<tr><td colspan="5" class="p-8 text-center text-gray-500">No agents registered.</td></tr>';
+                
+                agents.forEach(agent => {
+                    list.innerHTML += `
+                        <tr class="border-b border-[#1e2d4a] hover:bg-white/5 transition-all">
+                            <td class="p-4 font-medium">${agent.name}</td>
+                            <td class="p-4 text-sm text-gray-400">${agent.provider || 'custom'}/${agent.model || 'unknown'}</td>
+                            <td class="p-4 text-xs ${agent.status === 'active' ? 'text-green-400' : 'text-red-400'}">${agent.status}</td>
+                            <td class="p-4 font-mono text-xs text-gray-500">${agent.id}</td>
+                            <td class="p-4 text-right"><button onclick="decommissionAgent('${agent.id}')" class="text-xs text-red-500 hover:text-red-400">Decommission</button></td>
+                        </tr>
+                    `;
+                });
+            } catch (e) { console.error('Factory refresh failed', e); }
+        }
+
+        async function decommissionAgent(id) {
+            if(!confirm('Decommission this agent?')) return;
+            try {
+                await apiRequest(`/v1/agents/${id}`, 'DELETE');
+                refreshFactory();
+            } catch (e) { alert('Failed to decommission'); }
+        }
+
+        document.getElementById('factory-reg-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const payload = Object.fromEntries(formData.entries());
+            try {
+                const res = await apiRequest('/v1/agents/register', 'POST', payload);
+                if (res.success) {
+                    toggleFactoryModal(false);
+                    e.target.reset();
+                    refreshFactory();
+                } else { alert('Error: ' + res.error); }
+            } catch (e) { alert('Network Error'); }
+        };
+
 
         // --- Vault Logic ---
         async function saveVaultKey() {
@@ -386,7 +465,8 @@
         async function refreshUI() {
             document.getElementById('display-org').innerText = STATE.orgId || 'No Org Linked';
             
-            const grid = document.getElementById('agent-grid');
+            if (document.getElementById('view-factory').classList.contains('hidden')) {
+                const grid = document.getElementById('agent-grid');
             try {
                 const data = await apiRequest('/v1/agents');
                 const agents = data.data || [];
@@ -417,6 +497,7 @@
             } catch (e) {
                 console.error('Failed to load agents', e);
             }
+            refreshFactory();
         }
 
         // --- Initial Setup ---
@@ -435,5 +516,46 @@
             else refreshUI();
         };
     </script>
+
+    <div id="factory-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">Register New Agent</h2>
+                <button onclick="toggleFactoryModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="factory-reg-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Name</label>
+                    <input type="text" name="name" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Provider</label>
+                        <select name="provider" id="fact-provider" onchange="document.getElementById('fact-key-field').classList.toggle('hidden', !this.value)" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                            <option value="">Custom URL</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="groq">Groq</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
+                        <input type="text" name="model" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="gpt-4o">
+                    </div>
+                </div>
+                <div id="fact-key-field" class="hidden">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
+                    <input type="password" name="api_key" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Principal ID</label>
+                    <input type="text" name="principal_id" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                </div>
+                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all pt-4">Create Agent</button>
+            </form>
+        </div>
+    </div>
+
 </body>
 </html>
