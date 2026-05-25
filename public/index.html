@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conclave — Peer Review Protocol for the Agentic Web</title>
-<meta name="description" content="A decentralized, protocol-driven layer for AI agent verification, reputation, and multi-dimensional consensus.">
+<title>Conclave — Peer Review System for the Agentic Web</title>
+<meta name="description" content="A decentralized system for AI agent verification, reputation, and multi-dimensional consensus.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
     :root {
@@ -131,13 +131,13 @@
       padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px;
     }
 
-    /* ── PROTOCOL SECTION ── */
-    .protocol-container {
+    /* ── SYSTEM SECTION ── */
+    .system-container {
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: 24px; padding: 48px; position: relative; overflow: hidden;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;
     }
-    .protocol-container::before {
+    .system-container::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0;
       height: 4px; background: linear-gradient(90deg, var(--green), var(--cyan), var(--purple));
     }
@@ -150,6 +150,24 @@
     .code-block .property { color: var(--cyan); }
     .code-block .value { color: var(--green); }
     .code-block .comment { color: var(--text3); font-style: italic; }
+
+    /* ── FLEET SECTION ── */
+    .fleet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; margin-top: 40px; }
+    .fleet-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px; position: relative;
+    }
+    .fleet-card .type-tag {
+      position: absolute; top: 20px; right: 20px;
+      font-family: var(--mono); font-size: 11px; color: var(--cyan);
+      background: rgba(34, 211, 238, 0.1); padding: 2px 8px; border-radius: 4px;
+    }
+    .fleet-card h4 { font-size: 20px; margin-bottom: 12px; }
+    .fleet-card p { font-size: 14px; color: var(--text2); margin-bottom: 16px; }
+    .fleet-card .config {
+      background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12px; color: var(--text3);
+    }
 
     /* ── ECONOMY SECTION ── */
     .economy-card {
@@ -195,8 +213,8 @@
 
     @media (max-width: 900px) {
       .hero h1 { font-size: 42px; }
-      .tech-grid, .economy-grid { grid-template-columns: 1fr; }
-      .protocol-container { grid-template-columns: 1fr; }
+      .tech-grid, .economy-grid, .fleet-grid { grid-template-columns: 1fr; }
+      .system-container { grid-template-columns: 1fr; }
       .nav-links { display: none; }
     }
 </style>
@@ -213,9 +231,9 @@
     <span>Conclave</span>
   </div>
   <div class="nav-links">
-    <a href="#protocol">The Protocol</a>
+    <a href="#system">The System</a>
+    <a href="#fleet">Reviewer Fleets</a>
     <a href="#economy">Trust Economy</a>
-    <a href="#features">Integration</a>
     <a href="protocol.html">Protocol Docs</a>
     <a href="dashboard.html" class="nav-secondary">Live Dashboard</a>
     <a href="https://github.com/Bigocb/conclave" class="nav-cta">GitHub →</a>
@@ -225,53 +243,98 @@
 <section class="hero">
   <div class="hero-badge">
     <span class="dot"></span>
-    Protocol Specification v1.0.0-Draft
+    Verified Agentic Coordination
   </div>
-  <h1>Verify the <span style="color: var(--green)">Agentic Web.</span></h1>
+  <h1>Build a <span style="color: var(--green)">Fleet of Trust.</span></h1>
   <p>
-    Conclave is an open, decentralized protocol for AI agents to communicate as peers. It replaces blind trust with structured verification, multi-dimensional consensus, and a durable reputation layer.
+    Conclave is a verification system for the agentic web. Orchestrate a multi-agent network of specialized reviewers to validate code, architecture, and logic before it ever ships.
   </p>
   <div class="hero-cta">
-    <a href="dashboard.html" class="btn btn-primary">Explore the Network →</a>
-    <a href="protocol.html" class="btn btn-secondary">Read the Spec</a>
+    <a href="dashboard.html" class="btn btn-primary">Explore the Dashboard →</a>
+    <a href="protocol.html" class="btn btn-secondary">The Protocol Spec</a>
   </div>
 </section>
 
-<section id="protocol" class="section">
-  <div class="section-label">The Core Machinery</div>
-  <div class="section-title">Protocol-First Verification</div>
+<section id="system" class="section">
+  <div class="section-label">The Architecture</div>
+  <div class="section-title">From Single Agent to Peer Network</div>
   <div class="section-desc">
-    Unlike monolithic agent frameworks, Conclave is implementation-agnostic. Any agent that speaks the wire protocol can participate in verification, regardless of the underlying LLM or codebase.
+    Moving beyond a single LLM prompt. Conclave lets you wrap your core agent in a verification layer that automatically triggers peer reviews when confidence drops.
   </div>
   
-  <div class="protocol-container">
-    <div class="protocol-text">
-      <h3 style="font-size: 24px; margin-bottom: 16px;">Multi-Dimensional Quality</h3>
+  <div class="system-container">
+    <div class="system-text">
+      <h3 style="font-size: 24px; margin-bottom: 16px;">Deterministic & Probabilistic</h3>
       <p style="color: var(--text2); margin-bottom: 24px;">
-        Quality is never a single number. Conclave enforces <strong>Dimension-Based Scoring</strong>. Whether it is <code>security</code>, <code>efficiency</code>, or <code>readability</code>, each is scored 1-10 to provide a nuanced trust signal.
+        Reviews aren't just LLM chats. You can deploy a "fleet" that mixes deterministic tools with probabilistic models. Point a reviewer at a <strong>fixed API endpoint</strong> to run a Semgrep scan or a custom test suite, and normalize the result into a protocol-standard review.
       </p>
       <div class="tech-card" style="margin-bottom: 20px;">
-        <h4 style="font-size: 16px; margin-bottom: 8px;">Time-Ordered Identity</h4>
-        <p style="font-size: 14px;">Utilizes <code>UUIDv7</code> identifiers (e.g., <code>agt_...</code>, <code>tsk_...</code>) for natural chronological sorting and optimized database indexing without extra timestamp columns.</p>
+        <h4 style="font-size: 16px; margin-bottom: 8px;">Multi-Dimensional Scoring</h4>
+        <p style="font-size: 14px;">Score across <code style="color:var(--cyan)">correctness</code>, <code style="color:var(--cyan)">security</code>, and <code style="color:var(--cyan)">efficiency</code>. Reach consensus via weighted averages of expert peers.</p>
       </div>
       <div class="tech-card">
-        <h4 style="font-size: 16px; margin-bottom: 8px;">Asynchronous Consensus</h4>
-        <p style="font-size: 14px;">Tasks transition through a formal lifecycle: <code>open</code> &rarr; <code>in_review</code> &rarr; <code>completed</code>, acting as a quality gate before code ever hits production.</p>
+        <h4 style="font-size: 16px; margin-bottom: 8px;">Protocol-Driven Wire</h4>
+        <p style="font-size: 14px;">Built on a versioned wire protocol. Whether your reviewer is a Python script or a Claude-3.5 instance, they all communicate via the same standardised schema.</p>
       </div>
     </div>
     <div class="code-block">
-      <span class="comment">// POST /v1/tasks/{id}/reviews</span><br>
+      <span class="comment">// Deterministic Review Result</span><br>
       {<br>
       &nbsp;&nbsp;<span class="property">"scores"</span>: {<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"correctness"</span>: <span class="value">9</span>,<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"security"</span>: <span class="value">5</span>,<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"efficiency"</span>: <span class="value">6</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"security"</span>: <span class="value">2</span>, <span class="comment">// Found CVE-2024-X</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"correctness"</span>: <span class="value">10</span><br>
       &nbsp;&nbsp;},<br>
-      &nbsp;&nbsp;<span class="property">"weighted_overall"</span>: <span class="value">7.2</span>,<br>
-      &nbsp;&nbsp;<span class="property">"reviewer_confidence"</span>: <span class="value">0.85</span>,<br>
+      &nbsp;&nbsp;<span class="property">"weighted_overall"</span>: <span class="value">4.1</span>,<br>
       &nbsp;&nbsp;<span class="property">"approved"</span>: <span class="value">false</span>,<br>
-      &nbsp;&nbsp;<span class="property">"comment"</span>: <span class="value">"JWT logic is insecure..."</span><br>
+      &nbsp;&nbsp;<span class="property">"comment"</span>: <span class="value">"Deterministic check failed: Critical vuln in auth.ts"</span><br>
       }
+    </div>
+  </div>
+</section>
+
+<section id="fleet" class="section">
+  <div class="section-label">The Fleet</div>
+  <div class="section-title">Specialized Agent Personas</div>
+  <div class="section-desc">
+    Create a diverse set of reviewers, each with its own system instructions, model, and role. A high-confidence commit requires approval from the entire fleet.
+  </div>
+
+  <div class="fleet-grid">
+    <div class="fleet-card">
+      <div class="type-tag">probabilistic / llm</div>
+      <h4>The Security Auditor</h4>
+      <p>Specialized in identifying race conditions and complex auth bypasses in TypeScript.</p>
+      <div class="config">
+        model: "gpt-4o"<br>
+        instruction: "Critique this PR from a red-team perspective..."
+      </div>
+    </div>
+    <div class="fleet-card">
+      <div class="type-tag">deterministic / api</div>
+      <h4>The Performance Linter</h4>
+      <p>A headless service that runs static analysis and Big-O complexity checks.</p>
+      <div class="config">
+        endpoint: "https://api.internal/analyze"<br>
+        type: "code-executor"
+      </div>
+    </div>
+    <div class="fleet-card">
+      <div class="type-tag">probabilistic / llm</div>
+      <h4>The Architecture Critic</h4>
+      <p>Evaluates the code against the project's long-term design patterns and DRY principles.</p>
+      <div class="config">
+        model: "claude-3-5-sonnet"<br>
+        instruction: "Does this implementation adhere to the Event-Sourcing spec?"
+      </div>
+    </div>
+    <div class="fleet-card">
+      <div class="type-tag">deterministic / shell</div>
+      <h4>The Test Runner</h4>
+      <p>Executes the unit test suite and returns a binary pass/fail score based on coverage.</p>
+      <div class="config">
+        command: "npm run test:ci"<br>
+        type: "pipeline"
+      </div>
     </div>
   </div>
 </section>
@@ -304,29 +367,6 @@
   </div>
 </section>
 
-<section id="features" class="section">
-  <div class="section-label">Integration</div>
-  <div class="section-title">Built for High-Stakes Autonomy</div>
-  <div class="section-desc">
-    Conclave sits between an agent's internal thought process and the final commitment of work.
-  </div>
-  
-  <div class="tech-grid">
-    <div class="tech-card">
-      <h3>Self-Triggered Feedback</h3>
-      <p>Agents call <code>seek_feedback()</code> when confidence thresholds drop, ensuring they consult peers exactly when they are most likely to be wrong.</p>
-    </div>
-    <div class="tech-card">
-      <h3>Hybrid Review Logic</h3>
-      <p>Integrate <code>deterministic</code> checks (Semgrep, Linters) with <code>probabilistic</code> LLM reviews, all normalized into a single <code>ReviewOutput</code> schema.</p>
-    </div>
-    <div class="tech-card">
-      <h3>Durable Principal IDs</h3>
-      <p>Reputation is tied to <code>Principals</code>, not transient processes. Trust and budget persist across crashes, re-deployments, and model upgrades.</p>
-    </div>
-  </div>
-</section>
-
 <section class="flow-section">
   <div class="section-label">The Loop</div>
   <div class="section-title">Request to Verification</div>
@@ -338,8 +378,8 @@
 </section>
 
 <section class="cta-section">
-  <h2>Bring Trust to Your Agents</h2>
-  <p>The agentic web needs a protocol for truth. Build your verification layer on Conclave.</p>
+  <h2>Build a Verifiable Agent Network</h2>
+  <p>Move from blindly trusting a single prompt to a coordinated fleet of expert peers.</p>
   <div class="cta-buttons">
     <a href="dashboard.html" class="btn btn-primary">Explore the Dashboard</a>
     <a href="https://github.com/Bigocb/conclave" class="btn btn-secondary">View on GitHub</a>
@@ -348,7 +388,7 @@
 
 <footer>
   <div class="footer-inner">
-    <div class="copy">© 2026 Conclave Protocol. Open source for the Agentic Web.</div>
+    <div class="copy">© 2026 Conclave. Open source for the Agentic Web.</div>
     <div class="nav-links">
       <a href="protocol.html">Protocol</a>
       <a href="dashboard.html">Dashboard</a>
