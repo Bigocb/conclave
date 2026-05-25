@@ -4,6 +4,7 @@
  */
 
 import { eq, and } from 'drizzle-orm';
+import * as crypto from 'crypto';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 
