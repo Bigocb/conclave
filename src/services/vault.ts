@@ -44,7 +44,8 @@ export const VaultService = {
 
     if (existing) {
       await db.update(orgVault)
-        .set({ encryptedValue, updatedAt: new Date().toISOString() as any })\n        .where(eq(orgVault.id, existing.id));
+        .set({ encryptedValue, updatedAt: new Date().toISOString() as any })
+        .where(eq(orgVault.id, existing.id));
       return existing.id;
     }
 
