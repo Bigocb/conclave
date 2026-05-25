@@ -161,13 +161,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       };
     })() : null;
 
-    reply.send(success({ ...task, reviews_received: reviews.length, reviews, review_summary }));
-  });
-
-  });
-
-  // GET /v1/tasks
-  fastify.get('/tasks', async (request: any, reply) => {
+    reply.send(success({ ...task, reviews_received: reviews.length, reviews, review_summary }));\n  });\n\n  // GET /v1/tasks\n  fastify.get('/tasks', async (request: any, reply) => {
     const query = request.query as any;
     const tasks = await taskSvc.list({
       status: query.status,
