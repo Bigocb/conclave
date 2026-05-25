@@ -9,6 +9,7 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 
 export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>>;
+
 export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb; client: ReturnType<typeof postgres>; close: () => Promise<void> }> {
   const url = config.url;
   console.log(`[initDb] Connecting to PostgreSQL: ${url.replace(/:[^:@]+@/, ':***@')}`);
@@ -26,7 +27,6 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
 
   try {
     console.log('[initDb] Ensuring tables exist...');
-    // Create tables if they don't exist (safe for re-runs — IF NOT EXISTS skips existing)
     await client`CREATE TABLE IF NOT EXISTS clv_organizations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -127,12 +127,10 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT
     )`;
-    // Ensure new columns exist on older reviews tables (migration)
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
-    // Make updated_at nullable for existing tables (Drizzle $defaultFn may omit it from inserts)
     await client`ALTER TABLE clv_reviews ALTER COLUMN updated_at DROP NOT NULL`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
@@ -164,7 +162,6 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     }
   }
 
-  // Auto-seed dev environment if empty
   try {
     const orgCount = await db.select({ id: schema.organizations.id }).from(schema.organizations).limit(1);
     if (orgCount.length === 0) {
@@ -175,33 +172,25 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       const devAgtId = 'agt_dev';
       const devToken = 'tk_dev_' + Date.now();
 
-      await db.insert(schema.organizations).values({
-        id: devOrgId, name: 'Dev Org', slug: 'dev', description: 'Default dev organization',
-        policies: JSON.stringify({ min_reviews_required: 2 }), createdAt: now, updatedAt: now,
-      }).onConflictDoNothing();
-      await db.insert(schema.principals).values({
-        id: devPrnId, orgId: devOrgId, name: 'Developer',
-        roles: JSON.stringify(['admin', 'general-reviewer']), status: 'active',
-        createdAt: now, updatedAt: now,
-      }).onConflictDoNothing();
-      await db.insert(schema.agents).values({
-        id: devAgtId, principalId: devPrnId, orgId: devOrgId, name: 'Dev Agent',
-        type: 'llm', model: 'glm-5.1', provider: 'ollama_cloud',
-        llmUrl: 'https://www.ollama.com/v1', token: devToken, status: 'active',
-        createdAt: now, updatedAt: now,
-      }).onConflictDoNothing();
-      await db.insert(schema.attentionBudgets).values({
-        principalId: devPrnId, earned: 100, spent: 0, earnRate: 5, lastEarnAt: now,
-      }).onConflictDoNothing();
-      // Ensure general-qa channel exists
-      await db.insert(schema.channels).values({
-        id: 'ch_general_qa', name: 'general-qa', description: 'General Q&A review channel',
-        createdAt: now,
-      }).onConflictDoNothing();
-      // Subscribe dev principal to general-qa
-      await db.insert(schema.channelSubscriptions).values({
-        principalId: devPrnId, channelId: 'ch_general_qa', subscribedAt: now,
-      }).onConflictDoNothing();
+      // Note: we use raw client for seed if Drizzle types are mismatching with raw SQL tables
+      await client`INSERT INTO clv_organizations (id, name, slug, description, policies, created_at, updated_at) 
+        VALUES (${devOrgId}, 'Dev Org', 'dev', 'Default dev organization', '${JSON.stringify({ min_reviews_required: 2 })}', ${now}, ${now}) 
+        ON CONFLICT DO NOTHING`;
+      await client`INSERT INTO clv_principals (id, org_id, name, roles, status, created_at, updated_at) 
+        VALUES (${devPrnId}, ${devOrgId}, 'Developer', '${JSON.stringify(['admin', 'general-reviewer'])}', 'active', ${now}, ${now}) 
+        ON CONFLICT DO NOTHING`;
+      await client`INSERT INTO clv_agents (id, principal_id, org_id, name, type, model, provider, llm_url, token, status, created_at, updated_at) 
+        VALUES (${devAgtId}, ${devPrnId}, ${devOrgId}, 'Dev Agent', 'llm', 'glm-5.1', 'ollama_cloud', 'https://www.ollama.com/v1', ${devToken}, 'active', ${now}, ${now}) 
+        ON CONFLICT DO NOTHING`;
+      await client`INSERT INTO clv_attention_budgets (principal_id, earned, spent, earn_rate, last_earn_at) 
+        VALUES (${devPrnId}, 100, 0, 5, ${now}) 
+        ON CONFLICT DO NOTHING`;
+      await client`INSERT INTO clv_channels (id, name, description, created_at) 
+        VALUES ('ch_general_qa', 'general-qa', 'General Q&A review channel', ${now}) 
+        ON CONFLICT DO NOTHING`;
+      await client`INSERT INTO clv_channel_subscriptions (principal_id, channel_id, subscribed_at) 
+        VALUES (${devPrnId}, 'ch_general_qa', ${now}) 
+        ON CONFLICT DO NOTHING`;
       console.log('[initDb] Dev environment seeded (org_dev, prn_dev, agt_dev, general-qa)');
     } else {
       console.log('[initDb] Organizations already exist, skipping seed');
