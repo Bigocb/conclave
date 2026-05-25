@@ -8,7 +8,7 @@ import { v7 as uuidv7 } from 'uuidv7';
 export async function authRoutes(fastify: FastifyInstance) {
   // Public Route: Register
   fastify.post('/auth/register', async (request, reply) => {
-    const { email, password, fullName } = request.body as any;
+    const { email, password, fullName, orgName } = request.body as any;
 
     if (!email || !password) {
       return reply.status(400).send({ error: 'Email and password are required' });
@@ -36,8 +36,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     await db.insert(organizations).values({
       id: orgId,
       ownerId: userId,
-      name: `${fullName || email}'s Organization`,
-      slug: email.split('@')[0] + '-' + uuidv7().slice(0, 4),
+      name: orgName || `${fullName || email}'s Organization`,
+      slug: (orgName ? orgName.toLowerCase().replace(/\s+/g, '-') : email.split('@')[0]) + '-' + uuidv7().slice(0, 4),
     });
 
     await db.insert(organizationMembers).values({
