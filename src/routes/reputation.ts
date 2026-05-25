@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import { ReputationService } from '../services/reputation.js';
 import { AgentService } from '../services/agents.js';
-import { success } from '../utils/response.js';
+import { success, error } from '../utils/response.js';
 
 export const reputationRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
@@ -19,7 +19,7 @@ export const reputationRoutes: FastifyPluginCallback = (fastify: FastifyInstance
     if (id.startsWith('agt_')) {
       const agent = await agentSvc.getById(id);
       if (!agent) {
-        return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+        return reply.code(404).send(error('AGENT_NOT_FOUND', 'Agent not found'));
       }
       
       const currentOrgId = (request as any).orgId;

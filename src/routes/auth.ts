@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { AuthService } from '../services/auth.js';
+import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
 import { users, organizations, organizationMembers } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -7,7 +7,7 @@ import { v7 as uuidv7 } from 'uuidv7';
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Public Route: Register
-  fastify.post('/auth/register', async (request, reply) => {
+  fastify.post('/auth/register', async (request: any, reply: any) => {
     const { email, password, fullName, orgName } = request.body as any;
 
     if (!email || !password) {
@@ -22,7 +22,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(409).send({ error: 'User already exists' });
     }
 
-    const passwordHash = await AuthService.hashPassword(password);
+    const passwordHash = await authService.hashPassword(password);
     const userId = `usr_${uuidv7()}`;
 
     const newUser = await db.insert(users).values({
@@ -46,7 +46,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       role: 'owner',
     });
 
-    const token = await AuthService.generateToken(userId, orgId);
+    const token = await authService.generateToken(userId, orgId);
 
     return reply.status(201).send({
       user: {
@@ -60,7 +60,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Public Route: Login
-  fastify.post('/auth/login', async (request, reply) => {
+  fastify.post('/auth/login', async (request: any, reply: any) => {
     const { email, password } = request.body as any;
 
     if (!email || !password) {
@@ -71,12 +71,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       where: eq(users.email, email),
     });
 
-    if (!user || !(await AuthService.verifyPassword(password, user.passwordHash || ''))) {
+    if (!user || !(await authService.verifyPassword(password, user.passwordHash || ''))) {
       return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
-    const { defaultOrgId } = await AuthService.getUserWithDefaultOrg(user.id);
-    const token = await AuthService.generateToken(user.id, defaultOrgId);
+    const { defaultOrgId } = await authService.getUserWithDefaultOrg(user.id);
+    const token = await authService.generateToken(user.id, defaultOrgId);
 
     return reply.send({
       user: {
@@ -90,13 +90,13 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Google OAuth Implementation
-  fastify.get('/auth/google', async (request, reply) => {
+  fastify.get('/auth/google', async (request: any, reply: any) => {
     const rootUrl = request.headers['host'] ? `http://${request.headers['host']}` : 'http://localhost:3000';
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${rootUrl}/auth/google/callback&response_type=code&scope=openid%20email%20profile`;
     return reply.redirect(googleAuthUrl);
   });
 
-  fastify.get('/auth/google/callback', async (request, reply) => {
+  fastify.get('/auth/google/callback', async (request: any, reply: any) => {
     const { code } = request.query as any;
     if (!code) return reply.status(400).send({ error: 'No code provided' });
 
@@ -148,8 +148,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { defaultOrgId } = await AuthService.getUserWithDefaultOrg(user.id);
-      const sessionToken = await AuthService.generateToken(user.id, defaultOrgId);
+      const { defaultOrgId } = await authService.getUserWithDefaultOrg(user.id);
+      const sessionToken = await authService.generateToken(user.id, defaultOrgId);
 
       // Redirect back to frontend with token
       return reply.redirect(`/?token=${sessionToken}`);

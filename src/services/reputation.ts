@@ -52,6 +52,10 @@ export class ReputationService {
     return this.getByPrincipal(agentRows[0].principalId);
   }
 
+  async getAgentReputation(agentId: string) {
+    return this.getByAgent(agentId);
+  }
+
   async computeAndSnapshot(principalId: string) {
     // Get all reviews received by this principal's tasks
     const principalTasks = await this.db.select().from(schema.tasks)

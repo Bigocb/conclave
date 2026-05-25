@@ -24,6 +24,7 @@ import { fleetRoutes } from '../routes/fleet.js';
 import { providerRoutes } from '../routes/providers.js';
 import { cronRoutes } from '../routes/cron.js';
 import { authRoutes } from '../routes/auth.js';
+import { vaultRoutes } from '../routes/vault.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {

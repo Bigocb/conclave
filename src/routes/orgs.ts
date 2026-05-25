@@ -39,6 +39,7 @@ export const orgRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts
     try {
       const org = await orgSvc.create({
         id,
+        ownerId: 'usr_system', // TODO: Link to authenticated user
         name: data.name,
         slug: data.slug,
         description: data.description,

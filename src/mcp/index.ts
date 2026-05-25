@@ -666,7 +666,7 @@ server.tool(
 async function main() {
   // Verify connection
   try {
-    const health = await client.health();
+    const health = await client.health() as any;
     if (health.status !== 'ok') {
       console.error(`Warning: Conclave server health check returned: ${JSON.stringify(health)}`);
     }

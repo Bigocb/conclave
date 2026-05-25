@@ -10,6 +10,9 @@ import * as schema from './schema.js';
 
 export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>>;
 
+// Singleton instance to be used by services and routes
+export let db: ConclaveDb;
+
 export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb; client: ReturnType<typeof postgres>; close: () => Promise<void> }> {
   const url = config.url;
   console.log(`[initDb] Connecting to PostgreSQL: ${url.replace(/:[^:@]+@/, ':***@')}`);
@@ -19,7 +22,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     max: 10,
   });
 
-  const db = drizzle(client, { schema });
+  db = drizzle(client, { schema });
 
   // Verify connection and push schema
   await client`SELECT 1`;
@@ -172,7 +175,6 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       const devAgtId = 'agt_dev';
       const devToken = 'tk_dev_' + Date.now();
 
-      // Note: we use raw client for seed if Drizzle types are mismatching with raw SQL tables
       await client`INSERT INTO clv_organizations (id, name, slug, description, policies, created_at, updated_at) 
         VALUES (${devOrgId}, 'Dev Org', 'dev', 'Default dev organization', '${JSON.stringify({ min_reviews_required: 2 })}', ${now}, ${now}) 
         ON CONFLICT DO NOTHING`;

@@ -10,7 +10,7 @@ import type { ConclaveDb } from '../db/index.js';
 export class OrgService {
   constructor(private db: ConclaveDb) {}
 
-  async create(data: { id: string; name: string; slug: string; description?: string; policies?: Record<string, unknown> }) {
+  async create(data: { id: string; ownerId: string; name: string; slug: string; description?: string; policies?: Record<string, unknown> }) {
     const now = new Date().toISOString();
     await this.db.insert(schema.organizations).values({
       id: data.id,
@@ -19,6 +19,7 @@ export class OrgService {
       description: data.description ?? null,
       policies: data.policies ? JSON.stringify(data.policies) : null,
       createdAt: now,
+      ownerId: data.ownerId,
       updatedAt: now,
     });
     return this.getById(data.id);
@@ -52,7 +53,6 @@ export class OrgService {
       id: r.id,
       name: r.name,
       model: r.model,
-      roles: r.roles ? JSON.parse(r.roles) : [],
       status: r.status,
     }));
   }

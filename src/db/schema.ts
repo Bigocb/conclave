@@ -1,8 +1,3 @@
-/**
- * Conclave — Drizzle ORM Schema (PostgreSQL)
- * Canonical schema for both local dev (PG via Docker) and production (Render).
- */
-
 import { pgTable, text, integer, doublePrecision } from 'drizzle-orm/pg-core';
 
 // ─── Users ──────────────────────────────────────────────────

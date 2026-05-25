@@ -171,7 +171,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }).from(channelSubscriptions)
       .innerJoin(channels, eq(channelSubscriptions.channelId, channels.id))
       .where(eq(channelSubscriptions.principalId, agent.principal_id));
-    return reply.send(success({ channels: subs.map(s => s.channelName) }));
+    return reply.send(success({ channels: subs.map((s: any) => s.channelName) }));
   });
 
 }

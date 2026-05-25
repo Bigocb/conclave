@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { AuthService } from '../services/auth.js';
+import { authService } from '../services/auth.js';
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers.authorization;
@@ -12,7 +12,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   }
 
   const token = authHeader.slice(7);
-  const decoded = await AuthService.verifyToken(token);
+  const decoded = await authService.verifyToken(token);
 
   if (!decoded) {
     return reply.status(401).send({
@@ -21,7 +21,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     });
   }
 
-  const { user, defaultOrgId } = await AuthService.getUserWithDefaultOrg(decoded.sub);
+  const { user, defaultOrgId } = await authService.getUserWithDefaultOrg(decoded.sub);
 
   if (!user) {
     return reply.status(401).send({
