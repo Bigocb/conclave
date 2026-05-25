@@ -110,6 +110,48 @@ export class AgentService {
     return rows.map(r => this.formatAgent(r));
   }
 
+
+  async getReadyAgents(principalId: string) {
+    const agents = await this.getReviewers(principalId);
+    const vault = new VaultService(this.db);
+
+    const hydrated = await Promise.all(agents.map(async (agent) => {
+      let apiKey = null;
+      if (agent.provider) {
+        try {
+          apiKey = await vault.getSecret(`agent:${agent.id}:key`);
+        } catch (e) {
+          console.error(`Vault error for agent ${agent.id}:`, e);
+        }
+      }
+
+      return {
+        ...agent,
+        apiKey,
+        baseUrl: agent.llm_url || providerService.resolveUrl(agent.provider || '') || null
+      };
+    }));
+
+    return hydrated;
+  }
+
+  async validateAgent(id: string) {
+    const agent = await this.getById(id);
+    if (!agent) return { valid: false, error: 'Agent not found' };
+    
+    const vault = new VaultService(this.db);
+    try {
+      const key = await vault.getSecret(`agent:${id}:key`);
+      if (!key) return { valid: false, error: 'No API key found in vault' };
+      
+      // Simple connectivity/key check could go here via a lightweight API call
+      return { valid: true, agent };
+    } catch (e: any) {
+      return { valid: false, error: e.message };
+    }
+  }
+
+
   private formatAgent(row: typeof schema.agents.$inferSelect) {
     return {
       id: row.id,

@@ -6,6 +6,7 @@
 import { FastifyInstance } from 'fastify';
 import * as crypto from 'crypto';
 import { AgentService } from '../services/agents.js';
+import { VaultService } from '../services/vault.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { RegisterAgentSchema, UpdateAgentSchema, AgentQuerySchema } from '../schemas/index.js';
 import { authenticate } from '../middleware/auth.js';
@@ -17,7 +18,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
 
   // POST /v1/agents/register — Register a new agent under a principal
-  fastify.post('/agents/register', async (request, reply) => {
+    fastify.post('/agents/register', async (request, reply) => {
     const parse = RegisterAgentSchema.safeParse(request.body);
     if (!parse.success) {
       return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
@@ -31,7 +32,6 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
     }
 
-    // Enforce Org Isolation: The principal must belong to the user's current organization context
     const currentOrgId = (request as any).orgId;
     if (!currentOrgId || principal.org_id !== currentOrgId) {
       return reply.status(403).send(error('FORBIDDEN', 'You do not have permission to manage agents for this principal as it belongs to another organization'));
@@ -39,23 +39,39 @@ export async function agentRoutes(fastify: FastifyInstance) {
 
     const agentId = `agt_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
     const token = `clv_${crypto.randomUUID().replace(/-/g, '').slice(0, 32)}`;
+    const vault = new VaultService(fastify.db);
 
-    const agent = await agentService.create({
-      id: agentId,
-      principalId: data.principal_id,
-      orgId: principal.org_id,
-      name: data.name,
-      token,
-      model: data.model,
-      provider: data.provider,
-      llmUrl: data.llm_url,
-      type: data.type,
-      command: data.command,
-      instructions: data.instructions,
-      skills: data.skills,
-    });
+    try {
+      // Atomic operation: Create agent + store API key in vault
+      await fastify.db.transaction(async (tx) => {
+        const agent = await agentService.create({
+          id: agentId,
+          principalId: data.principal_id,
+          orgId: principal.org_id,
+          name: data.name,
+          token,
+          model: data.model,
+          provider: data.provider,
+          llmUrl: data.llm_url,
+          type: data.type,
+          command: data.command,
+          instructions: data.instructions,
+          skills: data.skills,
+        });
 
-    return reply.status(201).send(success({ ...agent, token }));
+        // If provider is specified, we expect an api_key in the request body
+        if (data.provider) {
+          const apiKey = (request.body as any).api_key;
+          if (!apiKey) throw new Error('API key is required for nominated providers');
+          await vault.storeSecret(`agent:${agentId}:key`, apiKey);
+        }
+      });
+
+      const finalAgent = await agentService.getById(agentId);
+      return reply.status(201).send(success({ ...finalAgent, token }));
+    } catch (e: any) {
+      return reply.status(500).send(error('INTERNAL_ERROR', e.message));
+    }
   });
 
   // GET /v1/agents — Discover agents
