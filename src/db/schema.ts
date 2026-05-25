@@ -31,7 +31,7 @@ export const organizationMembers = pgTable('clv_org_members', {
   role: text('role').notNull().default('member'), // owner | admin | member
   joinedAt: text('joined_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, {
-  pk: { columns: [ 'orgId', 'userId' ] } // Composite primary key
+  primaryKey: { columns: [ 'orgId', 'userId' ] }
 });
 
 // ─── Principals (durable identity layer) ────────────────────

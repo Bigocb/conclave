@@ -1,6 +1,6 @@
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { db } from '../db/index.js';
-import { orgVault } from './vault.js';
+import { orgVault } from '../db/vault.js';
 import { eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuidv7';
 

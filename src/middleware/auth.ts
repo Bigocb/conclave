@@ -21,7 +21,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     });
   }
 
-  const { user, defaultOrgId } = await authService.getUserWithDefaultOrg(decoded.sub);
+  const { user, defaultOrgId } = (await authService.getUserWithDefaultOrg(decoded.sub)) || { user: null, defaultOrgId: undefined };
 
   if (!user) {
     return reply.status(401).send({

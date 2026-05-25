@@ -3,7 +3,7 @@ import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
 import { users, organizations, organizationMembers } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { v7 as uuidv7 } from 'uuidv7';
+import { v7 as uuidv7 } from 'uuid';
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Public Route: Register
@@ -148,7 +148,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { defaultOrgId } = await authService.getUserWithDefaultOrg(user.id);
+      const { defaultOrgId } = (await authService.getUserWithDefaultOrg(user.id)) || { defaultOrgId: undefined };
       const sessionToken = await authService.generateToken(user.id, defaultOrgId);
 
       // Redirect back to frontend with token

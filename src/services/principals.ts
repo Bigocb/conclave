@@ -54,8 +54,6 @@ export class PrincipalService {
     const perPage = filters.perPage ?? 20;
     const offset = (page - 1) * perPage;
 
-    let query = this.db.select().from(schema.principals);
-
     const conditions = [];
     if (filters.org) {
       conditions.push(eq(schema.principals.orgId, filters.org));
@@ -66,11 +64,12 @@ export class PrincipalService {
       conditions.push(eq(schema.principals.status, 'active'));
     }
 
-    if (conditions.length > 0) {
-      query = this.db.select().from(schema.principals).where(and(...conditions));
-    }
+    const rows = await this.db.select()
+      .from(schema.principals)
+      .where(and(...conditions))
+      .limit(perPage)
+      .offset(offset);
 
-    const rows = await query.limit(perPage).offset(offset);
     return rows.map(r => this.formatPrincipal(r));
   }
 
