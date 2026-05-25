@@ -6,6 +6,8 @@
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
+import { VaultService } from './vault.js';
+import { providerService } from './providers.js';
 
 export class AgentService {
   constructor(private db: ConclaveDb) {}
