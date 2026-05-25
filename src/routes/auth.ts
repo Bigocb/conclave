@@ -7,7 +7,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Public Route: Register
-  fastify.post('/auth/register', async (request: any, reply: any) => {
+  fastify.post('/register', async (request: any, reply: any) => {
     const { email, password, fullName, orgName } = request.body as any;
 
     if (!email || !password) {
@@ -60,7 +60,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Public Route: Login
-  fastify.post('/auth/login', async (request: any, reply: any) => {
+  fastify.post('/login', async (request: any, reply: any) => {
     const { email, password } = request.body as any;
 
     if (!email || !password) {
