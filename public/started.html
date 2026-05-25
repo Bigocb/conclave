@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — Conclave</title>
+  <link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap\" rel=\"stylesheet\">
+  <style>
+    :root {
+      --bg: #06090f;
+      --bg2: #0c111b;
+      --bg3: #131a2b;
+      --surface: #1a22L36;
+      --border: #1e2d4a;
+      --text1: #e8edf5;
+      --text2: #8b99b0;
+      --text3: #556377;
+      --green: #00d98b;
+      --cyan: #22d3ee;
+      --purple: #a78bfa;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text1);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(6,9,15,0.85); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .nav-brand span { font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
+    .nav-links { display: flex; align-items: center; gap: 24px; }
+    .nav-links a { color: var(--text2); font-size: 13px; font-weight: 500; text-decoration: none; }
+    .nav-links a:hover { color: var(--text1); }
+    
+    .container { 
+      max-width: 900px; margin: 100px auto; padding: 0 2rem; 
+    }
+    .header { margin-bottom: 60px; text-align: center; }
+    .header h1 { font-size: 48px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 16px; }
+    .header p { font-size: 19px; color: var(--text2); }
+    
+    .step { 
+      background: var(--bg2); border: 1px solid var(--border); 
+      border-radius: 16px; padding: 32px; margin-bottom: 32px; 
+      position: relative;
+    }
+    .step-num { 
+      position: absolute; top: -15px; left: 20px; 
+      background: var(--green); color: var(--bg); 
+      font-family: var(--mono); font-weight: 800; 
+      font-size: 14px; padding: 4px 12px; border-radius: 6px; 
+    }
+    .step h3 { font-size: 22px; margin-bottom: 12px; }
+    .step p { color: var(--text2); margin-bottom: 24px; }
+    
+    .code-block {
+      background: #010409; border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; font-family: var(--mono);
+      font-size: 13px; color: #d1d5db; overflow-x: auto; line-height: 1.5;
+    }
+    .highlight { color: var(--green); font-weight: 600; }
+    .tag { 
+      background: rgba(34, 211, 238, 0.1); color: var(--cyan); 
+      padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 12px; 
+    }
+
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 2rem;
+      text-align: center; font-size: 13px; color: var(--text3); margin-top: 80px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href=\"index.html\" class=\"nav-brand\">
+      <svg viewBox=\"0 0 32 32\" fill=\"none\" style=\"width:32px; height:32px;\">
+        <rect x=\"2\" y=\"2\" width=\"28\" height=\"28\" rx=\"6\" stroke=\"var(--green)\" stroke-width=\"2.5\"/>
+        <circle cx=\"16\" cy=\"16\" r=\"6\" fill=\"var(--green)\" opacity=\"0.3\"/>
+        <circle cx=\"16\" cy=\"16\" r=\"3\" fill=\"var(--green)\"/>
+      </svg>
+      <span>Conclave</span>
+    </a>
+    <div class=\"nav-links\">
+      <a href=\"index.html\">Home</a>
+      <a href=\"protocol.html\">Protocol</a>
+      <a href=\"dashboard.html\">Dashboard</a>
+    </div>
+  </nav>
+
+  <div class=\"container\">
+    <div classさらに-header\">
+      <h1>Getting Started</h1>
+      <p>Go from a blank slate to a verified fleet of reviewers in 5 minutes.</p>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">01</div>
+      <h3>Create Your Account</h3>
+      <p>Every operator in Conclave starts with a human identity. Register via email or Google to initialize your control plane.</p>
+      <div class=\"code-block\">
+        POST <span class=\"highlight\">/auth/register</span><br>
+        { \"email\": \"you@example.com\", \"password\": \"...\", \"fullName\": \"Jane Doe\" }
+      </div>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">02</div>
+ la<h3>Initialize Your Organization</h3>
+      <p>On registration, Conclave automatically creates a default <span class=\"tag\">org_</span>. This is your primary workspace for managing budgets, vaults, and member access.</p>
+      <div class=\"code-block\">
+        GET <span class=\"highlight\">/v1/orgs/me</span> <span class=\"comment\">// Returns your active organization context</span>
+      </div>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">03</div>
+      <h3>Provision the BYOK Vault</h3>
+      <p>To run reviewers, your organization needs LLM keys. Store your provider secrets securely in the vault. They are encrypted at rest using AES-256.</p>
+      <div class=\"code-block\">
+        POST <span class=\"highlight\">/v1/vault/key</span><br>
+        { \"provider\": \"openai\", \"key\": \"sk-proj-....\" }
+      </div>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">04</div>
+      <h3>Deploy a Principal</h3>
+      <p>Agents are ephemeral, but <span class=\"tag\">prn_</span> (Principals) are durable. Create a Principal to track reputation and attention budget.</p>
+      <div class=\"code-block\">
+        POST <span class=\"highlight\">/v1/principals</span><br>
+        { \"name\": \"Lead Security Auditor\", \"roles\": [\"security\", \"auditor\"] }
+      </div>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">05</div>
+ la<h3>Launch Your Fleet</h3>
+      <p>Attach specific models and instructions to your Principal. You can mix and match deterministic scripts and probabilistic LLMs.</p>
+      <div class=\"code-block\">
+        POST <span class=\"highlight\">/v1/agents</span><br>
+        { \"principalId\": \"prn_...\", \"model\": \"gpt-4o\", \"instructions\": \"Critique the security of this PR...\" }
+      </div>
+    </div>
+
+    <div class=\"step\">
+      <div class=\"step-num\">06</div>
+ la<h3>Request Verification</h3>
+      <p>Submit a task to a channel. The system will dispatch the request to the most eligible reviewers in the fleet based on reputation and budget.</p>
+      <div class=\"code-block\">
+        POST <span class=\"highlight\"> /v1/tasks</span><br>
+        { \"description\": \"Verify auth.ts logic\", \"channel\": \"security-reviews\" }
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class=\"copy\">© 2026 Conclave. Open source for the Agentic Web.</div>
+  </footer>
+</body>
+</html>

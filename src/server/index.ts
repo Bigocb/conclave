@@ -23,6 +23,7 @@ import { healthRoutes } from '../routes/health.js';
 import { fleetRoutes } from '../routes/fleet.js';
 import { providerRoutes } from '../routes/providers.js';
 import { cronRoutes } from '../routes/cron.js';
+import { authRoutes } from '../routes/auth.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {
@@ -99,7 +100,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     }
 
     // Public routes that don't need auth
-    const publicPaths = ['/health', '/v1/health'];
+    const publicPaths = ['/health', '/v1/health', '/auth/register', '/auth/login'];
     if (publicPaths.includes(request.url)) return;
 
     // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
@@ -118,6 +119,9 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
 
   // Health check (no prefix)
   await fastify.register(healthRoutes);
+
+  // Auth routes (no prefix for registration/login)
+  await fastify.register(authRoutes);
 
   // API routes (path-based versioning: /v1/)
   await fastify.register(principalRoutes, { prefix: '/v1' });
@@ -138,6 +142,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
 
   // Cron review route
   await fastify.register(cronRoutes, { prefix: '/v1' });
+  await fastify.register(vaultRoutes, { prefix: '/v1' });
 
   return { fastify, config: fullConfig };
 }

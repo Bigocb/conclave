@@ -15,6 +15,16 @@ export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
   // GET /v1/agents/:id/budget — Get budget for agent (resolves to principal)
   fastify.get('/agents/:id/budget', async (request: any, reply) => {
     const { id } = request.params as { id: string };
+    const agent = await agentSvc.getById(id);
+    
+    if (!agent) return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+
+    // Org Isolation: Agent must belong to the user's current organization
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || agent.org_id !== currentOrgId) {
+      return reply.code(403).send(error('FORBIDDEN', 'This agent belongs to a different organization'));
+    }
+
     const budget = await budgetSvc.getByAgent(id);
     if (!budget) return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent/principal budget not found'));
     const history = await budgetSvc.getHistory(budget.principal_id);

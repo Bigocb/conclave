@@ -5,15 +5,38 @@
 
 import { pgTable, text, integer, doublePrecision } from 'drizzle-orm/pg-core';
 
-// ─── Organizations ──────────────────────────────────────────
+// ─── Users ──────────────────────────────────────────────────
+export const users = pgTable('clv_users', {
+  id: text('id').primaryKey(),               // usr_<uuidv7>
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'),       // Null for OAuth users
+  fullSName: text('full_name'),
+  avatarUrl: text('avatar_url'),
+  googleId: text('google_id').unique(),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
+});
+
+// ─── Organizations (The Workspace/Org merged entity) ───────────
 export const organizations = pgTable('clv_organizations', {
   id: text('id').primaryKey(),               // org_<uuidv7>
+  ownerId: text('owner_id').notNull().references(() => users.id),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   description: text('description'),
   policies: text('policies'),                 // JSON
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
+});
+
+// ─── User Organization Memberships ─────────────────────────────
+export const organizationMembers = pgTable('clv_org_members', {
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  role: text('role').notNull().default('member'), // owner | admin | member
+  joinedAt: text('joined_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, {
+  pk: { columns: [ 'orgId', 'userId' ] } // Composite primary key
 });
 
 // ─── Principals (durable identity layer) ────────────────────

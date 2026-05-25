@@ -9,14 +9,20 @@ import { PrincipalService } from '../services/principals.js';
 import { AgentService } from '../services/agents.js';
 import { BudgetService } from '../services/budget.js';
 import { ReputationService } from '../services/reputation.js';
+import { OrgService } from '../services/orgs.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { CreatePrincipalSchema, UpdatePrincipalSchema, RegisterAgentSchema, UpdateAgentSchema, PatchAgentSchema } from '../schemas/index.js';
+import { authenticate } from '../middleware/auth.js';
 
 export async function principalRoutes(fastify: FastifyInstance) {
   const principalService = new PrincipalService(fastify.db);
   const agentService = new AgentService(fastify.db);
   const budgetService = new BudgetService(fastify.db);
   const reputationService = new ReputationService(fastify.db);
+  const orgService = new OrgService(fastify.db);
+
+  // Middleware: All principal routes require valid user session
+  fastify.addHook('preHandler', authenticate);
 
   // POST /v1/principals — Create principal
   fastify.post('/principals', async (request, reply) => {
@@ -25,6 +31,13 @@ export async function principalRoutes(fastify: FastifyInstance) {
       return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
     }
     const data = parse.data;
+
+    // Enforce Org Isolation: User can only create principals in their current org context
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || data.org_id !== currentOrgId) {
+      return reply.status(403).send(error('FORBIDDEN', 'You do not have permission to create principals for this organization'));
+    }
+
     const id = `prn_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
     const principal = await principalService.create({
       id,
@@ -39,8 +52,20 @@ export async function principalRoutes(fastify: FastifyInstance) {
 
   // GET /v1/principals — List principals
   fastify.get('/principals', async (request, reply) => {
-    const { org, role, status, page, per_page } = request.query as any;
-    const principals = await principalService.list({ org, role, status, page, perPage: per_page });
+    const { role, status, page, per_page } = request.query as any;
+    const currentOrgId = (request as any).orgId;
+
+    if (!currentOrgId) {
+      return reply.status(403).send(error('UNAUTHORIZED', 'No active organization context'));
+    }
+
+    const principals = await principalService.list({ 
+      org: currentOrgId, 
+      role, 
+      status, 
+      page, 
+      perPage: per_page 
+    });
     return reply.send(success(principals));
   });
 

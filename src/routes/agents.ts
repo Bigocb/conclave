@@ -8,9 +8,13 @@ import * as crypto from 'crypto';
 import { AgentService } from '../services/agents.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { RegisterAgentSchema, UpdateAgentSchema, AgentQuerySchema } from '../schemas/index.js';
+import { authenticate } from '../middleware/auth.js';
 
 export async function agentRoutes(fastify: FastifyInstance) {
   const agentService = new AgentService(fastify.db);
+
+  // Middleware: All agent routes require valid user session
+  fastify.addHook('preHandler', authenticate);
 
   // POST /v1/agents/register — Register a new agent under a principal
   fastify.post('/agents/register', async (request, reply) => {
@@ -20,12 +24,17 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }
     const data = parse.data;
 
-    // Look up the principal to get org_id
     const { PrincipalService } = await import('../services/principals.js');
     const principalService = new PrincipalService(fastify.db);
     const principal = await principalService.getById(data.principal_id);
     if (!principal) {
       return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+
+    // Enforce Org Isolation: The principal must belong to the user's current organization context
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || principal.org_id !== currentOrgId) {
+      return reply.status(403).send(error('FORBIDDEN', 'You do not have permission to manage agents for this principal as it belongs to another organization'));
     }
 
     const agentId = `agt_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
@@ -56,8 +65,14 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.status(422).send(error('VALIDATION_ERROR', query.error.issues.map(i => i.message).join(', ')));
     }
     const statusFilter = query.data.status === 'all' ? undefined : (query.data.status || 'active');
+    const currentOrgId = (request as any).orgId;
+
+    if (!currentOrgId) {
+      return reply.status(403).send(error('UNAUTHORIZED', 'No active organization context'));
+    }
+
     const agents = await agentService.list({
-      org: query.data.org,
+      org: currentOrgId, // Force filtering by user's org, ignoring request query if provided
       principal: query.data.principal,
       status: statusFilter,
       page: query.data.page,
@@ -74,7 +89,12 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
     }
 
-    // Include principal info
+    // Org Isolation check
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || agent.org_id !== currentOrgId) {
+      return reply.status(403).send(error('FORBIDDEN', 'This agent belongs to a different organization'));
+    }
+
     const { PrincipalService } = await import('../services/principals.js');
     const principalService = new PrincipalService(fastify.db);
     const principal = await principalService.getById(agent.principal_id);

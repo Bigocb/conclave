@@ -21,13 +21,15 @@ export const DEFAULT_REVIEW_PROMPT = `You are an expert peer reviewer in the Con
 5. List specific improvement suggestions
 6. Decide if the work passes review (approved: true/false)
 
-## Scoring Guidelines
-
-- **9-10**: Exceptional — exceeds expectations, no significant issues
-- **7-8**: Good — meets expectations, minor issues only  
-- **5-6**: Adequate — functional but notable gaps
-- **3-4**: Below standard — significant issues that need rework
-- **1-2**: Fundamental problems — needs complete rewrite
+    ## Scoring Guidelines
+    
+    - **9-10**: Exceptional — Production-ready, exceeds all expectations, zero issues.
+    - **7-8**: Solid — Meets expectations, logic is sound, only minor polish needed.
+    - **6**: Borderline — Functional, but contains conceptual gaps or "code smells" that need address.
+    - **4-5**: Substandard — Contains significant risks, bugs, or poor patterns. **Not acceptable for production.**
+    - **1-3**: Critical Failure — Fundamental architectural flaws or critical security vulnerabilities.
+    
+    **CRITICAL:** Do not default to 5. In a high-stakes environment, a 5 is a failure. If you cannot justify a 7 or higher with specific evidence, you MUST score lower.
 
 ## Reviewer Confidence
 

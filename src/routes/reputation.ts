@@ -16,19 +16,24 @@ export const reputationRoutes: FastifyPluginCallback = (fastify: FastifyInstance
   fastify.get('/reputation/:id', async (request: any, reply) => {
     const { id } = request.params as { id: string };
 
-    // If it's an agent ID, resolve to principal
     if (id.startsWith('agt_')) {
       const agent = await agentSvc.getById(id);
       if (!agent) {
-        const rep = await repSvc.getByPrincipal(id);
-        return reply.send(success(rep));
+        return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
       }
+      
+      const currentOrgId = (request as any).orgId;
+      if (!currentOrgId || agent.org_id !== currentOrgId) {
+        return reply.code(403).send(error('FORBIDDEN', 'Access to this agent\'s reputation is restricted to its organization'));
+      }
+
       const rep = await repSvc.getByPrincipal(agent.principal_id);
       return reply.send(success({ ...rep, agent_id: id }));
     }
 
-    // If it's a principal ID, get directly
     const rep = await repSvc.getByPrincipal(id);
+    if (!rep) return reply.code(404).send(error('NOT_FOUND', 'Reputation record not found'));
+    
     reply.send(success(rep));
   });
 

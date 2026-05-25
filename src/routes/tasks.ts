@@ -10,6 +10,7 @@ import { AgentService } from '../services/agents.js';
 import { ChannelService } from '../services/channels.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { randomUUID } from 'crypto';
+import { authenticate } from '../middleware/auth.js';
 
 export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
@@ -17,6 +18,9 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
   const taskSvc = new TaskService(db, budgetSvc);
   const agentSvc = new AgentService(db);
   const channelSvc = new ChannelService(db);
+
+  // Middleware: Protect task management routes
+  fastify.addHook('preHandler', authenticate);
 
   // POST /v1/tasks
   fastify.post('/tasks', async (request, reply) => {
@@ -32,6 +36,13 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
     if (!agent) {
       return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
     }
+    
+    // Org Isolation: Task agent must belong to the user's current organization
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || agent.org_id !== currentOrgId) {
+      return reply.code(403).send(error('FORBIDDEN', 'This agent belongs to a different organization'));
+    }
+
     const principalId = agent.principal_id;
 
     // Verify principal is subscribed to the target channel
@@ -82,7 +93,6 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       if (pgClient && typeof pgClient.notify === 'function') {
         await pgClient.notify('new_task', id);
       } else if (pgClient) {
-        // Fallback to raw SQL if notify not available
         await pgClient.query(`SELECT pg_notify('new_task', $1)`, [id]);
       }
     } catch (notifyErr: any) {
@@ -95,13 +105,18 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
   // GET /v1/tasks/:id
   fastify.get('/tasks/:id', async (request: any, reply) => {
     const { id } = request.params as { id: string };
-    // Lazy deadline enforcement: expire open tasks past their deadline
     const task = await taskSvc.checkAndExpire(id);
     if (!task) return reply.code(404).send(error(ERROR_CODES.TASK_NOT_FOUND.code, 'Task not found'));
 
+    // Org Isolation: Task must belong to the user's organization
+    const currentOrgId = (request as any).orgId;
+    const agent = await agentSvc.getById(task.agent_id);
+    if (!currentOrgId || !agent || agent.org_id !== currentOrgId) {
+      return reply.code(403).send(error('FORBIDDEN', 'Access to this task is restricted to its owner organization'));
+    }
+
     const reviews = await taskSvc.getReviewsForTask(id);
 
-    // Compute review summary — aggregate scores, approval rate, top suggestions
     const review_summary = reviews.length > 0 ? (() => {
       const dimensionScores: Record<string, number[]> = {};
       let overallSum = 0;
@@ -127,7 +142,6 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
         avgScores[dim] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
       }
 
-      // Deduplicate and take top 5 suggestions
       const seen = new Set<string>();
       const topSuggestions = allSuggestions.filter(s => {
         const key = s.toLowerCase().trim();
@@ -143,11 +157,13 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
         approval_rate: Math.round((approvalCount / reviews.length) * 100),
         avg_confidence: Math.round((confidenceSum / reviews.length) * 100) / 100,
         top_suggestions: topSuggestions,
-        approved: approvalCount >= Math.ceil(reviews.length / 2), // majority rule
+        approved: approvalCount >= Math.ceil(reviews.length / 2),
       };
     })() : null;
 
     reply.send(success({ ...task, reviews_received: reviews.length, reviews, review_summary }));
+  });
+
   });
 
   // GET /v1/tasks
