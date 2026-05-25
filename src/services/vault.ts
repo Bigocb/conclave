@@ -7,7 +7,9 @@ import { v7 as uuidv7 } from 'uuid';
 const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!'; // Should be 32 bytes
 const IV_LENGTH = 16;
 
-export const VaultService = {
+export class VaultService {
+  constructor(private dbInstance = db) {}
+
   /**
    * Encrypts a value using AES-256-CBC
    */
@@ -17,7 +19,7 @@ export const VaultService = {
     let encrypted = cipher.update(text);
     encrypted = Buffer.concat([encrypted, cipher.final()]);
     return iv.toString('hex') + ':' + encrypted.toString('hex');
-  },
+  }
 
   /**
    * Decrypts a value encrypted by the encrypt method
@@ -30,7 +32,34 @@ export const VaultService = {
     let decrypted = decipher.update(encryptedText);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
-  },
+  }
+
+  /**
+   * Stores a generic secret for a specific key
+   */
+  async storeSecret(key: string, value: string) {
+    const encryptedValue = this.encrypt(value);
+    const id = `sec_${uuidv7()}`;
+    
+    await this.dbInstance.insert(orgVault).values({
+      id,
+      orgId: 'system', // Use system org or find associated org
+      provider: key,
+      encryptedValue,
+    });
+    return id;
+  }
+
+  /**
+   * Retrieves a decrypted secret
+   */
+  async getSecret(key: string): Promise<string | null> {
+    const record = await this.dbInstance.query.orgVault.findFirst({
+      where: (vault: any, { eq }: any) => eq(vault.provider, key),
+    });
+    if (!record) return null;
+    return this.decrypt(record.encryptedValue);
+  }
 
   /**
    * Upserts a provider key for an organization
@@ -38,36 +67,38 @@ export const VaultService = {
   async upsertKey(orgId: string, provider: string, key: string) {
     const encryptedValue = this.encrypt(key);
     
-    const existing = await db.query.orgVault.findFirst({
+    const existing = await this.dbInstance.query.orgVault.findFirst({
       where: (vault: any, { and, eq }: any) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
     });
 
     if (existing) {
-      await db.update(orgVault)
+      await this.dbInstance.update(orgVault)
         .set({ encryptedValue, updatedAt: new Date().toISOString() as any })
         .where(eq(orgVault.id, existing.id));
       return existing.id;
     }
 
     const id = `vlt_${uuidv7()}`;
-    await db.insert(orgVault).values({
+    await this.dbInstance.insert(orgVault).values({
       id,
       orgId,
       provider,
       encryptedValue,
     });
     return id;
-  },
+  }
 
   /**
    * Retrieves a decrypted key for a provider in an organization
    */
   async getKey(orgId: string, provider: string): Promise<string | null> {
-    const record = await db.query.orgVault.findFirst({
+    const record = await this.dbInstance.query.orgVault.findFirst({
       where: (vault: any, { and, eq }: any) => and(eq(vault.orgId, orgId), eq(vault.provider, provider)),
     });
 
     if (!record) return null;
     return this.decrypt(record.encryptedValue);
-  },
-};
+  }
+}
+
+export const vaultService = new VaultService();
