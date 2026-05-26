@@ -159,6 +159,15 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       reasoning TEXT,
       created_at TEXT NOT NULL
     )`;
+    await client`CREATE TABLE IF NOT EXISTS clv_org_vault (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      encrypted_value TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (org_id, provider)
+    )`;
     console.log('[initDb] Schema push complete');
   } catch (err: any) {
     if (err.code === '42P07' || err.message?.includes('already exists')) {
