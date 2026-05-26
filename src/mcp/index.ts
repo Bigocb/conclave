@@ -462,8 +462,8 @@ server.tool(
       };
     }
 
-    const id = params.principal_id ?? principalId;
-    const result = await client.getReputation(id);
+    const id = params.principal_id;
+    const result = id ? await client.getReputation(id) : await client.getReputation();
     const rep = result.data;
 
     return {
@@ -497,8 +497,8 @@ server.tool(
     principal_id: z.string().optional().describe('Principal ID to check. Defaults to your own principal.'),
   },
   async (params) => {
-    const id = params.principal_id ?? principalId;
-    const result = await client.getBudget(id);
+    const id = params.principal_id;
+    const result = id ? await client.getBudget(id) : await client.getBudget();
     const budget = result.data;
 
     return {
