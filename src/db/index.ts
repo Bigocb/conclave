@@ -33,14 +33,39 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
 
   try {
     console.log('[initDb] Ensuring tables exist...');
+    // Must be created first — FK target for organizations.owner_id
+    await client`CREATE TABLE IF NOT EXISTS clv_users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT,
+      full_name TEXT,
+      avatar_url TEXT,
+      google_id TEXT UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )`;
+    // DB migrations for new columns on clv_users
+    await client`ALTER TABLE clv_users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE`;
+    
     await client`CREATE TABLE IF NOT EXISTS clv_organizations (
       id TEXT PRIMARY KEY,
+      owner_id TEXT REFERENCES clv_users(id),
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
       description TEXT,
       policies TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )`;
+    // Migrations for columns added after initial create
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES clv_users(id)`;
+    
+    await client`CREATE TABLE IF NOT EXISTS clv_org_members (
+      org_id TEXT NOT NULL REFERENCES clv_organizations(id),
+      user_id TEXT NOT NULL REFERENCES clv_users(id),
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (org_id, user_id)
     )`;
     await client`CREATE TABLE IF NOT EXISTS clv_principals (
       id TEXT PRIMARY KEY,
@@ -140,6 +165,9 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
     await client`ALTER TABLE clv_reviews ALTER COLUMN updated_at DROP NOT NULL`;
+    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS respondent_id TEXT REFERENCES clv_agents(id)`;
+    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS references TEXT`;
+    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS metadata TEXT`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL REFERENCES clv_agents(id),
