@@ -114,6 +114,10 @@ function switchView(viewId) {
             item.classList.remove('text-gray-400');
         }
     });
+
+    if (viewId === 'org') refreshOrg();
+    if (viewId === 'vault') refreshVault();
+    if (viewId === 'tasks') refreshTasks();
 }
 
 async function saveVaultKey() {
@@ -267,6 +271,119 @@ async function decommissionAgent(id) {
         refreshFactory();
     } catch (e) { alert('Failed to decommission'); }
 }
+
+// ─── Org / Principal Management ──────────────────────────────
+
+async function refreshOrg() {
+    const details = document.getElementById('org-details');
+    const orgId = STATE.orgId;
+    if (!orgId) {
+        details.innerHTML = '<p class="text-gray-500">No organization linked.</p>';
+        return;
+    }
+
+    let orgName = 'Your Organization';
+    try {
+        const orgData = await apiRequest(`/v1/orgs/${orgId}`);
+        if (orgData.data) orgName = orgData.data.name || orgName;
+    } catch (e) { /* use default */ }
+
+    let principalsHtml = '';
+    let principalCount = 0;
+    try {
+        const pData = await apiRequest('/v1/principals');
+        const principals = pData.data || [];
+        principalCount = principals.length;
+        principals.forEach(p => {
+            principalsHtml += `
+                <div class="flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg">
+                    <div>
+                        <span class="font-mono text-sm text-green-400">${p.name}</span>
+                        <span class="text-xs text-gray-500 ml-2">${p.id}</span>
+                    </div>
+                    <span class="text-[10px] text-gray-500 uppercase">${p.roles ? JSON.parse(p.roles).join(', ') : 'general-reviewer'}</span>
+                </div>`;
+        });
+    } catch (e) { /* ignore */ }
+
+    details.innerHTML = `
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-lg font-bold">${orgName}</h3>
+                <p class="text-xs text-gray-500 font-mono">${orgId}</p>
+            </div>
+        </div>
+        <div class="border-t border-[#1e2d4a] pt-4 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Principals (${principalCount})</h4>
+                <button onclick="showCreatePrincipalModal()" class="text-xs bg-green-500 hover:bg-cyan-400 text-black font-bold px-3 py-1.5 rounded-lg transition-all">+ New Principal</button>
+            </div>
+            <div class="space-y-2">
+                ${principalsHtml || '<p class="text-gray-500 text-sm">No principals. Create one to register agents.</p>'}
+            </div>
+        </div>
+        <div class="border-t border-[#1e2d4a] pt-4">
+            <button onclick="showCreateOrgModal()" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 font-bold px-3 py-1.5 rounded-lg transition-all">+ New Organization</button>
+        </div>`;
+}
+
+function showCreatePrincipalModal() {
+    document.getElementById('principal-modal').classList.remove('hidden');
+}
+
+function hideCreatePrincipalModal() {
+    document.getElementById('principal-modal').classList.add('hidden');
+}
+
+async function createPrincipal() {
+    const name = document.getElementById('principal-name').value;
+    if (!name) return alert('Principal name is required.');
+    try {
+        await apiRequest('/v1/principals', 'POST', { org_id: STATE.orgId, name });
+        document.getElementById('principal-name').value = '';
+        hideCreatePrincipalModal();
+        await loadPrincipals();
+        refreshOrg();
+    } catch (e) {
+        alert('Failed to create principal: ' + (e.message || 'Unknown error'));
+    }
+}
+
+function showCreateOrgModal() {
+    document.getElementById('org-modal').classList.remove('hidden');
+}
+
+function hideCreateOrgModal() {
+    document.getElementById('org-modal').classList.add('hidden');
+}
+
+async function createOrg() {
+    const name = document.getElementById('new-org-name').value;
+    if (!name) return alert('Organization name is required.');
+    try {
+        const data = await apiRequest('/v1/orgs', 'POST', { name });
+        if (data.data) {
+            STATE.orgId = data.data.id;
+            localStorage.setItem('clv_orgId', data.data.id);
+            document.getElementById('new-org-name').value = '';
+            hideCreateOrgModal();
+            await loadPrincipals();
+            refreshOrg();
+            refreshUI();
+        }
+    } catch (e) {
+        alert('Failed to create organization: ' + (e.message || 'Unknown error'));
+    }
+}
+
+document.getElementById('principal-form').onsubmit = async (e) => {
+    e.preventDefault();
+    await createPrincipal();
+};
+document.getElementById('org-form').onsubmit = async (e) => {
+    e.preventDefault();
+    await createOrg();
+};
 
 document.getElementById('factory-reg-form').onsubmit = async (e) => {
     e.preventDefault();

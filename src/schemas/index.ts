@@ -17,7 +17,7 @@ export const PaginationSchema = z.object({
 
 export const CreateOrgSchema = z.object({
   name: z.string().min(1).max(200),
-  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).optional(),
   description: z.string().max(2000).optional(),
   policies: z.object({
     min_reviews_required: z.number().int().min(1).max(10).default(2),

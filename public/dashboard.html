@@ -244,6 +244,40 @@
         </div>
     </div>
 
+    <!-- Create Principal Modal -->
+    <div id="principal-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">New Principal</h2>
+                <button onclick="hideCreatePrincipalModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="principal-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Principal Name</label>
+                    <input id="principal-name" type="text" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. My App Identity">
+                </div>
+                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Create Principal</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Organization Modal -->
+    <div id="org-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">New Organization</h2>
+                <button onclick="hideCreateOrgModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="org-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Organization Name</label>
+                    <input id="new-org-name" type="text" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. My Company">
+                </div>
+                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Create Organization</button>
+            </form>
+        </div>
+    </div>
+
     <script src="dashboard.js"></script>
 </body>
 </html>

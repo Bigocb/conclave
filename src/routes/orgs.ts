@@ -7,7 +7,10 @@ import { CreateOrgSchema, UpdateOrgSchema } from '../schemas/index.js';
 import { OrgService } from '../services/orgs.js';
 import { ReputationService } from '../services/reputation.js';
 import { success, error } from '../utils/response.js';
+import { authenticate } from '../middleware/auth.js';
 import { randomUUID } from 'crypto';
+import { db } from '../db/index.js';
+import { organizationMembers } from '../db/schema.js';
 
 export const orgRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
@@ -28,6 +31,11 @@ export const orgRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts
     }
     const data = parsed.data;
 
+    // Auto-generate slug from name if not provided
+    if (!data.slug) {
+      data.slug = data.name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'org-' + randomUUID().slice(0, 8);
+    }
+
     // Check for duplicate slug
     const existing = await orgSvc.getBySlug(data.slug);
     if (existing) {
@@ -37,14 +45,33 @@ export const orgRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts
     const id = `org_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
     try {
+      const userId = (request as any).user?.id || 'usr_system';
       const org = await orgSvc.create({
         id,
-        ownerId: 'usr_system', // TODO: Link to authenticated user
+        ownerId: userId,
         name: data.name,
         slug: data.slug,
         description: data.description,
         policies: data.policies as Record<string, unknown> | undefined,
       });
+
+      // Add creator as owner member
+      if (userId !== 'usr_system') {
+        const { organizationMembers } = await import('../db/schema.js');
+        const { eq } = await import('drizzle-orm');
+        // Check if already a member
+        const existingMember = await db.query.organizationMembers.findFirst({
+          where: (m: any) => eq(m.orgId, id) && eq(m.userId, userId),
+        });
+        if (!existingMember) {
+          await db.insert(organizationMembers).values({
+            orgId: id,
+            userId,
+            role: 'owner',
+          });
+        }
+      }
+
       reply.code(201).send(success(org));
     } catch (err: any) {
       if (err.message?.includes('UNIQUE constraint')) {
