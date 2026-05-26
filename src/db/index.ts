@@ -208,6 +208,28 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     }
   }
 
+  // Critical migrations — run outside the DDL try-catch so they execute even if the main block failed
+  try {
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT`;
+    console.log('[initDb] owner_id column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] owner_id migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
+    await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
+    await client`ALTER TABLE clv_reviews ALTER COLUMN updated_at DROP NOT NULL`;
+  } catch (migErr: any) {
+    console.error('[initDb] reviews migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS respondent_id TEXT`;
+  } catch (migErr: any) {
+    console.error('[initDb] opinion_responses migration failed:', migErr.message);
+  }
+
   try {
     const orgCount = await db.select({ id: schema.organizations.id }).from(schema.organizations).limit(1);
     if (orgCount.length === 0) {
