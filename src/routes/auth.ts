@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
-import { users, organizations, organizationMembers } from '../db/schema.js';
+import { users, organizations, organizationMembers, principals } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -45,6 +45,18 @@ export async function authRoutes(fastify: FastifyInstance) {
         orgId: oId,
         userId: userId,
         role: 'owner',
+      });
+
+      // Auto-create a default principal for the user
+      const principalId = `prn_${uuidv7()}`;
+      await tx.insert(principals).values({
+        id: principalId,
+        orgId: oId,
+        name: `${fullName || email}'s Principal`,
+        roles: JSON.stringify(['general-reviewer']),
+        capabilities: JSON.stringify([]),
+        metadata: JSON.stringify({}),
+        status: 'active',
       });
 
       return { newUser: user, orgId: oId };
