@@ -462,8 +462,9 @@ server.tool(
       };
     }
 
-    const id = params.principal_id;
-    const result = id ? await client.getReputation(id) : await client.getReputation();
+    const id = params.principal_id ?? (await client.resolveSelf()).principal_id;
+    if (!id) throw new Error('No principal_id — provide one or use a clv_ token');
+    const result = await client.getReputation(id);
     const rep = result.data;
 
     return {
@@ -497,8 +498,9 @@ server.tool(
     principal_id: z.string().optional().describe('Principal ID to check. Defaults to your own principal.'),
   },
   async (params) => {
-    const id = params.principal_id;
-    const result = id ? await client.getBudget(id) : await client.getBudget();
+    const id = params.principal_id ?? (await client.resolveSelf()).principal_id;
+    if (!id) throw new Error('No principal_id — provide one or use a clv_ token');
+    const result = await client.getBudget(id);
     const budget = result.data;
 
     return {

@@ -17,6 +17,24 @@ export async function agentRoutes(fastify: FastifyInstance) {
   // Middleware: All agent routes require valid user session
   fastify.addHook('preHandler', authenticate);
 
+  // GET /v1/agents/me — Resolve current identity from token (clv_ or JWT)
+  fastify.get('/agents/me', async (request, reply) => {
+    const req = request as any;
+    const agentId = req.agentId;
+    const principalId = req.principalId;
+    const orgId = req.orgId;
+
+    if (!agentId && !principalId) {
+      return reply.status(401).send(error('UNAUTHORIZED', 'No agent or principal identity resolved from token'));
+    }
+
+    return reply.send(success({
+      agent_id: agentId || null,
+      principal_id: principalId || null,
+      org_id: orgId || null,
+    }));
+  });
+
   // POST /v1/agents/register — Register a new agent under a principal
     fastify.post('/agents/register', async (request, reply) => {
     const parse = RegisterAgentSchema.safeParse(request.body);

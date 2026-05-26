@@ -50,7 +50,10 @@ export class ConclaveApiClient {
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-    if (this.agentId) {
+    // Only send X-Agent-Id when there's no token — with a clv_ or JWT token,
+    // the server resolves agent/principal/org server-side. Sending X-Agent-Id
+    // overrides that resolution and causes FORBIDDEN/org mismatch errors.
+    if (!this.token && this.agentId) {
       headers['X-Agent-Id'] = this.agentId;
     }
 
@@ -113,6 +116,23 @@ export class ConclaveApiClient {
       ...data,
     });
   }
+
+  /** Resolve own identity from auth token (clv_ or JWT) via GET /v1/agents/me */
+  async resolveSelf(): Promise<{ agent_id: string | null; principal_id: string | null; org_id: string | null }> {
+    try {
+      const res = await this.request('GET', '/agents/me');
+      return {
+        agent_id: res.data?.agent_id ?? null,
+        principal_id: res.data?.principal_id ?? null,
+        org_id: res.data?.org_id ?? null,
+      };
+    } catch {
+      // Fall back to configured IDs when no token or token fails
+      return { agent_id: this.agentId, principal_id: this.principalId, org_id: null };
+    }
+  }
+
+  // ─── Tasks ──────────────────────────────────────
 
   async listAgentsUnderPrincipal(principalId: string) {
     return this.request('GET', `/principals/${principalId}/agents`);
