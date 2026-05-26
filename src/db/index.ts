@@ -57,8 +57,10 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
-    // Migrations for columns added after initial create
-    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES clv_users(id)`;
+    // Migrations: add owner_id to existing organizations if missing
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT`;
+    await client`ALTER TABLE clv_organizations DROP CONSTRAINT IF EXISTS clv_organizations_owner_id_fkey`;
+    await client`ALTER TABLE clv_organizations ADD CONSTRAINT clv_organizations_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES clv_users(id)`;
     
     await client`CREATE TABLE IF NOT EXISTS clv_org_members (
       org_id TEXT NOT NULL REFERENCES clv_organizations(id),
