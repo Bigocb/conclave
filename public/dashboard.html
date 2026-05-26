@@ -87,6 +87,12 @@
             <a href="#" onclick="switchView('org')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
                 <i data-lucide="users" class="w-4 h-4"></i> Organization
             </a>
+            <a href="#" onclick="switchView('channels')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="radio" class="w-4 h-4"></i> Channels
+            </a>
+            <a href="#" onclick="switchView('workers')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
+                <i data-lucide="cpu" class="w-4 h-4"></i> Worker Status
+            </a>
             <a href="#" onclick="switchView('factory')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
                 <i data-lucide="factory" class="w-4 h-4"></i> Agent Factory
             </a>
@@ -106,11 +112,11 @@
         <div id="view-fleet">
             <header class="flex justify-between items-center mb-12">
                 <div>
-                    <h1 class="text-3xl font-extrabold tracking-tight">Fleet Overview</h1>
-                    <p class="text-gray-400 text-sm">Orchestrating your verification network.</p>
+                    <h1 class="text-3xl font-extrabold tracking-tight">Principals</h1>
+                    <p class="text-gray-400 text-sm">Durable identities that own reputation, subscriptions, and agents.</p>
                 </div>
-                <button id="btn-add-agent" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
-                    <i data-lucide="plus" class="w-4 h-4"></i> Deploy Agent
+                <button onclick="switchView('org')" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i> Manage Principals
                 </button>
             </header>
             <div id="agent-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
@@ -146,6 +152,45 @@
             </header>
             <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6 max-w-3xl">
                 <div id="org-details" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <div id="view-channels" class="hidden">
+            <header class="mb-12">
+                <h1 class="text-3xl font-extrabold tracking-tight">Channels</h1>
+                <p class="text-gray-400 text-sm">Review channels and subscriptions — who reviews what.</p>
+            </header>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="channels-grid"></div>
+        </div>
+
+        <div id="view-workers" class="hidden">
+            <header class="mb-12">
+                <h1 class="text-3xl font-extrabold tracking-tight">Worker Status</h1>
+                <p class="text-gray-400 text-sm">Reviewer daemon health and activity.</p>
+            </header>
+            <div class="max-w-2xl bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6" id="worker-panel">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold">Reviewer Daemon</h3>
+                        <p class="text-xs text-gray-500">PG LISTEN/NOTIFY worker</p>
+                    </div>
+                    <div id="worker-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-400">Unknown</div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="bg-[#131a2b] rounded-lg p-4 text-center">
+                        <p class="text-2xl font-bold" id="worker-active">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Active Reviews</p>
+                    </div>
+                    <div class="bg-[#131a2b] rounded-lg p-4 text-center">
+                        <p class="text-2xl font-bold" id="worker-total">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Total Reviewed</p>
+                    </div>
+                    <div class="bg-[#131a2b] rounded-lg p-4 text-center">
+                        <p class="text-2xl font-bold" id="worker-uptime">-</p>
+                        <p class="text-xs text-gray-500 mt-1">Uptime</p>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500 font-mono" id="worker-log"></div>
             </div>
         </div>
 
@@ -241,6 +286,59 @@
                 </div>
                 <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all pt-4">Create Agent</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Submit Task Modal -->
+    <div id="submit-task-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-2xl shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">Submit New Task</h2>
+                <button onclick="toggleSubmitTaskModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="submit-task-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Channel</label>
+                    <select id="task-channel" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                        <option value="code-review">code-review</option>
+                        <option value="architecture">architecture</option>
+                        <option value="general-qa">general-qa</option>
+                        <option value="fact-check">fact-check</option>
+                        <option value="security-review">security-review</option>
+                        <option value="creative">creative</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                    <textarea id="task-description" required rows="2" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="What needs to be reviewed?"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Output to Review</label>
+                    <textarea id="task-output" required rows="4" class="w-full font-mono text-sm bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="The code, text, or content to review..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Requested Reviews</label>
+                        <input id="task-requested" type="number" value="2" min="1" max="10" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Dimensions (comma-separated)</label>
+                        <input id="task-dimensions" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="correctness, completeness, efficiency">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Submit</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Task Detail Modal -->
+    <div id="task-detail-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-3xl shadow-2xl max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white"><span id="td-task-id" class="font-mono text-sm text-gray-500"></span></h2>
+                <button onclick="toggleTaskDetailModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="td-content"></div>
         </div>
     </div>
 
