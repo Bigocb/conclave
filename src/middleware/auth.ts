@@ -1,5 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { authService } from '../services/auth.js';
+import { db } from '../db/index.js';
+import { agents } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers.authorization;
@@ -12,6 +15,29 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   }
 
   const token = authHeader.slice(7);
+
+  // Support clv_ agent tokens (lookup in DB)
+  if (token.startsWith('clv_')) {
+    const agent = await db.query.agents.findFirst({
+      where: eq(agents.token, token),
+    });
+
+    if (!agent) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Invalid agent token',
+      });
+    }
+
+    (request as any).agentId = agent.id;
+    (request as any).principalId = agent.principal_id;
+    (request as any).orgId = agent.org_id;
+    (request as any).user = { id: agent.principal_id };
+
+    return { sub: agent.principal_id, orgId: agent.org_id };
+  }
+
+  // Standard JWT user token flow
   const decoded = await authService.verifyToken(token);
 
   if (!decoded) {
