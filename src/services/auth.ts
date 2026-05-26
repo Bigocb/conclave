@@ -1,5 +1,6 @@
 import * as bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import { db } from '../db/index.js';
 import { users, organizationMembers } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
