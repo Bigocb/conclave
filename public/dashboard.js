@@ -1,6 +1,7 @@
 const STATE = {
     token: localStorage.getItem('clv_token'),
     orgId: localStorage.getItem('clv_orgId'),
+    principals: null,
     apiBase: window.location.origin,
 };
 
@@ -48,37 +49,53 @@ async function handleLogin() {
     
     if (AUTH_MODE === 'login') {
         try {
-            const data = await apiRequest('/auth/login', 'POST', { email, password });
+            const data = await apiRequest('/v1/auth/login', 'POST', { email, password });
             STATE.token = data.token;
             STATE.orgId = data.orgId;
             localStorage.setItem('clv_token', data.token);
             localStorage.setItem('clv_orgId', data.orgId);
             hideAuth();
+            await loadPrincipals();
             refreshUI();
         } catch (e) {
             alert('Login failed. Please check your credentials.');
         }
     } else {
-        const name = document.getElementById('reg-name').value;
+        const fullName = document.getElementById('reg-name').value;
         const orgName = document.getElementById('reg-org').value;
-        if (!name || !orgName) return alert('Name and Organization are required.');
+        if (!fullName || !orgName) return alert('Name and Organization are required.');
 
         try {
-            const data = await apiRequest('/auth/register', 'POST', { 
-                name, 
+            const data = await apiRequest('/v1/auth/register', 'POST', { 
                 email, 
                 password, 
-                orgName 
+                fullName,
+                orgName,
+                displayName: fullName,
             });
             STATE.token = data.token;
             STATE.orgId = data.orgId;
             localStorage.setItem('clv_token', data.token);
             localStorage.setItem('clv_orgId', data.orgId);
             hideAuth();
+            await loadPrincipals();
             refreshUI();
         } catch (e) {
-            alert('Registration failed. Email might be taken.');
+            alert('Registration failed: ' + (e.message || 'Email might be taken.'));
         }
+    }
+}
+
+async function loadPrincipals() {
+    try {
+        const data = await apiRequest('/v1/principals');
+        const principals = data.data || [];
+        STATE.principals = principals.map(p => p.id);
+        if (principals.length > 0) {
+            STATE.defaultPrincipalId = principals[0].id;
+        }
+    } catch (e) {
+        console.warn('Could not load principals', e);
     }
 }
 
@@ -169,12 +186,18 @@ async function deployAgent() {
     const name = document.getElementById('deploy-name').value;
     const model = document.getElementById('deploy-model').value;
     if (!name) return alert('Agent name is required.');
+    const principalId = STATE.principals && STATE.principals[0];
+    if (!principalId) return alert('No principal available. Create an organization principal first.');
     try {
-        await apiRequest('/v1/agents', 'POST', { name, model });
+        await apiRequest('/v1/agents/register', 'POST', { 
+            principal_id: principalId, 
+            name, 
+            model 
+        });
         toggleDeployModal();
         refreshUI();
     } catch (e) {
-        alert('Deployment failed. Check logs.');
+        alert('Deployment failed: ' + (e.message || 'Check logs.'));
     }
 }
 
@@ -213,6 +236,9 @@ async function refreshUI() {
 
 function toggleFactoryModal(show) {
     document.getElementById('factory-modal').classList.toggle('hidden', !show);
+    if (show && STATE.defaultPrincipalId) {
+        document.getElementById('factory-principal-id').value = STATE.defaultPrincipalId;
+    }
 }
 
 async function refreshFactory() {
@@ -265,8 +291,11 @@ document.getElementById('btn-save-key').onclick = saveVaultKey;
 document.getElementById('btn-add-agent').onclick = toggleDeployModal;
 document.getElementById('btn-confirm-deploy').onclick = deployAgent;
 
-window.onload = () => {
+window.onload = async () => {
     lucide.createIcons();
     if (!STATE.token) showAuth();
-    else refreshUI();
+    else {
+        await loadPrincipals();
+        refreshUI();
+    }
 };
