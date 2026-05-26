@@ -11,6 +11,8 @@ import { ChannelService } from '../services/channels.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { randomUUID } from 'crypto';
 import { authenticate } from '../middleware/auth.js';
+import * as schema from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
@@ -29,7 +31,21 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       return reply.code(422).send(error('VALIDATION_ERROR', 'Invalid input', parsed.error.flatten()));
     }
     const data = parsed.data;
-    const agentId = (request as any).agentId ?? 'agt_dev';
+    const agentId = (request as any).agentId;
+    
+    // If no agentId (JWT auth doesn't set one), look up the first agent for this user's org
+    if (!agentId) {
+      const currentOrgId = (request as any).orgId;
+      const agentsList = await db.select({ id: schema.agents.id, principalId: schema.agents.principalId })
+        .from(schema.agents)
+        .where(eq(schema.agents.orgId, currentOrgId as any))
+        .limit(1);
+      if (agentsList.length === 0) {
+        return reply.code(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'No agents registered in this organization. Create one in the Agent Factory first.'));
+      }
+      (request as any).agentId = agentsList[0].id;
+      (request as any).principalId = agentsList[0].principalId;
+    }
 
     // Resolve principal from agent
     const agent = await agentSvc.getById(agentId);

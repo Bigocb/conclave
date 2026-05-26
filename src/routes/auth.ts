@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
-import { users, organizations, organizationMembers, principals } from '../db/schema.js';
+import { users, organizations, organizationMembers, principals, agents } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -56,6 +56,20 @@ export async function authRoutes(fastify: FastifyInstance) {
         roles: JSON.stringify(['general-reviewer']),
         capabilities: JSON.stringify([]),
         metadata: JSON.stringify({}),
+        status: 'active',
+      });
+
+      // Auto-create a default agent so the user can submit tasks immediately
+      const agentId = `agt_${uuidv7()}`;
+      const agentToken = `clv_${uuidv7().replace(/-/g, '')}`;
+      await tx.insert(agents).values({
+        id: agentId,
+        principalId,
+        orgId: oId,
+        name: `${fullName || email}'s Agent`,
+        token: agentToken,
+        model: 'gpt-4o',
+        provider: 'openai',
         status: 'active',
       });
 

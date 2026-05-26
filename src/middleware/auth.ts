@@ -60,5 +60,30 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   request.user = user;
   request.orgId = decoded.orgId || defaultOrgId;
 
+  // Look up first agent for this user's principal so tasks can be submitted
+  try {
+    const principalId = (user as any)?.id ? await getDefaultPrincipalId(user.id, decoded.orgId || defaultOrgId) : null;
+    if (principalId) {
+      const agent = await db.query.agents.findFirst({
+        where: eq(agents.principalId, principalId as any),
+      });
+      if (agent) {
+        (request as any).agentId = agent.id;
+        (request as any).principalId = agent.principal_id;
+      }
+    }
+  } catch (e) {
+    // Non-fatal — some routes may not need agentId
+  }
+
   return decoded;
+}
+
+async function getDefaultPrincipalId(userId: string, orgId: string): Promise<string | null> {
+  const { principals } = await import('../db/schema.js');
+  const { eq } = await import('drizzle-orm');
+  const principal = await db.query.principals.findFirst({
+    where: eq(principals.orgId, orgId as any),
+  });
+  return principal?.id || null;
 }
