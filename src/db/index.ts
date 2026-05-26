@@ -133,6 +133,8 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       created_at TEXT NOT NULL,
       updated_at TEXT
     )`;
+    // DB migrations for new columns
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES clv_users(id)`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
