@@ -99,6 +99,19 @@ export class VaultService {
     if (!record) return null;
     return this.decrypt(record.encryptedValue);
   }
+
+  /**
+   * Lists all provider keys stored for an organization
+   */
+  async listKeys(orgId: string) {
+    const keys = await this.dbInstance.query.orgVault.findMany({
+      where: (vault: any, { eq }: any) => eq(vault.orgId, orgId),
+    });
+    return keys.map(k => ({
+      id: k.id,
+      provider: k.provider,
+    }));
+  }
 }
 
 export const vaultService = new VaultService();
