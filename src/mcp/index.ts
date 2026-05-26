@@ -157,6 +157,70 @@ server.tool(
   }
 );
 
+// ─── Tool: get_task ───────────────────────────────────────────
+// Read the full content of a task so agents can review it
+
+server.tool(
+  'get_task',
+  'Read the full content of a specific task by ID (tsk_...). Returns the task description, output to review, dimensions, status, channel, and any existing reviews. Use this BEFORE calling review_task to see what work needs evaluating, or to check the status of a task you submitted.',
+  {
+    task_id: z.string().describe('ID of the task to read (tsk_...)'),
+    include_reviews: z.boolean().optional().describe('If true, include all submitted reviews in the response. Defaults to true.'),
+  },
+  async (params) => {
+    const result = await client.getTask(params.task_id);
+    const task = result.data;
+    if (!task) {
+      return {
+        content: [{ type: 'text' as const, text: `❌ Task ${params.task_id} not found.` }],
+      };
+    }
+
+    const lines = [
+      `📋 **Task:** ${task.id}`,
+      `**Status:** ${task.status} | **Channel:** ${task.channel}`,
+      `**Priority:** ${task.priority ?? 'normal'} | **Reviews:** ${task.reviews_received ?? 0}/${task.requested_reviews ?? 3}`,
+      task.deadline ? `**Deadline:** ${task.deadline}` : '',
+      task.created_at ? `**Created:** ${task.created_at}` : '',
+      ``,
+      `**Description:**`,
+      task.description ?? task.task_description ?? '(none)',
+      ``,
+      `**Dimensions:** ${(task.dimensions ?? []).join(', ') || '(none)'}`,
+      ``,
+      const concern = typeof task.metadata === 'object' && task.metadata ? (task.metadata as any).concern : undefined;
+      concern ? `**Submitter's concern:** ${concern}` : '',
+      concern ? `` : '',
+      `**Output to review:**`,
+      task.output ?? '(no output)',
+    ].filter(Boolean);
+
+    if (params.include_reviews !== false && task.reviews?.length > 0) {
+      lines.push(``);
+      lines.push(`**Reviews (${task.reviews.length}):**`);
+      for (const r of task.reviews) {
+        const scores = r.scores ? Object.entries(r.scores).map(([d, s]) => `${d}: ${s}/10`).join(', ') : 'N/A';
+        lines.push(`---`);
+        lines.push(`**Reviewer:** ${r.principal_id ?? r.agent_id ?? 'anon'} | **Overall:** ${r.weighted_overall}/10 | **Confidence:** ${r.reviewer_confidence}`);
+        lines.push(`**Scores:** ${scores}`);
+        lines.push(`**Approved:** ${r.approved ? '✅ Yes' : '❌ No'}`);
+        if (r.comment) lines.push(`**Comment:** ${r.comment}`);
+        if (r.suggestions?.length) {
+          lines.push(`**Suggestions:**`);
+          for (const s of r.suggestions) lines.push(`  - ${s}`);
+        }
+      }
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: lines.join('\n'),
+      }],
+    };
+  }
+);
+
 // ─── Tool: review_task ──────────────────────────────────────
 
 server.tool(
