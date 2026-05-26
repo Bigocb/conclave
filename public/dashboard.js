@@ -251,7 +251,7 @@ function getChannelName(btn) {
 }
 
 async function subPrincipal(channelName) {
-    const selectId = `sub-principal-${channelName.replace(/[^a-z0-9]/gi,'_')}`;
+    const selectId = `sub-sel-${channelName.replace(/[^a-z0-9]/gi,'_')}`;
     const sel = document.getElementById(selectId);
     const principalId = sel?.value;
     if (!principalId) return alert('Select a principal first.');
