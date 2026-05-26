@@ -209,4 +209,22 @@ export async function agentRoutes(fastify: FastifyInstance) {
     return reply.send(success({ channels: subs.map((s: any) => s.channelName) }));
   });
 
+  // POST /v1/agents/:id/regenerate-token — Generate a new clv_ token for an agent
+  fastify.post('/agents/:id/regenerate-token', async (request, reply) => {
+    const { id } = request.params as any;
+    const agent = await agentService.getById(id);
+    if (!agent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+
+    // Org isolation
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || agent.org_id !== currentOrgId) {
+      return reply.status(403).send(error('FORBIDDEN', 'This agent belongs to a different organization'));
+    }
+
+    const newToken = `clv_${crypto.randomUUID().replace(/-/g, '').slice(0, 32)}`;
+    await agentService.update(id, { token: newToken } as any);
+    return reply.send(success({ agent_id: id, token: newToken }));
+  });
 }

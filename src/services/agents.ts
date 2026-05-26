@@ -60,7 +60,7 @@ export class AgentService {
     return this.formatAgent(rows[0]);
   }
 
-  async update(id: string, data: { name?: string; type?: string; model?: string; provider?: string; llm_url?: string; command?: string; instructions?: string; skills?: string[] }) {
+  async update(id: string, data: { name?: string; type?: string; model?: string; provider?: string; llm_url?: string; command?: string; instructions?: string; skills?: string[]; token?: string }) {
     const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (data.name) updates.name = data.name;
     if (data.type !== undefined) updates.type = data.type;
@@ -70,6 +70,7 @@ export class AgentService {
     if (data.command !== undefined) updates.command = data.command;
     if (data.instructions !== undefined) updates.instructions = data.instructions;
     if (data.skills !== undefined) updates.skills = JSON.stringify(data.skills);
+    if (data.token !== undefined) updates.token = data.token;
 
     await this.db.update(schema.agents).set(updates).where(eq(schema.agents.id, id));
     return this.getById(id);

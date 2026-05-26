@@ -585,15 +585,21 @@ async function refreshFactory() {
     try {
         const data = await apiRequest('/v1/agents');
         const agents = data.data || [];
-        list.innerHTML = agents.length ? '' : '<tr><td colspan="5" class="p-8 text-center text-gray-500">No agents registered.</td></tr>';
+        list.innerHTML = agents.length ? '' : '<tr><td colspan="6" class="p-8 text-center text-gray-500">No agents registered.</td></tr>';
         agents.forEach(agent => {
+            const owner = STATE.principals.find(p => p.id === agent.principal_id);
+            const ownerName = owner ? owner.name : (agent.principal_id ? agent.principal_id.slice(0,16)+'...' : '-');
             list.innerHTML += `
                 <tr class="border-b border-[#1e2d4a] hover:bg-white/5 transition-all">
                     <td class="p-4 font-medium">${agent.name}</td>
                     <td class="p-4 text-sm text-gray-400">${agent.provider || 'custom'}/${agent.model || 'unknown'}</td>
+                    <td class="p-4 text-xs text-gray-500 font-mono">${ownerName}</td>
                     <td class="p-4 text-xs ${agent.status === 'active' ? 'text-green-400' : 'text-red-400'}">${agent.status}</td>
                     <td class="p-4 font-mono text-xs text-gray-500">${agent.id}</td>
-                    <td class="p-4 text-right"><button onclick="decommissionAgent('${agent.id}')" class="text-xs text-red-500 hover:text-red-400">Decommission</button></td>
+                    <td class="p-4 text-right space-x-2">
+                        <button onclick="editAgent('${agent.id}')" class="text-xs text-cyan-400 hover:text-cyan-300">Edit</button>
+                        <button onclick="decommissionAgent('${agent.id}')" class="text-xs text-red-500 hover:text-red-400">Decommission</button>
+                    </td>
                 </tr>`;
         });
     } catch (e) { console.error('Factory refresh failed', e); }
@@ -605,6 +611,61 @@ async function decommissionAgent(id) {
         await apiRequest(`/v1/agents/${id}`, 'DELETE');
         refreshFactory();
     } catch (e) { alert('Failed to decommission'); }
+}
+
+// ─── Agent Edit / Token Management ─────────────────────────────
+
+function toggleEditAgentModal(show) {
+    document.getElementById('edit-agent-modal').classList.toggle('hidden', !show);
+}
+
+async function editAgent(agentId) {
+    try {
+        const data = await apiRequest(`/v1/agents/${agentId}`);
+        const agent = data.data;
+        document.getElementById('edit-agent-id').value = agent.id;
+        document.getElementById('edit-agent-name').value = agent.name || '';
+        document.getElementById('edit-agent-provider').value = agent.provider || '';
+        document.getElementById('edit-agent-model').value = agent.model || '';
+        document.getElementById('edit-agent-instructions').value = agent.instructions || '';
+        document.getElementById('edit-agent-token').value = '••••••••••••••••';
+        toggleEditAgentModal(true);
+    } catch (e) {
+        alert('Failed to load agent: ' + e.message);
+    }
+}
+
+async function saveEditAgent() {
+    const agentId = document.getElementById('edit-agent-id').value;
+    const payload = {
+        name: document.getElementById('edit-agent-name').value,
+        provider: document.getElementById('edit-agent-provider').value,
+        model: document.getElementById('edit-agent-model').value,
+        instructions: document.getElementById('edit-agent-instructions').value,
+    };
+    try {
+        await apiRequest(`/v1/agents/${agentId}`, 'PATCH', payload);
+        toggleEditAgentModal(false);
+        refreshFactory();
+    } catch (e) {
+        alert('Failed to save: ' + e.message);
+    }
+}
+
+async function regenerateAgentToken() {
+    const agentId = document.getElementById('edit-agent-id').value;
+    if (!confirm('Regenerate token? The old token will stop working immediately.')) return;
+    try {
+        const data = await apiRequest(`/v1/agents/${agentId}/regenerate-token`, 'POST');
+        const newToken = data.data?.token;
+        if (newToken) {
+            document.getElementById('edit-agent-token').value = newToken;
+            document.getElementById('edit-agent-token').type = 'text';
+            alert(`New token: ${newToken}\n\nCopy this now — it won't be shown again after closing.`);
+        }
+    } catch (e) {
+        alert('Failed to regenerate token: ' + e.message);
+    }
 }
 
 // ─── Event Wiring ──────────────────────────────────────────────
