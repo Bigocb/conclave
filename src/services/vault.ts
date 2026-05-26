@@ -104,13 +104,18 @@ export class VaultService {
    * Lists all provider keys stored for an organization
    */
   async listKeys(orgId: string) {
-    const keys = await this.dbInstance.query.orgVault.findMany({
-      where: (vault: any, { eq }: any) => eq(vault.orgId, orgId),
-    });
-    return keys.map((k: any) => ({
-      id: k.id,
-      provider: k.provider,
-    }));
+    try {
+      const keys = await this.dbInstance.query.orgVault.findMany({
+        where: (vault: any, { eq }: any) => eq(vault.orgId, orgId),
+      });
+      return keys.map((k: any) => ({
+        id: k.id,
+        provider: k.provider,
+      }));
+    } catch (e) {
+      console.error(`[VaultService] Error listing keys for org ${orgId}:`, e);
+      throw e;
+    }
   }
 }
 

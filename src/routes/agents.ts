@@ -21,6 +21,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
     fastify.post('/agents/register', async (request, reply) => {
     const parse = RegisterAgentSchema.safeParse(request.body);
     if (!parse.success) {
+      console.error('[Agent Registration] Validation Error:', JSON.stringify(parse.error.format()));
       return reply.status(422).send(error('VALIDATION_ERROR', parse.error.issues.map(i => i.message).join(', ')));
     }
     const data = parse.data;
