@@ -16,18 +16,26 @@ export class AuthService {
     return bcrypt.compare(password, hash);
   }
 
+  private getSecret(): string {
+    const secret = process.env.CONCLAVE_JWT_SECRET;
+    if (!secret && process.env.NODE_ENV === 'production') {
+      throw new Error('CRITICAL: CONCLAVE_JWT_SECRET is not defined in production environment');
+    }
+    return secret || 'conclave-dev-secret';
+  }
+
   async generateToken(userId: string, orgId?: string): Promise<string> {
     const payload = {
       sub: userId,
       orgId: orgId,
       iat: Math.floor(Date.now() / 1000),
     };
-    return jwt.sign(payload, process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret', { expiresIn: '7d' });
+    return jwt.sign(payload, this.getSecret(), { expiresIn: '7d' });
   }
 
   async verifyToken(token: string) {
     try {
-      return jwt.verify(token, process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret') as { sub: string; orgId?: string };
+      return jwt.verify(token, this.getSecret()) as { sub: string; orgId?: string };
     } catch (e) {
       return null;
     }
