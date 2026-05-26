@@ -6,9 +6,9 @@
 
 interface ConclaveConfig {
   serverUrl: string;  // e.g. http://localhost:3000
-  principalId: string; // e.g. prn_dev
-  agentId?: string;    // e.g. agt_dev (optional, defaults to first agent under principal)
-  token?: string;      // auth token (optional in local mode)
+  principalId?: string; // optional — token resolves it server-side
+  agentId?: string;    // optional — token resolves it server-side
+  token?: string;      // auth token (clv_ for agent, JWT for user)
 }
 
 interface ApiResponse {
@@ -19,8 +19,8 @@ interface ApiResponse {
 
 export class ConclaveApiClient {
   private baseUrl: string;
-  private principalId: string;
-  private agentId: string;
+  private principalId?: string;
+  private agentId?: string;
   private token?: string;
 
   constructor(configOrUrl: ConclaveConfig | string, principalId?: string) {
@@ -32,7 +32,7 @@ export class ConclaveApiClient {
     } else {
       this.baseUrl = configOrUrl.serverUrl.replace(/\/$/, '');
       this.principalId = configOrUrl.principalId;
-      this.agentId = configOrUrl.agentId ?? 'agt_dev';
+      this.agentId = configOrUrl.agentId;
       this.token = configOrUrl.token;
     }
   }
@@ -46,10 +46,12 @@ export class ConclaveApiClient {
     const url = `${this.baseUrl}/v1${path}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Agent-Id': this.agentId,
     };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.agentId) {
+      headers['X-Agent-Id'] = this.agentId;
     }
 
     let res: Response;

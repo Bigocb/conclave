@@ -39,16 +39,11 @@ function parseArgs(argv: string[]): Record<string, string> {
 
 const cliArgs = parseArgs(process.argv);
 const serverUrl = cliArgs.server ?? 'http://localhost:3000';
-const principalId = cliArgs.principal ?? 'prn_dev';
-const agentId = cliArgs.agent ?? 'agt_dev';
 const token = cliArgs.token;
 
-// ─── Create API client ──────────────────────────────────────
-
+// Create API client WITHOUT hardcoded principal/agent — token resolves everything server-side
 const client = new ConclaveApiClient({
   serverUrl,
-  principalId,
-  agentId,
   token,
 });
 
