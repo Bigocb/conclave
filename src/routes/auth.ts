@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
-import { users, organizations, organizationMembers, principals, agents } from '../db/schema.js';
+import { users, organizations, organizationMembers, principals, agents, attentionBudgets } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -57,6 +57,14 @@ export async function authRoutes(fastify: FastifyInstance) {
         capabilities: JSON.stringify([]),
         metadata: JSON.stringify({}),
         status: 'active',
+      });
+
+      // Auto-create a default budget row for the principal
+      await tx.insert(attentionBudgets).values({
+        principalId,
+        earned: 100,
+        spent: 0,
+        earnRate: 5,
       });
 
       // Auto-create a default agent so the user can submit tasks immediately
