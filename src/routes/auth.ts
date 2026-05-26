@@ -25,9 +25,6 @@ export async function authRoutes(fastify: FastifyInstance) {
     const passwordHash = await authService.hashPassword(password);
     const userId = `usr_${uuidv7()}`;
 
-    // Ensure owner_id column exists before INSERT (handles stale DB schema)
-    await db.execute(`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT`).catch(() => {});
-
     const { newUser, orgId } = await db.transaction(async (tx) => {
       const user = await tx.insert(users).values({
         id: userId,

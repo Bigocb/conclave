@@ -31,6 +31,14 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
   await client`SELECT 1`;
   console.log('[initDb] PostgreSQL connected');
 
+  // Critical migrations — must run BEFORE the DDL block which catches errors broadly
+  try {
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT`;
+    console.log('[initDb] owner_id column ensured');
+  } catch (mErr: any) {
+    console.warn('[initDb] owner_id migration:', mErr.message);
+  }
+
   try {
     console.log('[initDb] Ensuring tables exist...');
     // Must be created first — FK target for organizations.owner_id
