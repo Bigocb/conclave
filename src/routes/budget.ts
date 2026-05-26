@@ -4,6 +4,7 @@
 
 import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import { BudgetService } from '../services/budget.js';
+import { PrincipalService } from '../services/principals.js';
 import { AgentService } from '../services/agents.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 
@@ -42,8 +43,8 @@ export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     const orgId: string = currentOrgId;
 
     if (!amount || amount <= 0) return reply.code(422).send(error('VALIDATION_ERROR', 'Amount must be positive'));
-    const imported = await import('../services/principals.js');
-    const principal = await (new imported.PrincipalService(this.db)).getById(id);
+    const principalSvc = new PrincipalService(this.db);
+    const principal = await principalSvc.getById(id);
     if (!principal || !principal.org_id || principal.org_id !== orgId) return reply.code(404).send(error('PRINCIPAL_NOT_FOUND', 'Principal not found'));
 
     await budgetSvc.earn(id, amount, reason || 'manual_grant');
