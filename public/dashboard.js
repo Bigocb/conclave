@@ -394,9 +394,16 @@ async function viewTaskDetail(taskId) {
                 <span class="text-xs font-bold px-2 py-1 rounded ${task.status === 'completed' ? 'bg-green-500/20 text-green-400' : task.status === 'in_review' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'} uppercase">${task.status}</span>
                 <span class="text-xs text-gray-500">Channel: ${task.channel}</span>
                 <span class="text-xs text-gray-500">· ${task.requested_reviews || 0} requested</span>
+                ${task.priority && task.priority !== 'normal' ? `<span class="text-xs text-yellow-400">· ${task.priority}</span>` : ''}
             </div>
-            <p class="text-sm text-gray-300 mb-2">${task.description || task.input || ''}</p>
-            ${task.output ? `<pre class="text-xs bg-[#131a2b] rounded-lg p-4 overflow-x-auto text-gray-400 font-mono">${task.output.slice(0, 1000)}${task.output.length > 1000 ? '...' : ''}</pre>` : ''}
+            ${task.dimensions && task.dimensions.length > 0 ? `
+            <div class="flex flex-wrap gap-1 mb-3">
+                ${task.dimensions.map(d => `<span class="text-[10px] px-2 py-0.5 bg-green-500/10 text-green-400 rounded border border-green-500/30">${d}</span>`).join('')}
+            </div>` : ''}
+            <p class="text-sm text-gray-300 mb-2">${task.description || task.input || task.task_description || ''}</p>
+            ${task.output ? `<pre class="text-xs bg-[#131a2b] rounded-lg p-4 overflow-x-auto text-gray-400 font-mono whitespace-pre-wrap">${task.output.slice(0, 5000)}${task.output.length > 5000 ? '\n... (truncated)' : ''}</pre>` : ''}
+            ${task.deadline ? `<p class="text-xs text-gray-500 mt-2">⏰ Deadline: ${new Date(task.deadline).toLocaleString()}</p>` : ''}
+            ${task.budget_spent ? `<p class="text-xs text-gray-500 mt-1">Budget spent: ${task.budget_spent}</p>` : ''}
         </div>`;
 
         if (summary) {
@@ -475,6 +482,7 @@ async function refreshTasks() {
                         <span>Channel: ${t.channel || '-'}</span>
                         <span>Reviews: ${t.reviews_received || 0}/${t.requested_reviews || '-'}</span>
                     </div>
+                    ${t.dimensions && t.dimensions.length > 0 ? `<div class="flex flex-wrap gap-1 mt-2">${t.dimensions.map(d => `<span class="text-[10px] px-1.5 py-0.5 bg-green-500/10 text-green-400 rounded">${d}</span>`).join('')}</div>` : ''}
                 </div>`;
         });
     } catch (e) {
