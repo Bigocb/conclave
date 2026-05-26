@@ -31,7 +31,25 @@ export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     reply.send(success({ agent_id: id, ...budget, history }));
   });
 
-  // GET /v1/principals/:id/budget — Get budget for principal (defined in principal routes)
+  // GET /v1/principals/:id/budget — Get principal budget (defined in principal routes)
+
+  // POST /v1/principals/:id/budget/grant — Manually add budget to a principal
+  fastify.post('/principals/:id/budget/grant', async (request: any, reply) => {
+    const { id } = request.params as { id: string };
+    const { amount, reason } = request.body as { amount: number; reason?: string };
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId) return reply.code(403).send(error('FORBIDDEN', 'No org context'));
+    const orgId: string = currentOrgId;
+
+    if (!amount || amount <= 0) return reply.code(422).send(error('VALIDATION_ERROR', 'Amount must be positive'));
+    const imported = await import('../services/principals.js');
+    const principal = await (new imported.PrincipalService(this.db)).getById(id);
+    if (!principal || !principal.org_id || principal.org_id !== orgId) return reply.code(404).send(error('PRINCIPAL_NOT_FOUND', 'Principal not found'));
+
+    await budgetSvc.earn(id, amount, reason || 'manual_grant');
+    const budget = await budgetSvc.getByPrincipal(id);
+    reply.send(success({ granted: amount, new_balance: budget }));
+  });
 
   done();
 };

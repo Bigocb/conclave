@@ -105,6 +105,7 @@ function switchView(viewId) {
     if (viewId === 'org') refreshOrg();
     if (viewId === 'vault') refreshVault();
     if (viewId === 'tasks') refreshTasks();
+    if (viewId === 'factory') refreshFactory();
 }
 
 // ─── Fleet (Principals View) ───────────────────────────────────
@@ -401,6 +402,10 @@ async function viewTaskDetail(taskId) {
                 ${task.dimensions.map(d => `<span class="text-[10px] px-2 py-0.5 bg-green-500/10 text-green-400 rounded border border-green-500/30">${d}</span>`).join('')}
             </div>` : ''}
             <p class="text-sm text-gray-300 mb-2">${task.description || task.input || task.task_description || ''}</p>
+            ${task.metadata?.concern ? `<div class="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <p class="text-[10px] font-bold text-yellow-400 uppercase mb-1">Area of Concern</p>
+                <p class="text-xs text-yellow-300">${task.metadata.concern}</p>
+            </div>` : ''}
             ${task.output ? `<pre class="text-xs bg-[#131a2b] rounded-lg p-4 overflow-x-auto text-gray-400 font-mono whitespace-pre-wrap">${task.output.slice(0, 5000)}${task.output.length > 5000 ? '\n... (truncated)' : ''}</pre>` : ''}
             ${task.deadline ? `<p class="text-xs text-gray-500 mt-2">⏰ Deadline: ${new Date(task.deadline).toLocaleString()}</p>` : ''}
             ${task.budget_spent ? `<p class="text-xs text-gray-500 mt-1">Budget spent: ${task.budget_spent}</p>` : ''}
@@ -510,16 +515,28 @@ async function refreshOrg() {
 
     const principals = STATE.principals;
     let principalsHtml = '';
-    STATE.principals.forEach(p => {
+    for (const p of STATE.principals) {
+        // Fetch budget for each principal
+        let budgetStr = '—';
+        try {
+            const bData = await apiRequest(`/v1/principals/${p.id}/budget`);
+            const b = bData.data;
+            if (b) budgetStr = `${b.available || 0} (${b.earned || 0}e/${b.spent || 0}s)`;
+        } catch (e) { /* no budget yet */ }
+
         principalsHtml += `
             <div class="flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg">
-                <div>
+                <div class="flex-1">
                     <span class="font-mono text-sm text-green-400">${p.name}</span>
                     <span class="text-xs text-gray-500 ml-2">${p.id}</span>
                 </div>
-                <span class="text-[10px] text-gray-500 uppercase">${p.roles ? (Array.isArray(p.roles) ? p.roles.join(', ') : typeof p.roles === 'string' ? JSON.parse(p.roles).join(', ') : 'general-reviewer') : 'general-reviewer'}</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-[10px] text-gray-500 uppercase">${p.roles ? (Array.isArray(p.roles) ? p.roles.join(', ') : typeof p.roles === 'string' ? JSON.parse(p.roles).join(', ') : 'general-reviewer') : 'general-reviewer'}</span>
+                    <span class="text-xs font-mono text-yellow-400" title="Budget: available (earned/spent)">${budgetStr}</span>
+                    <button onclick="showGrantBudgetModal('${p.id}','${p.name}')" class="text-[10px] px-2 py-0.5 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all">+Budget</button>
+                </div>
             </div>`;
-    });
+    }
 
     details.innerHTML = `
         <div class="flex items-center justify-between mb-6">
@@ -633,7 +650,7 @@ async function editAgent(agentId) {
         const agent = data.data;
         document.getElementById('edit-agent-id').value = agent.id;
         document.getElementById('edit-agent-name').value = agent.name || '';
-        document.getElementById('edit-agent-provider').value = agent.provider || '';
+        populateProviderSelect('edit-agent-provider', agent.provider || 'ollama');
         document.getElementById('edit-agent-model').value = agent.model || '';
         document.getElementById('edit-agent-instructions').value = agent.instructions || '';
         document.getElementById('edit-agent-token').value = '••••••••••••••••';
@@ -676,7 +693,86 @@ async function regenerateAgentToken() {
     }
 }
 
-// ─── Event Wiring ──────────────────────────────────────────────
+// ─── Budget Management ─────────────────────────────────────────
+
+function showGrantBudgetModal(principalId, principalName) {
+    document.getElementById('grant-principal-id').value = principalId;
+    document.getElementById('grant-principal-name').innerText = principalName;
+    document.getElementById('grant-amount').value = '';
+    document.getElementById('grant-reason').value = '';
+    document.getElementById('grant-budget-modal').classList.remove('hidden');
+}
+
+function hideGrantBudgetModal() {
+    document.getElementById('grant-budget-modal').classList.add('hidden');
+}
+
+async function grantBudget() {
+    const principalId = document.getElementById('grant-principal-id').value;
+    const amount = parseInt(document.getElementById('grant-amount').value);
+    const reason = document.getElementById('grant-reason').value || 'manual_grant';
+    if (!amount || amount <= 0) return alert('Enter a positive amount.');
+    try {
+        await apiRequest(`/v1/principals/${principalId}/budget/grant`, 'POST', { amount, reason });
+        hideGrantBudgetModal();
+        refreshOrg();
+    } catch (e) { alert('Grant failed: ' + e.message); }
+}
+
+// ─── Provider / Model Helpers ──────────────────────────────────
+
+let STATE_PROVIDERS = [];
+
+async function loadProviders() {
+    try {
+        const data = await apiRequest('/v1/providers');
+        STATE_PROVIDERS = data.data?.providers || [];
+    } catch (e) { console.warn('Failed to load providers', e); }
+}
+
+async function loadProviderModels(provider, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Loading models...</option>';
+    sel.disabled = true;
+    try {
+        const data = await apiRequest(`/v1/providers/${provider}/models`);
+        const models = data.data || [];
+        sel.innerHTML = '<option value="">Select model...</option>';
+        models.forEach(m => {
+            sel.innerHTML += `<option value="${m.id}">${m.id}</option>`;
+        });
+    } catch (e) {
+        sel.innerHTML = '<option value="">No models available</option>';
+    }
+    sel.disabled = false;
+}
+
+async function onProviderChange(providerSelectId, modelSelectId) {
+    const provider = document.getElementById(providerSelectId)?.value;
+    const modelSel = document.getElementById(modelSelectId);
+    if (!modelSel) return;
+    if (provider) {
+        await loadProviderModels(provider, modelSelectId);
+    } else {
+        modelSel.innerHTML = '<option value="">Custom</option>';
+        modelSel.disabled = false;
+    }
+}
+
+function populateProviderSelect(selectId, defaultVal) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Custom URL</option>';
+    STATE_PROVIDERS.forEach(p => {
+        sel.innerHTML += `<option value="${p.name}" ${p.name === defaultVal ? 'selected' : ''}>${p.name}</option>`;
+    });
+    // Default to ollama
+    if (!defaultVal) {
+        const opt = sel.querySelector('option[value="ollama"]');
+        if (opt) opt.selected = true;
+    }
+}
 
 document.getElementById('principal-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -713,6 +809,10 @@ window.onload = async () => {
     if (!STATE.token) showAuth();
     else {
         await loadPrincipals();
+        await loadProviders();
+        populateProviderSelect('fact-provider', 'ollama');
+        // Load models for default ollama selection
+        await loadProviderModels('ollama', 'fact-model');
         switchView('fleet');
     }
 };

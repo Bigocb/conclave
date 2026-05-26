@@ -132,6 +132,7 @@ server.tool(
       output: params.output,
       channel: params.channel,
       requested_reviews: 3,
+      metadata: params.what_worries_you ? { concern: params.what_worries_you } : undefined,
     });
 
     const task = result.data;
