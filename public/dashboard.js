@@ -165,7 +165,6 @@ async function refreshFleet() {
 }
 
 function managePrincipalSubs(principalId, name) {
-    // Switch to channels view and auto-refresh
     switchView('channels');
 }
 
@@ -184,7 +183,6 @@ async function refreshChannels() {
         return;
     }
 
-    // For each channel, get subscribers
     let html = '';
     for (const ch of channels) {
         const name = ch.name || ch;
@@ -194,10 +192,8 @@ async function refreshChannels() {
             subs = sData.data?.subscribers || [];
         } catch (e) { /* no subs */ }
 
-        const subPrincipalIds = subs.map((s) => s.principal_id || s);
-        const dimensions = ch.default_dimensions
-            ? (Array.isArray(ch.default_dimensions) ? ch.default_dimensions : JSON.parse(ch.default_dimensions || '[]'))
-            : [];
+        const subIds = subs.map(s => s.principalId || s.principal_id || s);
+        const dimensions = ch.default_dimensions || [];
 
         html += `
         <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6">
@@ -207,26 +203,38 @@ async function refreshChannels() {
                 </div>
                 <div>
                     <h3 class="font-bold text-lg">${name}</h3>
-                    <p class="text-xs text-gray-500">${ch.description || 'No description'}</p>
+                    <p class="text-xs text-gray-500">${ch.description || ''}</p>
                 </div>
             </div>
             ${dimensions.length > 0 ? `<div class="flex flex-wrap gap-1 mb-4">${dimensions.map(d => `<span class="text-[10px] px-2 py-0.5 bg-white/5 rounded border border-white/10 text-gray-400">${d}</span>`).join('')}</div>` : ''}
             <div class="border-t border-[#1e2d4a] pt-4">
                 <p class="text-xs font-bold text-gray-500 uppercase mb-2">Subscribed Principals</p>
                 ${subs.length === 0 ? '<p class="text-xs text-gray-500">No principals subscribed yet.</p>' :
-                subs.map(s => `
-                    <div class="flex justify-between items-center py-1.5">
-                        <span class="text-xs font-mono text-green-400">${s.principal_id || s}</span>
-                        <button onclick="unsubPrincipal('${s.principal_id || s}','${name}')" class="text-[10px] text-red-500 hover:text-red-400">Unsub</button>
-                    </div>
-                `).join('')}
+                subs.map(s => {
+                    const pid = s.principalId || s.principal_id || s;
+                    const pName = STATE.principals.find(p => p.id === pid)?.name || pid.slice(0, 16)+'...';
+                    return `
+                    <div class="flex justify-between items-center py-1.5 border-b border-[#1e2d4a]/50 last:border-0">
+                        <div>
+                            <span class="text-xs font-mono text-green-400">${pName}</span>
+                            <span class="text-[10px] text-gray-500 ml-2">${pid.slice(0, 12)}...</span>
+                        </div>
+                        <button onclick="unsubPrincipal('${pid}','${name}')" class="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">Unsub</button>
+                    </div>`;
+                }).join('')}
                 ${STATE.principals.length > 0 ? `
-                <div class="mt-3 border-t border-[#1e2d4a] pt-3">
-                    <select id="sub-principal-${name.replace(/[^a-z0-9]/gi,'_')}" class="w-full text-xs bg-[#131a2b] border border-[#1e2d4a] p-2 rounded text-white outline-none mb-2">
-                        <option value="">Select principal...</option>
-                        ${STATE.principals.filter(p => !subPrincipalIds.includes(p.id)).map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                    </select>
-                    <button onclick="subPrincipal('${name}')" class="w-full text-xs bg-green-500 hover:bg-cyan-400 text-black font-bold px-3 py-1.5 rounded-lg transition-all">Subscribe</button>
+                <div class="mt-3 pt-3 border-t border-[#1e2d4a]">
+                    <div class="flex gap-2">
+                        <select id="sub-sel-${name.replace(/[^a-z0-9]/gi,'_')}" class="flex-1 text-xs bg-[#131a2b] border border-[#1e2d4a] p-2 rounded text-white outline-none">
+                            <option value="">Select principal...</option>
+                            ${STATE.principals.map(p => {
+                                const already = subIds.includes(p.id);
+                                const disabled = already ? 'disabled' : '';
+                                return `<option value="${p.id}" ${disabled}>${p.name}${already ? ' (subscribed)' : ''}</option>`;
+                            }).join('')}
+                        </select>
+                        <button onclick="subPrincipal('${name}')" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-3 py-1 rounded-lg text-xs transition-all">+ Sub</button>
+                    </div>
                 </div>` : ''}
             </div>
         </div>`;

@@ -201,16 +201,33 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       await client`INSERT INTO clv_attention_budgets (principal_id, earned, spent, earn_rate, last_earn_at) 
         VALUES (${devPrnId}, 100, 0, 5, ${now}) 
         ON CONFLICT DO NOTHING`;
-      await client`INSERT INTO clv_channels (id, name, description, created_at) 
-        VALUES ('ch_general_qa', 'general-qa', 'General Q&A review channel', ${now}) 
+      await client`INSERT INTO clv_channel_subscriptions (principal_id, channel_id, subscribed_at) 
+        VALUES (${devPrnId}, 'ch_code_review', ${now}) 
         ON CONFLICT DO NOTHING`;
       await client`INSERT INTO clv_channel_subscriptions (principal_id, channel_id, subscribed_at) 
-        VALUES (${devPrnId}, 'ch_general_qa', ${now}) 
+        VALUES (${devPrnId}, 'ch_arch', ${now}) 
         ON CONFLICT DO NOTHING`;
-      console.log('[initDb] Dev environment seeded (org_dev, prn_dev, agt_dev, general-qa)');
+      console.log('[initDb] Dev environment seeded (org_dev, prn_dev, agt_dev, dev subs)');
     } else {
-      console.log('[initDb] Organizations already exist, skipping seed');
+      console.log('[initDb] Organizations already exist, skipping full seed');
     }
+
+    // Always seed channels — they're the routing backbone
+    console.log('[initDb] Seeding channels...');
+    const standardChannels = [
+      { id: 'ch_code_review', name: 'code-review', description: 'Code correctness, efficiency, readability, security' },
+      { id: 'ch_arch', name: 'architecture', description: 'System design, scalability, maintainability' },
+      { id: 'ch_general_qa', name: 'general-qa', description: 'General Q&A review' },
+      { id: 'ch_fact_check', name: 'fact-check', description: 'Accuracy and sourcing verification' },
+      { id: 'ch_security', name: 'security-review', description: 'Security vulnerabilities and threats' },
+      { id: 'ch_creative', name: 'creative', description: 'Creative work and content review' },
+    ];
+    for (const ch of standardChannels) {
+      await client`INSERT INTO clv_channels (id, name, description, created_at)
+        VALUES (${ch.id}, ${ch.name}, ${ch.description}, ${new Date().toISOString()})
+        ON CONFLICT (name) DO NOTHING`;
+    }
+    console.log(`[initDb] ${standardChannels.length} channels seeded`);
   } catch (seedErr: any) {
     console.error('[initDb] Seed failed (non-fatal):', seedErr.message);
   }

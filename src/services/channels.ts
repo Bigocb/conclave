@@ -55,7 +55,10 @@ export class ChannelService {
 
   async unsubscribe(principalId: string, channelId: string) {
     await this.db.delete(schema.channelSubscriptions)
-      .where(eq(schema.channelSubscriptions.principalId, principalId));
+      .where(and(
+        eq(schema.channelSubscriptions.principalId, principalId),
+        eq(schema.channelSubscriptions.channelId, channelId),
+      ));
   }
 
   async getSubscribers(channelId: string) {
