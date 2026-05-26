@@ -19,9 +19,17 @@ export class AuthService {
   private getSecret(): string {
     const secret = process.env.CONCLAVE_JWT_SECRET;
     if (!secret && process.env.NODE_ENV === 'production') {
+      console.error('[AUTH_SECRET_ERROR] CONCLAVE_JWT_SECRET is missing in production!');
       throw new Error('CRITICAL: CONCLAVE_JWT_SECRET is not defined in production environment');
     }
-    return secret || 'conclave-dev-secret';
+    const finalSecret = secret || 'conclave-dev-secret';
+    
+    // Log a hash of the secret to verify consistency across serverless functions
+    // We use a simple slice/hash to avoid leaking the full secret in logs while still detecting mismatches
+    const secretHash = crypto.createHash('sha256').update(finalSecret).digest('hex').slice(0, 8);
+    console.log(`[AUTH_SECRET_ID] Using secret hash: ${secretHash}`);
+    
+    return finalSecret;
   }
 
   async generateToken(userId: string, orgId?: string): Promise<string> {
