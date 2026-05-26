@@ -8,7 +8,7 @@ export async function vaultRoutes(fastify: FastifyInstance) {
   // All vault routes are protected
   fastify.addHook('preHandler', authenticate);
 
-  fastify.post('/v1/vault/key', async (request, reply) => {
+  fastify.post('/vault/key', async (request, reply) => {
     const { provider, key } = request.body as any;
     const orgId = (request as any).orgId;
 
@@ -31,7 +31,18 @@ export async function vaultRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get('/v1/vault/key/:provider', async (request, reply) => {
+  fastify.get('/vault/keys', async (request, reply) => {
+    const orgId = (request as any).orgId;
+    if (!orgId) return reply.status(403).send({ error: 'No active organization context' });
+    try {
+      const keys = await vault.listKeys(orgId);
+      return reply.send({ data: keys });
+    } catch (e) {
+      return reply.status(500).send({ error: 'Failed to retrieve keys' });
+    }
+  });
+
+  fastify.get('/vault/key/:provider', async (request, reply) => {
     const { provider } = request.params as any;
     const orgId = (request as any).orgId;
 
