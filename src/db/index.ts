@@ -49,7 +49,6 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     
     await client`CREATE TABLE IF NOT EXISTS clv_organizations (
       id TEXT PRIMARY KEY,
-      owner_id TEXT REFERENCES clv_users(id),
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
       description TEXT,
@@ -161,7 +160,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       updated_at TEXT
     )`;
     // DB migrations for new columns
-    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES clv_users(id)`;
+    await client`ALTER TABLE clv_organizations ADD COLUMN IF NOT EXISTS owner_id TEXT`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS suggestions TEXT`;
