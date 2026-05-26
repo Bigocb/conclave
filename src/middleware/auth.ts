@@ -30,11 +30,11 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     }
 
     (request as any).agentId = agent.id;
-    (request as any).principalId = agent.principal_id;
-    (request as any).orgId = agent.org_id;
-    (request as any).user = { id: agent.principal_id };
+    (request as any).principalId = agent.principalId;
+    (request as any).orgId = agent.orgId;
+    (request as any).user = { id: agent.principalId };
 
-    return { sub: agent.principal_id, orgId: agent.org_id };
+    return { sub: agent.principalId, orgId: agent.orgId };
   }
 
   // Standard JWT user token flow
@@ -69,7 +69,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       });
       if (agent) {
         (request as any).agentId = agent.id;
-        (request as any).principalId = agent.principal_id;
+        (request as any).principalId = agent.principalId;
       }
     }
   } catch (e) {
