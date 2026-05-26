@@ -128,7 +128,7 @@ export class ConclaveApiClient {
       };
     } catch {
       // Fall back to configured IDs when no token or token fails
-      return { agent_id: this.agentId, principal_id: this.principalId, org_id: null };
+      return { agent_id: this.agentId ?? null, principal_id: this.principalId ?? null, org_id: null };
     }
   }
 
