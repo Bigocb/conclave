@@ -183,11 +183,13 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
   // GET /v1/tasks
   fastify.get('/tasks', async (request: any, reply) => {
     const query = request.query as any;
+    const currentOrgId = (request as any).orgId;
     const tasks = await taskSvc.list({
       status: query.status,
       channel: query.channel,
       agentId: query.agent_id,
       principalId: query.principal_id,
+      orgId: currentOrgId,
     });
     reply.send(success({ tasks, total: tasks.length }));
   });

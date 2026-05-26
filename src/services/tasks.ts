@@ -3,7 +3,7 @@
  * CRUD and lifecycle operations for tasks and reviews
  */
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 import { BUDGET } from '../services/budget.js';
@@ -54,12 +54,22 @@ export class TaskService {
     return this.formatTask(rows[0]);
   }
 
-  async list(filters: { status?: string; channel?: string; agentId?: string; principalId?: string } = {}) {
+  async list(filters: { status?: string; channel?: string; agentId?: string; principalId?: string; orgId?: string } = {}) {
     const conditions = [];
     if (filters.status) conditions.push(eq(schema.tasks.status, filters.status));
     if (filters.channel) conditions.push(eq(schema.tasks.channel, filters.channel));
     if (filters.agentId) conditions.push(eq(schema.tasks.agentId, filters.agentId));
     if (filters.principalId) conditions.push(eq(schema.tasks.principalId, filters.principalId));
+
+    if (filters.orgId) {
+      // Get all agent IDs for this org, then filter tasks
+      const orgAgents = await this.db.select({ id: schema.agents.id })
+        .from(schema.agents)
+        .where(eq(schema.agents.orgId, filters.orgId as any));
+      const agentIds = orgAgents.map(a => a.id);
+      if (agentIds.length === 0) return []; // No agents in this org → no tasks
+      conditions.push(inArray(schema.tasks.agentId, agentIds));
+    }
 
     const rows = conditions.length > 0
       ? await this.db.select().from(schema.tasks).where(and(...conditions)).orderBy(desc(schema.tasks.createdAt)).limit(50)
