@@ -3,7 +3,7 @@
  * CRUD and lifecycle operations for tasks and reviews
  */
 
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc, inArray, ne } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 import { BUDGET } from '../services/budget.js';
@@ -54,12 +54,15 @@ export class TaskService {
     return this.formatTask(rows[0]);
   }
 
-  async list(filters: { status?: string; channel?: string; agentId?: string; principalId?: string; orgId?: string } = {}) {
+  async list(filters: { status?: string; channel?: string; agentId?: string; principalId?: string; orgId?: string; includeDismissed?: boolean } = {}) {
     const conditions = [];
     if (filters.status) conditions.push(eq(schema.tasks.status, filters.status));
     if (filters.channel) conditions.push(eq(schema.tasks.channel, filters.channel));
     if (filters.agentId) conditions.push(eq(schema.tasks.agentId, filters.agentId));
     if (filters.principalId) conditions.push(eq(schema.tasks.principalId, filters.principalId));
+    if (!filters.includeDismissed && !filters.status) {
+      conditions.push(ne(schema.tasks.status, 'dismissed'));
+    }
 
     if (filters.orgId) {
       // Get all agent IDs for this org, then filter tasks

@@ -176,6 +176,8 @@ server.tool(
       };
     }
 
+    const concern = typeof task.metadata === 'object' && task.metadata ? (task.metadata as any).concern : undefined;
+
     const lines = [
       `📋 **Task:** ${task.id}`,
       `**Status:** ${task.status} | **Channel:** ${task.channel}`,
@@ -188,7 +190,6 @@ server.tool(
       ``,
       `**Dimensions:** ${(task.dimensions ?? []).join(', ') || '(none)'}`,
       ``,
-      const concern = typeof task.metadata === 'object' && task.metadata ? (task.metadata as any).concern : undefined;
       concern ? `**Submitter's concern:** ${concern}` : '',
       concern ? `` : '',
       `**Output to review:**`,

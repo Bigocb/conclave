@@ -389,6 +389,10 @@ async function viewTaskDetail(taskId) {
         const reviews = task.reviews || task.review_summary || [];
         const summary = task.review_summary;
 
+        // Show/hide Dismiss / Restore buttons
+        document.getElementById('td-dismiss-btn').classList.toggle('hidden', task.status !== 'open' && task.status !== 'in_review');
+        document.getElementById('td-restore-btn').classList.toggle('hidden', task.status !== 'dismissed');
+
         let html = `
         <div class="mb-6">
             <div class="flex items-center gap-2 mb-2">
@@ -467,20 +471,45 @@ async function viewTaskDetail(taskId) {
     }
 }
 
+async function dismissTask(taskId) {
+    if (!confirm('Dismiss this task? It will be hidden from agents and the list by default. Can be restored later.')) return;
+    try {
+        await apiRequest(`/v1/tasks/${taskId}/dismiss`, { method: 'POST' });
+        toggleTaskDetailModal(false);
+        refreshTasks();
+    } catch (e) {
+        alert('Failed to dismiss task: ' + e.message);
+    }
+}
+
+async function restoreTask(taskId) {
+    try {
+        await apiRequest(`/v1/tasks/${taskId}/restore`, { method: 'POST' });
+        toggleTaskDetailModal(false);
+        refreshTasks();
+    } catch (e) {
+        alert('Failed to restore task: ' + e.message);
+    }
+}
+
 async function refreshTasks() {
     const list = document.getElementById('task-list');
+    const showDismissed = document.getElementById('show-dismissed-toggle')?.checked || false;
     try {
-        const data = await apiRequest('/v1/tasks');
+        const url = showDismissed ? '/v1/tasks?include_dismissed=true' : '/v1/tasks';
+        const data = await apiRequest(url);
         const tasks = data.data?.tasks || data.data || [];
         list.innerHTML = tasks.length ? '' : '<p class="text-gray-500 text-center py-8">No tasks yet. Submit one to get started.</p>';
         tasks.forEach(t => {
-            const statusColor = t.status === 'completed' ? 'text-green-400' :
+            const isDismissed = t.status === 'dismissed';
+            const statusColor = isDismissed ? 'text-gray-600' :
+                t.status === 'completed' ? 'text-green-400' :
                 t.status === 'in_review' ? 'text-yellow-400' : 'text-gray-400';
             list.innerHTML += `
-                <div onclick="viewTaskDetail('${t.id}')" class="cursor-pointer p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl hover:border-green-500/50 transition-all">
+                <div onclick="viewTaskDetail('${t.id}')" class="cursor-pointer p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl hover:border-green-500/50 transition-all ${isDismissed ? 'opacity-50' : ''}">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-mono text-gray-500">${t.id}</span>
-                        <span class="text-xs font-bold ${statusColor} uppercase">${t.status}</span>
+                        <span class="text-xs font-bold ${statusColor} uppercase">${t.status}${isDismissed ? ' <span class="text-gray-600">(hidden)</span>' : ''}</span>
                     </div>
                     <div class="text-sm mb-2 text-gray-300">${(t.description || t.input || t.task_description || '').slice(0, 120)}${(t.description || '').length > 120 ? '...' : ''}</div>
                     <div class="flex justify-between items-center text-[10px] text-gray-500">

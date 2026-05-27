@@ -190,6 +190,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       agentId: query.agent_id,
       principalId: query.principal_id,
       orgId: currentOrgId,
+      includeDismissed: query.include_dismissed === 'true',
     });
     reply.send(success({ tasks, total: tasks.length }));
   });
