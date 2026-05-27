@@ -19,6 +19,10 @@ export function success(data: any, metaOverrides: Record<string, unknown> = {}) 
 export function error(code: string, message: string, details?: Record<string, unknown>, statusCode: number = 400) {
   return {
     status: 'error',
+    meta: {
+      request_id: `req_${randomUUID().replace(/-/g, '').slice(0, 24)}`,
+      timestamp: new Date().toISOString(),
+    },
     error: {
       code,
       message,
