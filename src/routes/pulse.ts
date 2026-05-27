@@ -18,16 +18,22 @@ export const pulseRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
 
     // 2. Set SSE Headers
+    // We use reply.raw because SSE requires manual control over the response stream
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
     });
 
     // 3. Event Handler
     const handler = (event: any) => {
-      const data = `data: ${JSON.stringify(event)}\n\n`;
-      reply.raw.write(data);
+      try {
+        const data = `data: ${JSON.stringify(event)}\n\n`;
+        reply.raw.write(data);
+      } catch (err) {
+        console.error('[Pulse Hub] Write failed', err);
+      }
     };
 
     // Subscribe to this org's events AND global events
@@ -40,8 +46,10 @@ export const pulseRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       pulseHub.removeListener('global', handler);
     });
 
-    // Prevent Fastify from closing the connection automatically
-    return reply.raw;
+    // IMPORTANT: For SSE in Fastify, we must return a promise that never resolves 
+    // or use a specific response pattern to prevent Fastify from closing the connection.
+    // Returning a Promise that doesn't resolve is a common way to keep the stream open.
+    return new Promise(() => {});
   });
 
   done();
