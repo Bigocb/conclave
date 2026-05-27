@@ -82,11 +82,15 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     });
 
     // Inject rate_limit_remaining into the meta envelope of every JSON response
-    fastify.addHook('preSerialization', async (request, reply, payload: any) => {
-      if (payload?.meta && typeof payload.meta === 'object') {
-        const remaining = reply.getHeader('x-rate-limit-remaining');
+    fastify.addHook('preSerialization', async (request, reply, payload: unknown) => {
+      if (typeof payload === 'object' && payload !== null) {
+        const p = payload as Record<string, unknown>;
+        if (!p.meta || typeof p.meta !== 'object') {
+          p.meta = {};
+        }
+        const remaining = reply.getHeader('x-ratelimit-remaining');
         if (remaining !== undefined) {
-          payload.meta.rate_limit_remaining = Number(remaining);
+          (p.meta as Record<string, unknown>).rate_limit_remaining = Number(remaining);
         }
       }
       return payload;
