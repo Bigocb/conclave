@@ -19,6 +19,60 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     return data;
 }
 
+
+// ─── Real-time Pulse Infrastructure ────────────────────────────
+
+function initPulse() {
+    if (!STATE.token) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}/v1/pulse`;
+    
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+        console.log('[Pulse] Connected to real-time stream');
+        socket.send(JSON.stringify({ token: STATE.token })); 
+    };
+
+    socket.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handlePulseEvent(data);
+        } catch (e) {
+            console.error('[Pulse] Failed to parse event:', e);
+        }
+    };
+
+    socket.onclose = () => {
+        console.log('[Pulse] Connection closed. Reconnecting in 5s...');
+        setTimeout(initPulse, 5000);
+    };
+
+    socket.onerror = (err) => console.error('[Pulse] WebSocket error:', err);
+}
+
+function handlePulseEvent(event) {
+    const { type, payload, orgId } = event;
+    if (orgId && STATE.orgId !== orgId) return;
+
+    console.log(`[Pulse Event] ${type}:`, payload);
+
+    switch (type) {
+        case 'TASK_CREATED':
+            showToast(`New task submitted to ${payload.channel}`, 'info');
+            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
+                refreshTasks(); 
+            }
+            break;
+        case 'REVIEW_SUBMITTED':
+            showToast(`New review submitted for task ${payload.taskId.slice(0,8)}`, 'success');
+            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
+                refreshTasks();
+            }
+            break;
+    }
+}
 // ─── Toast Notifications ─────────────────────────────────────
 
 function showToast(message, type = 'info', duration = 4000) {
@@ -1266,7 +1320,8 @@ document.getElementById('btn-login').onclick = handleLogin;
 document.getElementById('btn-logout').onclick = () => { localStorage.clear(); window.location.reload(); };
 document.getElementById('btn-save-key').onclick = saveVaultKey;
 
-window.onload = async () => {
+window.onload = async () => {    initPulse();
+    
     lucide.createIcons();
     applySummaryMode();
     registerServiceWorker();

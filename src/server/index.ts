@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
+import websocket from '@fastify/websocket';
 import { initDb, type ConclaveDb } from '../db/index.js';
 
 import { principalRoutes } from '../routes/principals.js';
@@ -26,6 +27,7 @@ import { cronRoutes } from '../routes/cron.js';
 import { authRoutes } from '../routes/auth.js';
 import { vaultRoutes } from '../routes/vault.js';
 import { pushRoutes } from '../routes/push.js';
+import { pulseRoutes } from '../routes/pulse.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {
@@ -151,6 +153,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(spotCheckRoutes, { prefix: '/v1' });
   await fastify.register(orgRoutes, { prefix: '/v1' });
   await fastify.register(providerRoutes, { prefix: '/v1' });
+  await fastify.register(pulseRoutes, { prefix: '/v1' });
 
   // Fleet routes (only when fleet manager is provided)
     await fastify.register(fleetRoutes, { prefix: '/v1' });

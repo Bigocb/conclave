@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { authenticate } from '../middleware/auth.js';
 import * as schema from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { pulseHub } from '../services/pulse.js';
 
 export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
@@ -113,6 +114,15 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
       }
     } catch (notifyErr: any) {
       console.warn('[tasks] pg_notify failed (non-fatal):', notifyErr.message);
+    }
+
+    // Broadcast real-time event to the org
+    const taskOrgId = (request as any).orgId;
+    if (taskOrgId) {
+      pulseHub.broadcastToOrg(taskOrgId, { 
+        type: 'TASK_CREATED', 
+        payload: { id, channel: data.channel, priority: data.priority } 
+      });
     }
 
     reply.code(201).send(success(task));
@@ -273,6 +283,15 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
 
     // Earn budget for reviewing (on principal)
     await budgetSvc.earn(reviewer?.principal_id ?? 'prn_anon', BUDGET.SUBMIT_REVIEW, 'submit_review', reviewId);
+
+    // Broadcast real-time event to the org
+    const reviewOrgId = (request as any).orgId;
+    if (reviewOrgId) {
+      pulseHub.broadcastToOrg(reviewOrgId, { 
+        type: 'REVIEW_SUBMITTED', 
+        payload: { taskId, reviewId, reviewerId: reviewer?.principal_id } 
+      });
+    }
 
     reply.code(201).send(success(review));
   });
