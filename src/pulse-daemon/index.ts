@@ -20,7 +20,7 @@ await fastify.register(cors, { origin: '*' });
 
 // 1. The SSE Stream Endpoint
 fastify.get('/pulse', async (request, reply) => {
-  const orgId = request.query as any?.orgId;
+  const orgId = (request.query as any)?.orgId;
   if (!orgId) {
     return reply.status(400).send({ error: 'orgId is required for pulse subscription' });
   }
