@@ -65,13 +65,163 @@ function handlePulseEvent(event) {
             if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
                 refreshTasks(); 
             }
+            if (document.getElementById('view-active')?.classList.contains('hidden') === false) {
+                refreshActiveView();
+            }
             break;
         case 'REVIEW_SUBMITTED':
             showToast(`New review submitted for task ${payload.taskId.slice(0,8)}`, 'success');
             if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
                 refreshTasks();
             }
+            handleActiveViewPulse(event);
             break;
+    }
+}
+
+// ─── NOC Active View ──────────────────────────────────────────
+
+async function refreshActiveView() {
+    if (!STATE.token || !STATE.orgId) return;
+    
+    try {
+        const data = await apiRequest('/v1/active-view');
+        const tasks = data.activeTasks || [];
+        
+        // Update Global Tickers
+        document.getElementById('noc-active-tasks').innerText = tasks.length;
+        const totalReviews = tasks.reduce((sum, t) => sum + t.currentReviews, 0);
+        document.getElementById('noc-reviews-count').innerText = totalReviews;
+
+        const grid = document.getElementById('active-grid');
+        if (!grid) return;
+
+        // Surgical Update: Only create elements if they don't exist
+        tasks.forEach(task => {
+            let card = document.getElementById(`noc-card-${task.id}`);
+            const progress = (task.currentReviews / task.requestedReviews) * 100;
+            
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `noc-card-${task.id}`;
+                card.className = 'noc-card group';
+                card.onclick = () => {
+                    document.getElementById('td-task-id').innerText = task.id;
+                    toggleTaskDetailModal(true);
+                    refreshTaskDetails(task.id);
+                };
+                grid.appendChild(card);
+            }
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-mono text-gray-500">${task.id}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400 font-bold uppercase">${task.status}</span>
+                </div>
+                <p class="text-sm font-medium text-gray-200 mb-4 line-clamp-2 h-10">${escapeHtml(task.description)}</p>
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-bold text-gray-500 uppercase">Verify Consensus</span>
+                    <span class="text-[10px] font-mono text-green-400">${task.currentReviews}/${task.requestedReviews}</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: ${progress}%"></div>
+                </div>
+            `;
+        });
+
+        // Remove cards for tasks that are no longer active
+        const activeIds = new Set(tasks.map(t => `noc-card-${t.id}`));
+        Array.from(grid.children).forEach(child => {
+            if (!activeIds.has(child.id)) child.remove();
+        });
+
+    } catch (e) {
+        console.error('Active View Refresh Failed:', e);
+    }
+}
+
+function handleActiveViewPulse(event) {
+    const { type, payload } = event;
+    if (type === 'REVIEW_SUBMITTED') {
+        const card = document.getElementById(`noc-card-${payload.taskId}`);
+        if (card) {
+            card.classList.add('pulse-flash');
+            setTimeout(() => card.classList.remove('pulse-flash'), 1000);
+            refreshActiveView(); // Surgical refresh of data
+        }
+    }
+}
+
+// ─── NOC Active View ──────────────────────────────────────────
+
+async function refreshActiveView() {
+    if (!STATE.token || !STATE.orgId) return;
+    
+    try {
+        const data = await apiRequest('/v1/active-view');
+        const tasks = data.activeTasks || [];
+        
+        // Update Global Tickers
+        document.getElementById('noc-active-tasks').innerText = tasks.length;
+        const totalReviews = tasks.reduce((sum, t) => sum + (t.currentReviews || 0), 0);
+        document.getElementById('noc-reviews-count').innerText = totalReviews;
+
+        const grid = document.getElementById('active-grid');
+        if (!grid) return;
+
+        // Surgical Update: Only create or update elements
+        tasks.forEach(task => {
+            let card = document.getElementById(`noc-card-${task.id}`);
+            const progress = ((task.currentReviews || 0) / (task.requestedReviews || 1)) * 100;
+            
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `noc-card-${task.id}`;
+                card.className = 'noc-card group';
+                card.onclick = () => {
+                    document.getElementById('td-task-id').innerText = task.id;
+                    toggleTaskDetailModal(true);
+                    refreshTaskDetails(task.id);
+                };
+                grid.appendChild(card);
+            }
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-mono text-gray-500">${task.id}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400 font-bold uppercase">${task.status}</span>
+                </div>
+                <p class="text-sm font-medium text-gray-200 mb-4 line-clamp-2 h-10">${escapeHtml(task.description)}</p>
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-bold text-gray-500 uppercase">Verify Consensus</span>
+                    <span class="text-[10px] font-mono text-green-400">${task.currentReviews}/${task.requestedReviews}</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width: ${progress}%"></div>
+                </div>
+            `;
+        });
+
+        // Remove cards for tasks that are no longer active
+        const activeIds = new Set(tasks.map(t => `noc-card-${t.id}`));
+        Array.from(grid.children).forEach(child => {
+            if (!activeIds.has(child.id)) child.remove();
+        });
+
+    } catch (e) {
+        console.error('Active View Refresh Failed:', e);
+    }
+}
+
+function handleActiveViewPulse(event) {
+    const { type, payload } = event;
+    if (type === 'REVIEW_SUBMITTED') {
+        const card = document.getElementById(`noc-card-${payload.taskId}`);
+        if (card) {
+            card.classList.add('pulse-flash');
+            setTimeout(() => card.classList.remove('pulse-flash'), 1000);
+            refreshActiveView(); 
+        }
     }
 }
 // ─── Toast Notifications ─────────────────────────────────────
