@@ -12,7 +12,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     token = authHeader.slice(7);
   } else {
     // Fallback to query parameter for SSE/EventSource
-    token = request.query as any?.token;
+    token = (request.query as any)?.token;
   }
 
   if (!token) {
