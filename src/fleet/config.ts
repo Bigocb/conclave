@@ -83,6 +83,7 @@ export interface FleetConfig {
   org_id: string;
   server: string;
   scope: FleetScope;
+  token?: string;                  // org-level token for API auth
   providers?: Record<string, string>;  // custom provider name → URL overrides
   reviewers: ReviewerConfig[];
   /** Path to the fleet.yaml for reference */
@@ -229,6 +230,7 @@ export function parseFleetConfig(filePath: string): FleetConfig {
     org_id: interpolated.org_id,
     server: interpolated.server.replace(/\/$/, ''), // strip trailing slash
     scope: interpolated.scope ?? 'public',
+    token: interpolated.token,
     providers: Object.keys(customProviders).length > 0 ? customProviders : undefined,
     reviewers,
     config_path: resolvedPath,

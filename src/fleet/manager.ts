@@ -186,7 +186,8 @@ export class FleetManager extends EventEmitter {
       // Try to find existing principal by listing and matching name
       const tempClient = new ConclaveApiClient({
         serverUrl: this.config.server,
-        principalId: 'prn_dev', // use a known principal for bootstrapping
+        principalId: 'prn_dev',
+        token: this.config.token, // use org-level token for auth
       });
 
       try {
@@ -216,6 +217,7 @@ export class FleetManager extends EventEmitter {
       const regClient = new ConclaveApiClient({
         serverUrl: this.config.server,
         principalId,
+        token: this.config.token,
       });
 
       // 2. Register agents (one per replica) — reuse existing agents when possible
@@ -233,7 +235,13 @@ export class FleetManager extends EventEmitter {
         // Reuse existing agent if available
         if (i < existingCount) {
           const existing = existingAgents[i];
-          agents.push({ agentId: existing.id, token: '', index: i });
+          // Fetch full agent details to get token for auth
+          let agentToken = '';
+          try {
+            const agentResp = await tempClient.getAgent(existing.id);
+            agentToken = agentResp.data?.token ?? '';
+          } catch { /* fallback to empty token */ }
+          agents.push({ agentId: existing.id, token: agentToken, index: i });
           console.log(`  Agent reused: ${existing.id} (${existing.name})`);
           continue;
         }
@@ -273,22 +281,38 @@ export class FleetManager extends EventEmitter {
         serverUrl: this.config.server,
         principalId,
         agentId: agents[0]?.agentId,
+        token: this.config.token,
       });
       if (agents[0]?.token) {
         pollingClient.setToken(agents[0].token);
       }
       this.apiClients.set(principalId, pollingClient);
 
-      // 4. Subscribe to channels
-      for (const ch of reviewer.channels) {
-        try {
-          await regClient.subscribeToChannel(ch);
-          console.log(`  Subscribed: ${principalId} → ${ch}`);
-        } catch (err: any) {
-          if (!err.message?.includes('already subscribed') && !err.message?.includes('duplicate')) {
+      // 4. Subscribe to channels — use the newly created agent's token so auth resolves correctly
+      const agentToken = agents[0]?.token;
+      if (agentToken) {
+        for (const ch of reviewer.channels) {
+          try {
+            // Use the agent-level token so the server resolves to this principal
+            const subResp = await fetch(`${this.config.server}/v1/channels/${encodeURIComponent(ch)}/subscribe`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${agentToken}`,
+              },
+            });
+            if (subResp.ok) {
+              console.log(`  Subscribed: ${principalId} → ${ch}`);
+            } else {
+              const errBody = await subResp.text().catch(() => '');
+              console.warn(`  ⚠ Subscribe ${ch}: ${subResp.status} ${errBody.slice(0, 150)}`);
+            }
+          } catch (err: any) {
             console.warn(`  ⚠ Subscribe ${ch}: ${err.message}`);
           }
         }
+      } else {
+        console.warn(`  ⚠ No token for ${reviewer.name} — skipping subscribe`);
       }
 
       // 4. Load prompt template
@@ -459,8 +483,9 @@ export class FleetManager extends EventEmitter {
 
     try {
       // 1. Build input for any backend type
+      const taskId = task.id ?? task.task_id;
       const reviewInput: ReviewInput = {
-        task_id: task.id ?? task.task_id,
+        task_id: taskId,
         task_description: task.description,
         output: task.output,
         dimensions: Array.isArray(task.dimensions) ? task.dimensions : JSON.parse(task.dimensions || '[]'),
@@ -531,15 +556,15 @@ export class FleetManager extends EventEmitter {
       };
 
       if (proc.mode === 'auto') {
-        await client.submitReview(task.id, reviewPayload);
+        await client.submitReview(taskId, reviewPayload);
         this.incrementCompleted(principalId);
-        console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${task.id} (overall: ${draft.weighted_overall})`);
-        this.emit('review_completed', { principalId, taskId: task.id, mode: 'auto' });
+        console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${taskId} (overall: ${draft.weighted_overall})`);
+        this.emit('review_completed', { principalId, taskId, mode: 'auto' });
 
       } else if (proc.mode === 'human') {
         const pending: PendingReview = {
           id: `pnd_${randomUUID().replace(/-/g, '').slice(0, 24)}`,
-          taskId: task.id,
+          taskId,
           channel,
           reviewerName: proc.reviewerName,
           principalId,

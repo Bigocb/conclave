@@ -1,7 +1,8 @@
 # Conclave Fleet — Production Reviewers
-org_id: org_dev
+org_id: org_019e6027-580a-767a-8f13-cf40de5363a9
 server: https://conclave-roan.vercel.app
 scope: public
+token: clv_fef0dbe67ce2406793dd3deff19fbab7
 
 providers:
   ollama_cloud: https://www.ollama.com/v1
