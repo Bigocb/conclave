@@ -26,7 +26,9 @@ export async function vaultRoutes(fastify: FastifyInstance) {
         message: 'Provider key updated successfully', 
         vaultId 
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[vault] Upsert failed:', e?.message || e);
+      if (e?.stack) console.error('[vault] Stack:', e.stack);
       return reply.status(500).send({ error: 'Failed to store key in vault' });
     }
   });
