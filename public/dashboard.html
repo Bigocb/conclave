@@ -320,6 +320,13 @@
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Instructions</label>
                     <textarea id="edit-agent-instructions" rows="4" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500 font-mono text-sm" placeholder="Custom system prompt for this agent..."></textarea>
                 </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vault Key</label>
+                    <select id="edit-agent-vault-key" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
+                        <option value="">Use agent-specific key (enter below)</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500 mt-1">Select a vault-stored key to share across agents in your org.</p>
+                </div>
                 <div class="border-t border-[#1e2d4a] pt-4">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Authentication Token</label>
                     <div class="flex gap-2">

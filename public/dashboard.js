@@ -683,6 +683,21 @@ async function editAgent(agentId) {
         document.getElementById('edit-agent-model').value = agent.model || '';
         document.getElementById('edit-agent-instructions').value = agent.instructions || '';
         document.getElementById('edit-agent-token').value = '••••••••••••••••';
+
+        // Load vault keys for the vault-key selector
+        const vaultData = await apiRequest('/v1/vault/keys');
+        const keys = vaultData.data || [];
+        const vaultSelect = document.getElementById('edit-agent-vault-key');
+        vaultSelect.innerHTML = '<option value="">Use agent-specific key (enter below)</option>';
+        keys.forEach(k => {
+            vaultSelect.innerHTML += `<option value="${k.provider}">${k.provider} (stored in vault)</option>`;
+        });
+
+        // Pre-select if the agent's provider matches a vault key
+        if (agent.provider && keys.some(k => k.provider === agent.provider)) {
+            vaultSelect.value = agent.provider;
+        }
+
         toggleEditAgentModal(true);
     } catch (e) {
         alert('Failed to load agent: ' + e.message);
@@ -691,11 +706,13 @@ async function editAgent(agentId) {
 
 async function saveEditAgent() {
     const agentId = document.getElementById('edit-agent-id').value;
+    const vaultKey = document.getElementById('edit-agent-vault-key').value;
     const payload = {
         name: document.getElementById('edit-agent-name').value,
         provider: document.getElementById('edit-agent-provider').value,
         model: document.getElementById('edit-agent-model').value,
         instructions: document.getElementById('edit-agent-instructions').value,
+        use_vault_key: vaultKey || undefined,
     };
     try {
         await apiRequest(`/v1/agents/${agentId}`, 'PATCH', payload);

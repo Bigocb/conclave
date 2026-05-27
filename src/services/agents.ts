@@ -121,6 +121,10 @@ export class AgentService {
       if (agent.provider) {
         try {
           apiKey = await vault.getSecret(`agent:${agent.id}:key`);
+          // Fall back to org-level vault key for the provider
+          if (!apiKey) {
+            apiKey = await vault.getSecret(`org:${agent.org_id}:provider:${agent.provider}`);
+          }
         } catch (e) {
           console.error(`Vault error for agent ${agent.id}:`, e);
         }
@@ -142,8 +146,12 @@ export class AgentService {
     
     const vault = new VaultService(this.db);
     try {
-      const key = await vault.getSecret(`agent:${id}:key`);
-      if (!key) return { valid: false, error: 'No API key found in vault' };
+      let key = await vault.getSecret(`agent:${id}:key`);
+      // Fall back to org-level vault key
+      if (!key && agent.provider) {
+        key = await vault.getSecret(`org:${agent.org_id}:provider:${agent.provider}`);
+      }
+      if (!key) return { valid: false, error: 'No API key found in vault or org vault for this provider' };
       
       // Simple connectivity/key check could go here via a lightweight API call
       return { valid: true, agent };
