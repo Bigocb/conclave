@@ -43,7 +43,7 @@ export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     const orgId: string = currentOrgId;
 
     if (!amount || amount <= 0) return reply.code(422).send(error('VALIDATION_ERROR', 'Amount must be positive'));
-    const principalSvc = new PrincipalService(this.db);
+    const principalSvc = new PrincipalService(fastify.db);
     const principal = await principalSvc.getById(id);
     if (!principal || !principal.org_id || principal.org_id !== orgId) return reply.code(404).send(error('PRINCIPAL_NOT_FOUND', 'Principal not found'));
 
