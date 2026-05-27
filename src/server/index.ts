@@ -78,7 +78,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   // Rate limiting (skip in local mode for development)
   if (fullConfig.mode !== 'local') {
     await fastify.register(rateLimit, {
-      max: fullConfig.rateLimit?.max || 60,
+      max: fullConfig.rateLimit?.max || 1200,
       timeWindow: fullConfig.rateLimit?.timeWindow || '1 minute',
     });
 
