@@ -3,7 +3,7 @@
  * Channel management, subscription (by principals), and feed
  */
 
-import { eq, and, ne } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
@@ -72,7 +72,7 @@ export class ChannelService {
 
   async getFeed(channelName: string, limit: number = 20) {
     const tasks = await this.db.select().from(schema.tasks)
-      .where(and(eq(schema.tasks.channel, channelName), ne(schema.tasks.status, 'failed'), ne(schema.tasks.status, 'archived')))
+      .where(eq(schema.tasks.channel, channelName))
       .limit(limit);
 
     const opinions = await this.db.select().from(schema.opinions)
