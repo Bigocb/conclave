@@ -79,6 +79,7 @@ function handlePulseEvent(event) {
     }
 }
 
+
 // ─── NOC Active View ──────────────────────────────────────────
 
 async function refreshActiveView() {
@@ -89,14 +90,16 @@ async function refreshActiveView() {
         const tasks = data.activeTasks || [];
         
         // Update Global Tickers
-        document.getElementById('noc-active-tasks').innerText = tasks.length;
-        const totalReviews = tasks.reduce((sum, t) => sum + t.currentReviews, 0);
-        document.getElementById('noc-reviews-count').innerText = totalReviews;
+        const activeTasksEl = document.getElementById('noc-active-tasks');
+        const reviewsCountEl = document.getElementById('noc-reviews-count');
+        if (activeTasksEl) activeTasksEl.innerText = tasks.length;
+        
+        const totalReviews = tasks.reduce((sum, t) => sum + (t.currentReviews || 0), 0);
+        if (reviewsCountEl) reviewsCountEl.innerText = totalReviews;
 
         const grid = document.getElementById('active-grid');
         if (!grid) return;
 
-        // Surgical Update: Only create elements if they don't exist
         tasks.forEach(task => {
             let card = document.getElementById(`noc-card-${task.id}`);
             const progress = ((task.currentReviews || 0) / (task.requestedReviews || 1)) * 100;
@@ -129,7 +132,6 @@ async function refreshActiveView() {
             `;
         });
 
-        // Remove cards for tasks that are no longer active
         const activeIds = new Set(tasks.map(t => `noc-card-${t.id}`));
         Array.from(grid.children).forEach(child => {
             if (!activeIds.has(child.id)) child.remove();
@@ -147,43 +149,11 @@ function handleActiveViewPulse(event) {
         if (card) {
             card.classList.add('pulse-flash');
             setTimeout(() => card.classList.remove('pulse-flash'), 1000);
-            refreshActiveView(); // Surgical refresh of data
+            refreshActiveView(); 
         }
     }
 }
 
-// ─── NOC Active View ──────────────────────────────────────────
-
-
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-3">
-                    <span class="text-[10px] font-mono text-gray-500">${task.id}</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400 font-bold uppercase">${task.status}</span>
-                </div>
-                <p class="text-sm font-medium text-gray-200 mb-4 line-clamp-2 h-10">${escapeHtml(task.description)}</p>
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] font-bold text-gray-500 uppercase">Verify Consensus</span>
-                    <span class="text-[10px] font-mono text-green-400">${task.currentReviews}/${task.requestedReviews}</span>
-                </div>
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width: ${progress}%"></div>
-                </div>
-            `;
-        });
-
-        // Remove cards for tasks that are no longer active
-        const activeIds = new Set(tasks.map(t => `noc-card-${t.id}`));
-        Array.from(grid.children).forEach(child => {
-            if (!activeIds.has(child.id)) child.remove();
-        });
-
-    } catch (e) {
-        console.error('Active View Refresh Failed:', e);
-    }
-}
-
-    }
-}
 // ─── Toast Notifications ─────────────────────────────────────
 
 function showToast(message, type = 'info', duration = 4000) {
@@ -1459,4 +1429,19 @@ window.onload = async () => {    initPulse();
 // Ensure Opinion Board loads if it's the default active view
 if (document.getElementById('view-active')?.classList.contains('hidden') === false) {
     refreshActiveView();
+}
+
+function switchView(view) {
+    document.querySelectorAll('main > div').forEach(div => div.classList.add('hidden'));
+    const target = document.getElementById('view-' + view);
+    if (target) {
+        target.classList.remove('hidden');
+        if (view === 'active') refreshActiveView();
+    }
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick') && item.getAttribute('onclick').includes(`switchView('${view}')`)) {
+            item.classList.add('active');
+        }
+    });
 }
