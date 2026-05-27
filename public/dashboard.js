@@ -1079,10 +1079,25 @@ async function editAgent(agentId) {
         const agent = data.data;
         document.getElementById('edit-agent-id').value = agent.id;
         document.getElementById('edit-agent-name').value = agent.name || '';
-        populateProviderSelect('edit-agent-provider', agent.provider || 'ollama');
-        document.getElementById('edit-agent-model').value = agent.model || '';
+        populateProviderSelect('edit-agent-provider', agent.provider || '');
         document.getElementById('edit-agent-instructions').value = agent.instructions || '';
         document.getElementById('edit-agent-token').value = '••••••••••••••••';
+
+        // Preload model list if the agent has a provider
+        const modelSel = document.getElementById('edit-agent-model');
+        if (agent.provider) {
+            await loadProviderModels(agent.provider, 'edit-agent-model');
+            // Select the agent's current model in the dropdown
+            const opt = modelSel.querySelector(`option[value="${agent.model}"]`);
+            if (opt) {
+                opt.selected = true;
+            } else if (agent.model) {
+                // If the model isn't in the list (e.g., custom), add it
+                modelSel.innerHTML += `<option value="${agent.model}" selected>${agent.model}</option>`;
+            }
+        } else {
+            modelSel.innerHTML = '<option value="">Custom</option>';
+        }
 
         // Load vault keys for the vault-key selector
         const vaultData = await apiRequest('/v1/vault/keys');
