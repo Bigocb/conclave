@@ -25,7 +25,12 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
 function initPulse() {
     console.log('📡 Initializing Pulse SSE...');
     
-    const eventSource = new EventSource('/v1/pulse');
+    if (!STATE.token) {
+        console.warn('⚠️ No token found, skipping Pulse initialization');
+        return;
+    }
+
+    const eventSource = new EventSource(`/v1/pulse?token=${STATE.token}`);
 
     eventSource.onopen = () => {
         console.log('✅ Connected to Conclave Pulse');

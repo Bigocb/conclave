@@ -5,16 +5,22 @@ import { agents } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
+  let token: string | undefined;
   const authHeader = request.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else {
+    // Fallback to query parameter for SSE/EventSource
+    token = request.query as any?.token;
+  }
+
+  if (!token) {
     return reply.status(401).send({
       error: 'Unauthorized',
       message: 'Missing or invalid authentication token',
     });
   }
-
-  const token = authHeader.slice(7);
 
   // Support clv_ agent tokens (lookup in DB)
   if (token.startsWith('clv_')) {
