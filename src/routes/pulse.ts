@@ -4,16 +4,19 @@
  */
 import type { FastifyPluginCallback } from 'fastify';
 import { pulseHub } from '../services/pulse.js';
+import { authenticate } from '../middleware/auth.js';
 
 export const pulseRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   
+  fastify.addHook('preHandler', authenticate);
+
   fastify.get('/pulse', async (request, reply) => {
     // 1. Resolve Organization Context
     const orgId = (request as any).orgId;
     if (!orgId) {
       return reply.code(403).send({ error: 'No organization context found in session' });
     }
-
+...[truncated]
     // 2. Set SSE Headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
