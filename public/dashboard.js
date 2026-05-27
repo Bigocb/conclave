@@ -1495,3 +1495,8 @@ window.onload = async () => {    initPulse();
         switchView('fleet');
     }
 };
+
+// Ensure Opinion Board loads if it's the default active view
+if (document.getElementById('view-active')?.classList.contains('hidden') === false) {
+    refreshActiveView();
+}
