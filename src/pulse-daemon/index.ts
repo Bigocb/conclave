@@ -23,7 +23,10 @@ class PulseHub extends EventEmitter {
 }
 const pulseHub = new PulseHub();
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ 
+  logger: true,
+  disableRequestLogging: false 
+});
 await fastify.register(cors, { origin: '*' });
 
 // 1. The SSE Stream Endpoint
@@ -33,12 +36,18 @@ fastify.get('/pulse', async (request, reply) => {
     return reply.status(400).send({ error: 'orgId is required for pulse subscription' });
   }
 
+  // To prevent Vercel/Render proxies from buffering the response,
+  // we must write headers and an initial heartbeat immediately.
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
+
+  // Flush headers and send an immediate heartbeat to trigger 'onopen' in browser
+  reply.raw.write(': ok\n\n');
+  console.log(`[Pulse Daemon] Client connected to org:${orgId}`);
 
   const handler = (event: any) => {
     try {
@@ -52,10 +61,12 @@ fastify.get('/pulse', async (request, reply) => {
   pulseHub.on('global', handler);
 
   request.raw.on('close', () => {
+    console.log(`[Pulse Daemon] Client disconnected from org:${orgId}`);
     pulseHub.removeListener(`org:${orgId}`, handler);
     pulseHub.removeListener('global', handler);
   });
 
+  // Keep the connection open
   return new Promise(() => {});
 });
 
