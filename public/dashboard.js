@@ -164,6 +164,122 @@ function scheduleRefresh(fn, key = 'default') {
     AUTO_REFRESH_TIMERS[key] = setTimeout(fn, delay);
 }
 
+// ─── Pull-to-Refresh (touch gesture) ──────────────────────────
+
+let PULL_START_Y = 0;
+let PULL_THRESHOLD = 80;
+let PULL_ACTIVE = false;
+let PULL_OVERSCROLL = false;
+let PULL_REFRESH_FN = null;
+
+function setupPullToRefresh(refreshFn) {
+    PULL_REFRESH_FN = refreshFn;
+    const main = document.getElementById('main-content');
+    if (!main) return;
+
+    main.addEventListener('touchstart', function(e) {
+        if (IS_MOBILE && main.scrollTop <= 0) {
+            PULL_START_Y = e.touches[0].clientY;
+            PULL_OVERSCROLL = true;
+        } else {
+            PULL_OVERSCROLL = false;
+        }
+    }, { passive: true });
+
+    main.addEventListener('touchmove', function(e) {
+        if (!PULL_OVERSCROLL || PULL_ACTIVE) return;
+        const delta = e.touches[0].clientY - PULL_START_Y;
+        if (delta > PULL_THRESHOLD) {
+            PULL_ACTIVE = true;
+            startPullRefresh();
+        }
+    }, { passive: true });
+
+    main.addEventListener('touchend', function() {
+        PULL_OVERSCROLL = false;
+    }, { passive: true });
+}
+
+function startPullRefresh() {
+    const indicator = document.getElementById('pull-to-refresh-indicator');
+    if (!indicator) return;
+    indicator.classList.add('active');
+    PULL_ACTIVE = true;
+
+    if (PULL_REFRESH_FN) {
+        Promise.resolve(PULL_REFRESH_FN()).finally(() => {
+            setTimeout(() => {
+                indicator.classList.remove('active');
+                PULL_ACTIVE = false;
+            }, 500);
+        });
+    } else {
+        setTimeout(() => {
+            indicator.classList.remove('active');
+            PULL_ACTIVE = false;
+        }, 1000);
+    }
+}
+
+// ─── Summary Mode Toggle ──────────────────────────────────────
+
+let SUMMARY_MODE = localStorage.getItem('clv_summary_mode') === 'true';
+
+function toggleSummaryMode() {
+    SUMMARY_MODE = !SUMMARY_MODE;
+    localStorage.setItem('clv_summary_mode', SUMMARY_MODE);
+    applySummaryMode();
+}
+
+function applySummaryMode() {
+    const toggles = document.querySelectorAll('.summary-toggle');
+    toggles.forEach(t => t.classList.toggle('active', SUMMARY_MODE));
+    document.body.classList.toggle('summary-mode', SUMMARY_MODE);
+    const label = SUMMARY_MODE ? 'Detailed' : 'Compact';
+    toggles.forEach(t => {
+        t.innerHTML = `<i data-lucide="${SUMMARY_MODE ? 'list' : 'grid'}" class="w-3.5 h-3.5"></i> ${label}`;
+    });
+    if (SUMMARY_MODE) lucide.createIcons();
+}
+
+// ─── Swipe-to-Close Modals (touch gesture) ───────────────────
+
+let SWIPE_MODAL_START_Y = 0;
+let SWIPE_MODAL_ACTIVE = false;
+
+document.addEventListener('touchstart', function(e) {
+    const modal = getOpenModal();
+    if (!modal) return;
+    const content = modal.querySelector('[class*="rounded-2xl"], [class*="bg-\\[#0c111b\\]"]');
+    if (!content || !content.contains(e.target)) return;
+    if (content.scrollTop > 0) return; // Only swipe if scrolled to top
+    SWIPE_MODAL_START_Y = e.touches[0].clientY;
+    SWIPE_MODAL_ACTIVE = true;
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+    if (!SWIPE_MODAL_ACTIVE) return;
+    const modal = getOpenModal();
+    if (!modal) return;
+    const delta = e.touches[0].clientY - SWIPE_MODAL_START_Y;
+    if (delta > 100) {
+        SWIPE_MODAL_ACTIVE = false;
+        const id = modal.id;
+        if (id === 'deploy-modal') toggleDeployModal();
+        else if (id === 'factory-modal') toggleFactoryModal(false);
+        else if (id === 'edit-agent-modal') toggleEditAgentModal(false);
+        else if (id === 'submit-task-modal') toggleSubmitTaskModal(false);
+        else if (id === 'task-detail-modal') toggleTaskDetailModal(false);
+        else if (id === 'principal-modal') hideCreatePrincipalModal();
+        else if (id === 'org-modal') hideCreateOrgModal();
+        else if (id === 'grant-budget-modal') hideGrantBudgetModal();
+    }
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+    SWIPE_MODAL_ACTIVE = false;
+}, { passive: true });
+
 // ─── Auth ──────────────────────────────────────────────────────
 
 let AUTH_MODE = 'login';
@@ -1024,6 +1140,16 @@ document.getElementById('btn-save-key').onclick = saveVaultKey;
 
 window.onload = async () => {
     lucide.createIcons();
+    applySummaryMode();
+    setupPullToRefresh(() => {
+        // Refresh the current view
+        const currentView = document.querySelector('[id^="view-"]:not(.hidden)');
+        if (currentView) {
+            const id = currentView.id.replace('view-', '');
+            const fns = { fleet: refreshFleet, vault: refreshVault, tasks: refreshTasks, channels: refreshChannels, workers: refreshWorker, org: refreshOrg, factory: refreshFactory };
+            return fns[id] ? fns[id]() : Promise.resolve();
+        }
+    });
     if (!STATE.token) showAuth();
     else {
         await loadPrincipals();
