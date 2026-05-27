@@ -12,7 +12,15 @@ export interface PulseEvent {
   orgId?: string;
 }
 
-class PulseHub extends EventEmitter {}
+class PulseHub extends EventEmitter {
+  broadcastToOrg(orgId: string, event: any) {
+    this.emit(`org:${orgId}`, { ...event, orgId });
+  }
+
+  broadcastGlobal(event: any) {
+    this.emit('global', event);
+  }
+}
 const pulseHub = new PulseHub();
 
 const fastify = Fastify({ logger: true });
@@ -33,7 +41,11 @@ fastify.get('/pulse', async (request, reply) => {
   });
 
   const handler = (event: any) => {
-    reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+    try {
+      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch (err) {
+      console.error('[Pulse Daemon] Write failed', err);
+    }
   };
 
   pulseHub.on(`org:${orgId}`, handler);
@@ -48,7 +60,6 @@ fastify.get('/pulse', async (request, reply) => {
 });
 
 // 2. The Internal Trigger Endpoint
-// This is called by the Vercel API to broadcast events
 fastify.post('/broadcast', async (request, reply) => {
   const { event, orgId } = request.body as any;
   
@@ -64,14 +75,6 @@ fastify.post('/broadcast', async (request, reply) => {
 
   return { success: true };
 });
-
-// Simple implementation of the broadcast methods for the daemon
-(pulseHub as any).broadcastToOrg = function(orgId: string, event: any) {
-  this.emit(`org:${orgId}`, { ...event, orgId });
-};
-(pulseHub as any).broadcastGlobal = function(event: any) {
-  this.emit('global', event);
-};
 
 const start = async () => {
   try {
