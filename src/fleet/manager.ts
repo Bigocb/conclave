@@ -288,31 +288,26 @@ export class FleetManager extends EventEmitter {
       }
       this.apiClients.set(principalId, pollingClient);
 
-      // 4. Subscribe to channels — use the newly created agent's token so auth resolves correctly
-      const agentToken = agents[0]?.token;
-      if (agentToken) {
-        for (const ch of reviewer.channels) {
-          try {
-            // Use the agent-level token so the server resolves to this principal
-            const subResp = await fetch(`${this.config.server}/v1/channels/${encodeURIComponent(ch)}/subscribe`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${agentToken}`,
-              },
-            });
-            if (subResp.ok) {
-              console.log(`  Subscribed: ${principalId} → ${ch}`);
-            } else {
-              const errBody = await subResp.text().catch(() => '');
-              console.warn(`  ⚠ Subscribe ${ch}: ${subResp.status} ${errBody.slice(0, 150)}`);
-            }
-          } catch (err: any) {
-            console.warn(`  ⚠ Subscribe ${ch}: ${err.message}`);
+      // 4. Subscribe to channels — use the newly created principal directly
+      for (const ch of reviewer.channels) {
+        try {
+          const subResp = await fetch(`${this.config.server}/v1/channels/${encodeURIComponent(ch)}/subscribe`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.config.token}`,
+            },
+            body: JSON.stringify({ principal_id: principalId }),
+          });
+          if (subResp.ok) {
+            console.log(`  Subscribed: ${principalId} → ${ch}`);
+          } else {
+            const errBody = await subResp.text().catch(() => '');
+            console.warn(`  ⚠ Subscribe ${ch}: ${subResp.status} ${errBody.slice(0, 150)}`);
           }
+        } catch (err: any) {
+          console.warn(`  ⚠ Subscribe ${ch}: ${err.message}`);
         }
-      } else {
-        console.warn(`  ⚠ No token for ${reviewer.name} — skipping subscribe`);
       }
 
       // 4. Load prompt template
