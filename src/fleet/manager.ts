@@ -555,12 +555,64 @@ export class FleetManager extends EventEmitter {
       for (const [dim, val] of Object.entries(draft.scores)) {
         sanitizedScores[dim] = Math.max(1, Math.min(10, Math.round(val)));
       }
+
+      // 3. PROTOCOL ENFORCEMENT: Force exact dimension names matching the task
+      const taskDimensions: string[] = Array.isArray(task.dimensions)
+        ? task.dimensions
+        : (typeof task.dimensions === 'string' ? JSON.parse(task.dimensions) : []);
+      const finalScores: Record<string, number> = {};
+
+      if (taskDimensions.length > 0) {
+        // Check which task dimensions are covered by the LLM output
+        const missingDims = taskDimensions.filter(d => sanitizedScores[d] === undefined);
+        const extraDims = Object.keys(sanitizedScores).filter(d => !taskDimensions.includes(d));
+
+        if (missingDims.length > 0 || extraDims.length > 0) {
+          // Attempt fuzzy match: find the closest task dimension for each LLM dimension
+          const llmDims = Object.keys(sanitizedScores);
+          const dimMap: Record<string, string> = {};
+          for (const taskDim of taskDimensions) {
+            // Find the closest LLM dimension by substring matching
+            const match = llmDims.find(ld =>
+              ld.toLowerCase().includes(taskDim.toLowerCase()) ||
+              taskDim.toLowerCase().includes(ld.toLowerCase())
+            );
+            if (match) {
+              dimMap[match] = taskDim;
+            }
+          }
+
+          // Build final scores using the mapping, fall back to 'correctness' or 5
+          for (const taskDim of taskDimensions) {
+            const llmKey = Object.entries(dimMap).find(([llm, task]) => task === taskDim)?.[0];
+            if (llmKey && sanitizedScores[llmKey] !== undefined) {
+              finalScores[taskDim] = sanitizedScores[llmKey];
+            } else if (sanitizedScores[taskDim] !== undefined) {
+              finalScores[taskDim] = sanitizedScores[taskDim];
+            } else {
+              finalScores[taskDim] = 5; // neutral fallback
+            }
+          }
+
+          if (missingDims.length > 0) {
+            console.log(`  ⚠ ${proc.reviewerName}: LLM used wrong dimensions for task ${taskId}. ` +
+              `Missing: [${missingDims.join(', ')}], Extra: [${extraDims.join(', ')}]. Corrected via fuzzy match.`);
+          }
+        } else {
+          // All dimensions match exactly — use as-is
+          Object.assign(finalScores, sanitizedScores);
+        }
+      } else {
+        // No defined dimensions on the task — use LLM output as-is
+        Object.assign(finalScores, sanitizedScores);
+      }
+
       const sanitizedOverall = Math.max(1, Math.min(10, Math.round(draft.weighted_overall)));
 
-      // 3. Route based on mode (compute approved from overall score)
+      // 4. Protocol: compute approved from overall score
       const approved = sanitizedOverall >= 7;
       const reviewPayload = {
-        scores: sanitizedScores,
+        scores: finalScores,
         weighted_overall: sanitizedOverall,
         reviewer_confidence: draft.reviewer_confidence ?? 5,
         comment: draft.comment || '',
