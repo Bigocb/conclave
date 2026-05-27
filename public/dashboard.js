@@ -99,7 +99,7 @@ async function refreshActiveView() {
         // Surgical Update: Only create elements if they don't exist
         tasks.forEach(task => {
             let card = document.getElementById(`noc-card-${task.id}`);
-            const progress = (task.currentReviews / task.requestedReviews) * 100;
+            const progress = ((task.currentReviews || 0) / (task.requestedReviews || 1)) * 100;
             
             if (!card) {
                 card = document.createElement('div');
@@ -154,37 +154,6 @@ function handleActiveViewPulse(event) {
 
 // ─── NOC Active View ──────────────────────────────────────────
 
-async function refreshActiveView() {
-    if (!STATE.token || !STATE.orgId) return;
-    
-    try {
-        const data = await apiRequest('/v1/active-view');
-        const tasks = data.activeTasks || [];
-        
-        // Update Global Tickers
-        document.getElementById('noc-active-tasks').innerText = tasks.length;
-        const totalReviews = tasks.reduce((sum, t) => sum + (t.currentReviews || 0), 0);
-        document.getElementById('noc-reviews-count').innerText = totalReviews;
-
-        const grid = document.getElementById('active-grid');
-        if (!grid) return;
-
-        // Surgical Update: Only create or update elements
-        tasks.forEach(task => {
-            let card = document.getElementById(`noc-card-${task.id}`);
-            const progress = ((task.currentReviews || 0) / (task.requestedReviews || 1)) * 100;
-            
-            if (!card) {
-                card = document.createElement('div');
-                card.id = `noc-card-${task.id}`;
-                card.className = 'noc-card group';
-                card.onclick = () => {
-                    document.getElementById('td-task-id').innerText = task.id;
-                    toggleTaskDetailModal(true);
-                    refreshTaskDetails(task.id);
-                };
-                grid.appendChild(card);
-            }
 
             card.innerHTML = `
                 <div class="flex justify-between items-start mb-3">
@@ -213,15 +182,6 @@ async function refreshActiveView() {
     }
 }
 
-function handleActiveViewPulse(event) {
-    const { type, payload } = event;
-    if (type === 'REVIEW_SUBMITTED') {
-        const card = document.getElementById(`noc-card-${payload.taskId}`);
-        if (card) {
-            card.classList.add('pulse-flash');
-            setTimeout(() => card.classList.remove('pulse-flash'), 1000);
-            refreshActiveView(); 
-        }
     }
 }
 // ─── Toast Notifications ─────────────────────────────────────
