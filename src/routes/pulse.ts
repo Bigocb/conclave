@@ -16,7 +16,7 @@ export const pulseRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     if (!orgId) {
       return reply.code(403).send({ error: 'No organization context found in session' });
     }
-...[truncated]
+
     // 2. Set SSE Headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
