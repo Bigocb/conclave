@@ -10,17 +10,55 @@ export interface PulseEvent {
   orgId?: string;
 }
 
-class PulseHub extends EventEmitter {
-  // Since SSE is request-based, we don't store socket connections.
-  // Instead, we act as a central dispatcher that the route handlers
-  // listen to via the EventEmitter.
+export class PulseHub extends EventEmitter {
+  private pulseUrl: string = process.env.PULSE_DAEMON_URL || '';
 
-  broadcastToOrg(orgId: string, event: Omit<PulseEvent, 'orgId'>) {
-    this.emit(`org:${orgId}`, { ...event, orgId });
+  async broadcastToOrg(orgId: string, event: Omit<PulseEvent, 'orgId'>) {
+    if (!this.pulseUrl) {
+      console.error('[PulseHub] CRITICAL: PULSE_DAEMON_URL is NOT configured in Vercel environment variables.');
+      return;
+    }
+
+    try {
+      console.log(`[PulseHub] Attempting to relay event to ${this.pulseUrl} for org ${orgId}...`);
+      const response = await fetch(`${this.pulseUrl}/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId, event }),
+      });
+      
+      if (!response.ok) {
+        console.error(`[PulseHub] Render Daemon returned error: ${response.status} ${response.statusText}`);
+      } else {
+        console.log(`[PulseHub] Successfully relayed event to Render Daemon.`);
+      }
+    } catch (err) {
+      console.error('[PulseHub] Network error while relaying to daemon:', err);
+    }
   }
 
-  broadcastGlobal(event: PulseEvent) {
-    this.emit('global', event);
+  async broadcastGlobal(event: PulseEvent) {
+    if (!this.pulseUrl) {
+      console.error('[PulseHub] CRITICAL: PULSE_DAEMON_URL is NOT configured in Vercel environment variables.');
+      return;
+    }
+
+    try {
+      console.log(`[PulseHub] Attempting to relay global event to ${this.pulseUrl}...`);
+      const response = await fetch(`${this.pulseUrl}/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event }),
+      });
+      
+      if (!response.ok) {
+        console.error(`[PulseHub] Render Daemon returned error: ${response.status} ${response.statusText}`);
+      } else {
+        console.log(`[PulseHub] Successfully relayed global event to Render Daemon.`);
+      }
+    } catch (err) {
+      console.error('[PulseHub] Network error while relaying to daemon:', err);
+    }
   }
 }
 
