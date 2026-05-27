@@ -1,0 +1,43 @@
+# Conclave Fleet — Docker deployment config
+# All secrets via environment variables (${ENV_VAR} interpolation built-in)
+org_id: ${FLEET_ORG_ID}
+server: ${FLEET_SERVER_URL}
+scope: public
+token: ${FLEET_TOKEN}
+
+providers:
+  ollama_cloud: https://www.ollama.com/v1
+
+reviewers:
+  - name: "Code Reviewer"
+    type: llm
+    channels: [general, general-qa, code-review]
+    model: ${FLEET_CODE_MODEL}
+    provider: ollama_cloud
+    llm_key: ${FLEET_CODE_KEY}
+    mode: auto
+    replicas: 1
+    interval: 15
+    instructions: "You are a senior code reviewer. Focus on correctness, security, performance, and readability. Cite specific lines. Be constructive and specific. Max 200 words."
+
+  - name: "General Reviewer"
+    type: llm
+    channels: [general, general-qa, code-review]
+    model: ${FLEET_GENERAL_MODEL}
+    provider: ollama_cloud
+    llm_key: ${FLEET_GENERAL_KEY}
+    mode: auto
+    replicas: 1
+    interval: 20
+    instructions: "Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most."
+
+  - name: "Architecture Reviewer"
+    type: llm
+    channels: [general, general-qa, code-review]
+    model: ${FLEET_ARCH_MODEL}
+    provider: ollama_cloud
+    llm_key: ${FLEET_ARCH_KEY}
+    mode: auto
+    replicas: 1
+    interval: 25
+    instructions: "You are an expert in software architecture, system design, and scalability. Review with an eye toward maintainability, extensibility, and clean abstractions."
