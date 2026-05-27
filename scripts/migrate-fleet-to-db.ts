@@ -1,19 +1,56 @@
-import { readFileSync } from 'fs';
-import { parse as parseYaml } from 'yaml';
-import { resolve } from 'path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../src/db/schema';
 import { nanoid } from 'nanoid';
+import { readFileSync } from 'fs';
+import { parse as parseYaml } from 'yaml';
+import { resolve } from 'path';
+import { eq } from 'drizzle-orm';
 
 async function runMigration() {
-  const DATABASE_URL = process.env.DATABASE_URL || 'postgres://conclave:conclave@localhost:5432/conclave';
-  console.log(`Connecting to DB: ${DATABASE_URL}`);
+  const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://promptoria_db_user:VMsV40FYzcy1BmbWnqCWwiPrmGXuoh0k@dpg-d79au56dqaus739isukg-a.oregon-postgres.render.com/promptoria_db';
   
-  const pool = new Pool({ connectionString: DATABASE_URL });
+  const pool = new Pool({ 
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
   const db = drizzle(pool, { schema });
 
   try {
+    console.log('Ensuring tables exist...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "clv_fleet_config" (
+        "org_id" text PRIMARY KEY REFERENCES "clv_organizations"("id"),
+        "server" text NOT NULL,
+        "scope" text DEFAULT 'public',
+        "providers" text,
+        "updated_at" text NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS "clv_fleet_reviewers" (
+        "id" text PRIMARY KEY,
+        "org_id" text NOT NULL REFERENCES "clv_fleet_config"("org_id"),
+        "name" text NOT NULL,
+        "channels" text NOT NULL,
+        "type" text DEFAULT 'llm',
+        "model" text,
+        "provider" text,
+        "llm_url" text,
+        "llm_key" text,
+        "command" text,
+        "replicas" integer DEFAULT 1,
+        "mode" text DEFAULT 'auto',
+        "confidence_threshold" integer DEFAULT 8,
+        "prompt" text,
+        "instructions" text,
+        "skills" text,
+        "steps" text,
+        "interval" integer,
+        "max_concurrent" integer DEFAULT 1,
+        "created_at" text NOT NULL DEFAULT now(),
+        "updated_at" text NOT NULL DEFAULT now()
+      );
+    `);
+
     const configPath = resolve('./fleet.yaml');
     const raw = readFileSync(configPath, 'utf-8');
     const parsed = parseYaml(raw);
@@ -24,7 +61,6 @@ async function runMigration() {
 
     console.log(`Migrating fleet.yaml for org: ${parsed.org_id}`);
 
-    // 1. Save Global Config
     await db.insert(schema.fleetConfig).values({
       orgId: parsed.org_id,
       server: parsed.server,
@@ -40,10 +76,9 @@ async function runMigration() {
       }
     });
 
-    // 2. Clear old blueprints for this org to avoid duplicates during migration
-    await db.delete(schema.fleetReviewers).where(schema.fleetReviewers.orgId, 'eq', parsed.org_id);
+    // CORRECTED: Using eq() for the where clause
+    await db.delete(schema.fleetReviewers).where(eq(schema.fleetReviewers.orgId, parsed.org_id));
 
-    // 3. Save Reviewers
     for (const r of parsed.reviewers) {
       const id = `rev_blueprint_${nanoid(12)}`;
       await db.insert(schema.fleetReviewers).values({

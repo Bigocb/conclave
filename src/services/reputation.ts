@@ -3,7 +3,7 @@
  * Reputation computation — owned by principals
  */
 
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 
@@ -54,6 +54,48 @@ export class ReputationService {
 
   async getAgentReputation(agentId: string) {
     return this.getByAgent(agentId);
+  }
+
+  async __bulkGetByPrincipals(principalIds: string[]) {
+    if (principalIds.length === 0) return [];
+    
+    const snapshots = await this.db.select().from(schema.reputationSnapshots)
+      .where(inArray(schema.reputationSnapshots.principalId, principalIds));
+
+    const latest: Record<string, any> = {};
+    for (const s of snapshots) {
+      const current = latest[s.principalId];
+      if (!current || new Date(s.snapshotAt) > new Date(current.snapshotAt)) {
+        latest[s.principalId] = s;
+      }
+    }
+
+    return principalIds.map(id => {
+      const s = latest[id];
+      if (!s) return { 
+        principal_id: id, 
+        performer: { overall: 0, by_dimension: {}, confidence: 0, total_tasks_completed: 0 }, 
+        reviewer: { overall: 0, alignment_score: 0, helpfulness_score: 0, total_reviews_given: 0 } 
+      };
+      return {
+        principal_id: id,
+        performer: { 
+          overall: s.performerOverall ?? 0, 
+          by_dimension: s.performerDimensions ? JSON.parse(s.performerDimensions) : {}, 
+          by_role: s.performerByRole ? JSON.parse(s.performerByRole) : {}, 
+          confidence: s.confidence, 
+          total_tasks_completed: s.taskCount 
+        },
+        reviewer: { 
+          overall: s.reviewerOverall ?? 0, 
+          alignment_score: s.reviewerAlignment ?? 0, 
+          helpfulness_score: s.reviewerHelpfulness ?? 0, 
+          total_reviews_given: s.reviewCount 
+        },
+        trend: s.trend,
+        snapshot_at: s.snapshotAt,
+      };
+    });
   }
 
   async computeAndSnapshot(principalId: string) {

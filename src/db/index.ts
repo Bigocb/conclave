@@ -178,7 +178,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS overall_score INTEGER`;
     await client`ALTER TABLE clv_reviews ALTER COLUMN updated_at DROP NOT NULL`;
     await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS respondent_id TEXT REFERENCES clv_agents(id)`;
-    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS references TEXT`;
+    await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS "references" TEXT`;
     await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS metadata TEXT`;
     await client`CREATE TABLE IF NOT EXISTS clv_opinions (
       id TEXT PRIMARY KEY,

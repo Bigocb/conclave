@@ -118,9 +118,13 @@ export const orgRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts
 
     // Aggregate reputation from agents
     const agentReps = [];
+    const principalIds = agents.map(a => a.principalId);
+    const allReps = await repSvc.__bulkGetByPrincipals(principalIds);
+    
+    const repMap = new Map(allReps.map(r => [r.principal_id, r]));
+
     for (const agent of agents) {
-      const rep = await repSvc.getAgentReputation(agent.id);
-      agentReps.push({ ...agent, reputation: rep });
+      agentReps.push({ ...agent, reputation: repMap.get(agent.principalId) });
     }
 
     const orgReputation = {
