@@ -80,6 +80,17 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
       max: fullConfig.rateLimit?.max || 60,
       timeWindow: fullConfig.rateLimit?.timeWindow || '1 minute',
     });
+
+    // Inject rate_limit_remaining into the meta envelope of every JSON response
+    fastify.addHook('preSerialization', async (request, reply, payload: any) => {
+      if (payload?.meta && typeof payload.meta === 'object') {
+        const remaining = reply.getHeader('x-rate-limit-remaining');
+        if (remaining !== undefined) {
+          payload.meta.rate_limit_remaining = Number(remaining);
+        }
+      }
+      return payload;
+    });
   }
 
   // JWT auth (skip verification in local mode)
