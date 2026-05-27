@@ -7,11 +7,15 @@ import { BudgetService } from '../services/budget.js';
 import { PrincipalService } from '../services/principals.js';
 import { AgentService } from '../services/agents.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
+import { authenticate } from '../middleware/auth.js';
 
 export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = fastify.db;
   const budgetSvc = new BudgetService(db);
   const agentSvc = new AgentService(db);
+
+  // Protect all budget routes with authentication
+  fastify.addHook('preHandler', authenticate);
 
   // GET /v1/agents/:id/budget — Get budget for agent (resolves to principal)
   fastify.get('/agents/:id/budget', async (request: any, reply) => {
