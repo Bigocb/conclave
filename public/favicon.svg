@@ -1,0 +1,14 @@
+/* Conclave Dashboard — Favicon SVG (inline icon) */
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="20" fill="#06090f"/>
+  <circle cx="50" cy="50" r="38" fill="none" stroke="#00d98b" stroke-width="4"/>
+  <circle cx="50" cy="50" r="18" fill="#00d98b"/>
+  <circle cx="50" cy="24" r="6" fill="#00d98b" opacity="0.6"/>
+  <circle cx="50" cy="76" r="6" fill="#00d98b" opacity="0.6"/>
+  <circle cx="24" cy="50" r="6" fill="#00d98b" opacity="0.6"/>
+  <circle cx="76" cy="50" r="6" fill="#00d98b" opacity="0.6"/>
+  <circle cx="32" cy="32" r="5" fill="#00d98b" opacity="0.4"/>
+  <circle cx="68" cy="32" r="5" fill="#00d98b" opacity="0.4"/>
+  <circle cx="32" cy="68" r="5" fill="#00d98b" opacity="0.4"/>
+  <circle cx="68" cy="68" r="5" fill="#00d98b" opacity="0.4"/>
+</svg>

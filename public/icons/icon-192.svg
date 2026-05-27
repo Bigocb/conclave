@@ -1,0 +1,20 @@
+/* Conclave Dashboard — PWA Icon Placeholders
+
+   For production, replace these with proper 192x192 and 512x512 PNGs.
+   These SVG placeholders are recognized by modern browsers but PNG is
+   recommended for full compatibility with all PWA-capable platforms. */
+
+/* 192x192 placeholder — solid green circle on dark bg */
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#06090f"/>
+  <circle cx="96" cy="96" r="72" fill="none" stroke="#00d98b" stroke-width="8"/>
+  <circle cx="96" cy="96" r="34" fill="#00d98b"/>
+  <circle cx="96" cy="46" r="12" fill="#00d98b" opacity="0.6"/>
+  <circle cx="96" cy="146" r="12" fill="#00d98b" opacity="0.6"/>
+  <circle cx="46" cy="96" r="12" fill="#00d98b" opacity="0.6"/>
+  <circle cx="146" cy="96" r="12" fill="#00d98b" opacity="0.6"/>
+  <circle cx="61" cy="61" r="10" fill="#00d98b" opacity="0.4"/>
+  <circle cx="131" cy="61" r="10" fill="#00d98b" opacity="0.4"/>
+  <circle cx="61" cy="131" r="10" fill="#00d98b" opacity="0.4"/>
+  <circle cx="131" cy="131" r="10" fill="#00d98b" opacity="0.4"/>
+</svg>

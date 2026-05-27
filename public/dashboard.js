@@ -280,6 +280,61 @@ document.addEventListener('touchend', function() {
     SWIPE_MODAL_ACTIVE = false;
 }, { passive: true });
 
+// ─── PWA: Service Worker + Push Notifications ────────────────
+
+const VAPID_PUBLIC_KEY = 'BJRbzU74Mave_sfRvjBcQ_xfoalte0tm08DKMeRfK_YxLGU60t66Fi9MtDt-YiD6oy-3kSQoUUZU4dPp_CA5p_w';
+
+async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        console.log('SW registered:', reg.scope);
+
+        // Check if push is supported
+        if (!('PushManager' in window)) return reg;
+
+        // Check permission
+        const result = await Notification.requestPermission();
+        if (result !== 'granted') return reg;
+
+        // Subscribe to push
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+
+        // Send subscription to server
+        await sendPushSubscription(sub);
+        return reg;
+    } catch (e) {
+        console.warn('SW registration failed:', e);
+    }
+}
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function sendPushSubscription(subscription) {
+    try {
+        await apiRequest('/v1/push/subscribe', 'POST', {
+            subscription: JSON.stringify(subscription),
+        });
+        console.log('Push subscription saved');
+    } catch (e) {
+        console.warn('Failed to save push subscription:', e.message);
+    }
+}
+
 // ─── Auth ──────────────────────────────────────────────────────
 
 let AUTH_MODE = 'login';
@@ -1141,6 +1196,7 @@ document.getElementById('btn-save-key').onclick = saveVaultKey;
 window.onload = async () => {
     lucide.createIcons();
     applySummaryMode();
+    registerServiceWorker();
     setupPullToRefresh(() => {
         // Refresh the current view
         const currentView = document.querySelector('[id^="view-"]:not(.hidden)');

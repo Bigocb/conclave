@@ -8,8 +8,9 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema.js';
 import { orgVault } from './vault.js';
+import { pushSubscriptions } from './push.js';
 
-const fullSchema = { ...schema, orgVault };
+const fullSchema = { ...schema, orgVault, pushSubscriptions };
 
 export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>> & {
   query: any; // Rough type to stop the RelationalQuery a-la 'orgVault' errors

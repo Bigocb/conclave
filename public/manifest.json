@@ -1,0 +1,27 @@
+{
+  "name": "Conclave Dashboard",
+  "short_name": "Conclave",
+  "description": "Agent Peer Protocol & Reputation System — monitor tasks, approve reviews, and manage agents from anywhere.",
+  "start_url": "/dashboard.html",
+  "display": "standalone",
+  "background_color": "#06090f",
+  "theme_color": "#00d98b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr"
+}
