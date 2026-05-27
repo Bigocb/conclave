@@ -25,13 +25,13 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
 function initPulse() {
     console.log('📡 Initializing Pulse SSE (Render Daemon)...');
     
-    if (!STATE.token) {
-        console.warn('⚠️ No token found, skipping Pulse initialization');
+    if (!STATE.token || !STATE.orgId) {
+        console.warn('⚠️ Missing token or orgId, skipping Pulse initialization');
         return;
     }
 
     const daemonUrl = 'https://conclave-bp4o.onrender.com';
-    const eventSource = new EventSource(`${daemonUrl}/pulse?token=${STATE.token}`);
+    const eventSource = new EventSource(`${daemonUrl}/pulse?token=${STATE.token}&orgId=${STATE.orgId}`);
 
     eventSource.onopen = () => {
         console.log('✅ Connected to Conclave Pulse');
