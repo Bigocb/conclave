@@ -19,6 +19,151 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     return data;
 }
 
+// ─── Toast Notifications ─────────────────────────────────────
+
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) { alert(message); return; }
+
+    const icons = { success: 'check-circle', error: 'alert-circle', info: 'info', warning: 'alert-triangle' };
+    const icon = icons[type] || 'info';
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 flex-shrink-0"></i><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    lucide.createIcons({ attrs: { root: toast } });
+
+    setTimeout(() => {
+        toast.classList.add('toast-out');
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 250);
+    }, duration);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ─── Mobile Sidebar ──────────────────────────────────────────
+
+function openMobileSidebar() {
+    document.getElementById('mobile-sidebar-overlay').classList.add('open');
+    document.getElementById('mobile-sidebar-panel').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    // Focus the close button
+    setTimeout(() => {
+        const closeBtn = document.querySelector('.mobile-sidebar-panel [aria-label="Close navigation menu"]');
+        if (closeBtn) closeBtn.focus();
+    }, 100);
+}
+
+function closeMobileSidebar() {
+    document.getElementById('mobile-sidebar-overlay').classList.remove('open');
+    document.getElementById('mobile-sidebar-panel').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// ─── Focus Trap for Modals ───────────────────────────────────
+
+const MODAL_SELECTORS = [
+    'auth-overlay', 'deploy-modal', 'factory-modal', 'edit-agent-modal',
+    'submit-task-modal', 'task-detail-modal', 'principal-modal',
+    'org-modal', 'grant-budget-modal'
+];
+
+function getModalElement(id) {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains('hidden') ? el : null;
+}
+
+function getOpenModal() {
+    for (const id of MODAL_SELECTORS) {
+        const el = getModalElement(id);
+        if (el) return el;
+    }
+    return null;
+}
+
+document.addEventListener('keydown', function(e) {
+    // Escape closes modals
+    if (e.key === 'Escape') {
+        const modal = getOpenModal();
+        if (modal) {
+            const id = modal.id;
+            if (id === 'auth-overlay') hideAuth();
+            else if (id === 'deploy-modal') toggleDeployModal();
+            else if (id === 'factory-modal') toggleFactoryModal(false);
+            else if (id === 'edit-agent-modal') toggleEditAgentModal(false);
+            else if (id === 'submit-task-modal') toggleSubmitTaskModal(false);
+            else if (id === 'task-detail-modal') toggleTaskDetailModal(false);
+            else if (id === 'principal-modal') hideCreatePrincipalModal();
+            else if (id === 'org-modal') hideCreateOrgModal();
+            else if (id === 'grant-budget-modal') hideGrantBudgetModal();
+        }
+        // Escape closes mobile sidebar
+        if (document.getElementById('mobile-sidebar-overlay')?.classList.contains('open')) {
+            closeMobileSidebar();
+        }
+    }
+
+    // Focus trap: Tab inside open modal
+    if (e.key === 'Tab') {
+        const modal = getOpenModal();
+        if (modal) {
+            const focusable = modal.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    }
+});
+
+// Backdrop click to close modals
+document.addEventListener('click', function(e) {
+    for (const id of MODAL_SELECTORS) {
+        const el = document.getElementById(id);
+        if (!el || el.classList.contains('hidden')) continue;
+        // Check if click is on the overlay itself (not on the modal content)
+        if (e.target === el || (el.id === 'task-detail-modal' && e.target === el)) {
+            if (id === 'auth-overlay') { /* don't close auth on backdrop */ }
+            else if (id === 'deploy-modal') toggleDeployModal();
+            else if (id === 'factory-modal') toggleFactoryModal(false);
+            else if (id === 'edit-agent-modal') toggleEditAgentModal(false);
+            else if (id === 'submit-task-modal') toggleSubmitTaskModal(false);
+            else if (id === 'task-detail-modal') toggleTaskDetailModal(false);
+            else if (id === 'principal-modal') hideCreatePrincipalModal();
+            else if (id === 'org-modal') hideCreateOrgModal();
+            else if (id === 'grant-budget-modal') hideGrantBudgetModal();
+        }
+    }
+});
+
+// ─── Debounced Auto-Refresh ─────────────────────────────────
+
+let AUTO_REFRESH_TIMERS = {};
+let IS_MOBILE = window.innerWidth < 768;
+
+window.addEventListener('resize', () => {
+    IS_MOBILE = window.innerWidth < 768;
+});
+
+function scheduleRefresh(fn, key = 'default') {
+    if (AUTO_REFRESH_TIMERS[key]) clearTimeout(AUTO_REFRESH_TIMERS[key]);
+    const delay = IS_MOBILE ? 2000 : 500;
+    AUTO_REFRESH_TIMERS[key] = setTimeout(fn, delay);
+}
+
 // ─── Auth ──────────────────────────────────────────────────────
 
 let AUTH_MODE = 'login';
@@ -49,12 +194,12 @@ async function handleLogin() {
             await loadPrincipals();
             switchView('fleet');
         } catch (e) {
-            alert('Login failed. Please check your credentials.');
+            showToast('Login failed. Check your credentials.', 'error');
         }
     } else {
         const fullName = document.getElementById('reg-name').value;
         const orgName = document.getElementById('reg-org').value;
-        if (!fullName || !orgName) return alert('Name and Organization are required.');
+        if (!fullName || !orgName) { showToast('Name and Organization are required.', 'warning'); return; }
         try {
             const data = await apiRequest('/v1/auth/register', 'POST', { email, password, fullName, orgName, displayName: fullName });
             STATE.token = data.token;
@@ -65,7 +210,7 @@ async function handleLogin() {
             await loadPrincipals();
             switchView('fleet');
         } catch (e) {
-            alert('Registration failed: ' + (e.message || 'Email might be taken.'));
+            showToast('Registration failed: ' + (e.message || 'Email might be taken.'), 'error');
         }
     }
 }
@@ -87,6 +232,8 @@ function switchView(viewId) {
         const el = document.getElementById(`view-${v}`);
         if (el) el.classList.toggle('hidden', v !== viewId);
     });
+
+    // Sync desktop sidebar
     document.querySelectorAll('.sidebar-item').forEach(item => {
         item.classList.remove('active', 'text-white');
         item.classList.add('text-gray-400');
@@ -96,6 +243,26 @@ function switchView(viewId) {
             if (viewId === key && txt.includes(val)) {
                 item.classList.add('active');
                 item.classList.remove('text-gray-400');
+            }
+        }
+    });
+
+    // Sync bottom nav (phone)
+    document.querySelectorAll('#mobile-bottom-nav a').forEach(a => {
+        a.classList.toggle('active', a.dataset.view === viewId);
+        if (a.dataset.view === viewId) {
+            a.classList.remove('text-gray-400');
+        }
+    });
+
+    // Sync mobile sidebar
+    document.querySelectorAll('.mobile-sidebar-panel nav a').forEach(a => {
+        const txt = a.textContent.toLowerCase();
+        const map = { fleet: 'fleet', vault: 'vault', tasks: 'task', channels: 'channel', workers: 'worker', org: 'organization', factory: 'factory' };
+        a.classList.remove('active');
+        for (const [key, val] of Object.entries(map)) {
+            if (viewId === key && txt.includes(val)) {
+                a.classList.add('active');
             }
         }
     });
@@ -112,7 +279,10 @@ function switchView(viewId) {
 
 async function refreshFleet() {
     const grid = document.getElementById('agent-grid');
-    document.getElementById('display-org').innerText = STATE.orgId || 'No Org Linked';
+    const orgText = STATE.orgId || 'No Org Linked';
+    document.getElementById('display-org').innerText = orgText;
+    const mobileOrg = document.getElementById('mobile-display-org');
+    if (mobileOrg) mobileOrg.innerText = orgText;
     await loadPrincipals();
     const principals = STATE.principals;
 
@@ -255,18 +425,18 @@ async function subPrincipal(channelName) {
     const selectId = `sub-sel-${channelName.replace(/[^a-z0-9]/gi,'_')}`;
     const sel = document.getElementById(selectId);
     const principalId = sel?.value;
-    if (!principalId) return alert('Select a principal first.');
+    if (!principalId) { showToast('Select a principal first.', 'warning'); return; }
     try {
         await apiRequest(`/v1/channels/${encodeURIComponent(channelName)}/subscribe`, 'POST', { principal_id: principalId });
         await refreshChannels();
-    } catch (e) { alert('Subscribe failed: ' + e.message); }
+    } catch (e) { showToast('Subscribe failed: ' + e.message, 'error'); }
 }
 
 async function unsubPrincipal(principalId, channelName) {
     try {
         await apiRequest(`/v1/channels/${encodeURIComponent(channelName)}/subscribe`, 'DELETE', { principal_id: principalId });
         await refreshChannels();
-    } catch (e) { alert('Unsubscribe failed: ' + e.message); }
+    } catch (e) { showToast('Unsubscribe failed: ' + e.message, 'error'); }
 }
 
 // ─── Worker Status ─────────────────────────────────────────────
@@ -310,13 +480,14 @@ async function refreshWorker() {
 async function saveVaultKey() {
     const provider = document.getElementById('vault-provider').value;
     const key = document.getElementById('vault-key').value;
-    if (!provider || !key) return alert('Both provider and key are required.');
+    if (!provider || !key) { showToast('Both provider and key are required.', 'warning'); return; }
     try {
         await apiRequest('/v1/vault/key', 'POST', { provider, key });
         document.getElementById('vault-provider').value = '';
         document.getElementById('vault-key').value = '';
         await refreshVault();
-    } catch (e) { alert('Failed to save key to vault.'); }
+        showToast('Key saved to vault.', 'success');
+    } catch (e) { showToast('Failed to save key to vault.', 'error'); }
 }
 
 async function refreshVault() {
@@ -356,7 +527,7 @@ async function submitTask() {
     const dimsRaw = document.getElementById('task-dimensions').value;
     const dimensions = dimsRaw ? dimsRaw.split(',').map(d => d.trim()).filter(Boolean) : null;
 
-    if (!channel || !description || !output) return alert('Channel, description, and output are required.');
+    if (!channel || !description || !output) { showToast('Channel, description, and output are required.', 'warning'); return; }
 
     try {
         const payload = {
@@ -372,7 +543,7 @@ async function submitTask() {
         document.getElementById('submit-task-form').reset();
         await refreshTasks();
     } catch (e) {
-        alert('Task submission failed: ' + e.message);
+        showToast('Task submission failed: ' + e.message, 'error');
     }
 }
 
@@ -478,7 +649,7 @@ async function dismissTask(taskId) {
         toggleTaskDetailModal(false);
         refreshTasks();
     } catch (e) {
-        alert('Failed to dismiss task: ' + e.message);
+        showToast('Failed to dismiss task: ' + e.message, 'error');
     }
 }
 
@@ -488,7 +659,7 @@ async function restoreTask(taskId) {
         toggleTaskDetailModal(false);
         refreshTasks();
     } catch (e) {
-        alert('Failed to restore task: ' + e.message);
+        showToast('Failed to restore task: ' + e.message, 'error');
     }
 }
 
@@ -595,14 +766,14 @@ function hideCreatePrincipalModal() { document.getElementById('principal-modal')
 
 async function createPrincipal() {
     const name = document.getElementById('principal-name').value;
-    if (!name) return alert('Principal name is required.');
+    if (!name) { showToast('Principal name is required.', 'warning'); return; }
     try {
         await apiRequest('/v1/principals', 'POST', { org_id: STATE.orgId, name });
         document.getElementById('principal-name').value = '';
         hideCreatePrincipalModal();
         await loadPrincipals();
         refreshOrg();
-    } catch (e) { alert('Failed to create principal: ' + (e.message || 'Unknown error')); }
+    } catch (e) { showToast('Failed to create principal: ' + (e.message || 'Unknown error'), 'error'); }
 }
 
 function showCreateOrgModal() { document.getElementById('org-modal').classList.remove('hidden'); }
@@ -610,7 +781,7 @@ function hideCreateOrgModal() { document.getElementById('org-modal').classList.a
 
 async function createOrg() {
     const name = document.getElementById('new-org-name').value;
-    if (!name) return alert('Organization name is required.');
+    if (!name) { showToast('Organization name is required.', 'warning'); return; }
     try {
         const data = await apiRequest('/v1/orgs', 'POST', { name });
         if (data.data) {
@@ -622,7 +793,7 @@ async function createOrg() {
             refreshOrg();
             refreshFleet();
         }
-    } catch (e) { alert('Failed to create org: ' + (e.message || 'Unknown error')); }
+    } catch (e) { showToast('Failed to create org: ' + (e.message || 'Unknown error'), 'error'); }
 }
 
 // ─── Agent Factory (unchanged from original) ───────────────────
@@ -645,12 +816,12 @@ async function refreshFactory() {
             const ownerName = owner ? owner.name : (agent.principal_id ? agent.principal_id.slice(0,16)+'...' : '-');
             list.innerHTML += `
                 <tr class="border-b border-[#1e2d4a] hover:bg-white/5 transition-all">
-                    <td class="p-4 font-medium">${agent.name}</td>
-                    <td class="p-4 text-sm text-gray-400">${agent.provider || 'custom'}/${agent.model || 'unknown'}</td>
-                    <td class="p-4 text-xs text-gray-500 font-mono">${ownerName}</td>
-                    <td class="p-4 text-xs ${agent.status === 'active' ? 'text-green-400' : 'text-red-400'}">${agent.status}</td>
-                    <td class="p-4 font-mono text-xs text-gray-500">${agent.id}</td>
-                    <td class="p-4 text-right space-x-2">
+                    <td data-label="Agent Name" class="p-4 font-medium">${agent.name}</td>
+                    <td data-label="Provider/Model" class="p-4 text-sm text-gray-400">${agent.provider || 'custom'}/${agent.model || 'unknown'}</td>
+                    <td data-label="Principal" class="p-4 text-xs text-gray-500 font-mono">${ownerName}</td>
+                    <td data-label="Status" class="p-4 text-xs ${agent.status === 'active' ? 'text-green-400' : 'text-red-400'}">${agent.status}</td>
+                    <td data-label="ID" class="p-4 font-mono text-xs text-gray-500">${agent.id}</td>
+                    <td data-label="Actions" class="p-4 text-right space-x-2">
                         <button onclick="editAgent('${agent.id}')" class="text-xs text-cyan-400 hover:text-cyan-300">Edit</button>
                         <button onclick="decommissionAgent('${agent.id}')" class="text-xs text-red-500 hover:text-red-400">Decommission</button>
                     </td>
@@ -664,7 +835,7 @@ async function decommissionAgent(id) {
     try {
         await apiRequest(`/v1/agents/${id}`, 'DELETE');
         refreshFactory();
-    } catch (e) { alert('Failed to decommission'); }
+    } catch (e) { showToast('Failed to decommission', 'error'); }
 }
 
 // ─── Agent Edit / Token Management ─────────────────────────────
@@ -700,7 +871,7 @@ async function editAgent(agentId) {
 
         toggleEditAgentModal(true);
     } catch (e) {
-        alert('Failed to load agent: ' + e.message);
+        showToast('Failed to load agent: ' + e.message, 'error');
     }
 }
 
@@ -719,7 +890,7 @@ async function saveEditAgent() {
         toggleEditAgentModal(false);
         refreshFactory();
     } catch (e) {
-        alert('Failed to save: ' + e.message);
+        showToast('Failed to save: ' + e.message, 'error');
     }
 }
 
@@ -735,7 +906,7 @@ async function regenerateAgentToken() {
             alert(`New token: ${newToken}\n\nCopy this now — it won't be shown again after closing.`);
         }
     } catch (e) {
-        alert('Failed to regenerate token: ' + e.message);
+        showToast('Failed to regenerate token: ' + e.message, 'error');
     }
 }
 
@@ -757,12 +928,12 @@ async function grantBudget() {
     const principalId = document.getElementById('grant-principal-id').value;
     const amount = parseInt(document.getElementById('grant-amount').value);
     const reason = document.getElementById('grant-reason').value || 'manual_grant';
-    if (!amount || amount <= 0) return alert('Enter a positive amount.');
+    if (!amount || amount <= 0) { showToast('Enter a positive amount.', 'warning'); return; }
     try {
         await apiRequest(`/v1/principals/${principalId}/budget/grant`, 'POST', { amount, reason });
         hideGrantBudgetModal();
         refreshOrg();
-    } catch (e) { alert('Grant failed: ' + e.message); }
+    } catch (e) { showToast('Grant failed: ' + e.message, 'error'); }
 }
 
 // ─── Provider / Model Helpers ──────────────────────────────────
@@ -842,8 +1013,9 @@ document.getElementById('factory-reg-form').onsubmit = async (e) => {
             toggleFactoryModal(false);
             e.target.reset();
             refreshFactory();
-        } else { alert('Error: ' + (res.error || 'Unknown')); }
-    } catch (e) { alert('Network Error: ' + e.message); }
+            showToast('Agent created successfully.', 'success');
+        } else { showToast('Error: ' + (res.error || 'Unknown'), 'error'); }
+    } catch (e) { showToast('Network Error: ' + e.message, 'error'); }
 };
 
 document.getElementById('btn-login').onclick = handleLogin;
