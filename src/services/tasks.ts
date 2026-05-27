@@ -141,10 +141,12 @@ export class TaskService {
       if (task.status === 'open') {
         await this.updateStatus(data.taskId, 'in_review');
       }
-      // Check if we've hit the requested review count → complete the task + award bonuses
-      const reviewCount = await this.getReviewCountForTask(data.taskId);
-      if (reviewCount >= (task.requested_reviews ?? 3) && task.status !== 'completed') {
-        await this.updateStatus(data.taskId, 'completed');
+    // Check if we've hit the requested review count → complete the task + award bonuses
+    const reviewCount = await this.getReviewCountForTask(data.taskId);
+    const required = Math.max(task.requested_reviews ?? 3, 1);
+    if (reviewCount >= required && task.status !== 'completed') {
+      console.log(`[Tasks] Task ${data.taskId} reached consensus (${reviewCount}/${required}). Marking as completed.`);
+      await this.updateStatus(data.taskId, 'completed');
 
         // ─── Budget awards on task completion ─────────────────────
         if (this.budgetService) {
