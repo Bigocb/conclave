@@ -73,7 +73,7 @@ export class VaultService {
 
     if (existing) {
       await this.dbInstance.update(orgVault)
-        .set({ encryptedValue, updatedAt: new Date().toISOString() as any })
+        .set({ encryptedValue, updatedAt: new Date() })
         .where(eq(orgVault.id, existing.id));
       return existing.id;
     }
