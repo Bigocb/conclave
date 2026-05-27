@@ -153,9 +153,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(providerRoutes, { prefix: '/v1' });
 
   // Fleet routes (only when fleet manager is provided)
-  if (fleetManager) {
-    await fastify.register(async (instance) => fleetRoutes(instance, fleetManager), { prefix: '/v1' });
-  }
+    await fastify.register(fleetRoutes, { prefix: '/v1' });
 
   // Cron review route
   await fastify.register(cronRoutes, { prefix: '/v1' });
