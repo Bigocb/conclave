@@ -5,6 +5,7 @@
  */
 
 import { startServer } from './server/index.js';
+import { applyPerformanceIndexes } from './db/apply-indexes.js';
 
 const config = {
   mode: (process.env.CONCLAVE_MODE || 'local') as 'local' | 'self-hosted' | 'cloud',
@@ -16,7 +17,13 @@ const config = {
   jwtSecret: process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret-change-in-production',
 };
 
-startServer(config).catch((err) => {
-  console.error('Fatal error starting Conclave:', err);
-  process.exit(1);
-});
+(async () => {
+  try {
+    // Apply performance indexes before starting server
+    await applyPerformanceIndexes();
+    await startServer(config);
+  } catch (err) {
+    console.error('Fatal error starting Conclave:', err);
+    process.exit(1);
+  }
+})();

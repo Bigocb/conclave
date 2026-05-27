@@ -1,4 +1,4 @@
-import { pgTable, text, integer, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, doublePrecision, index } from 'drizzle-orm/pg-core';
 
 // ─── Users ──────────────────────────────────────────────────
 export const users = pgTable('clv_users', {
@@ -30,7 +30,9 @@ export const organizationMembers = pgTable('clv_org_members', {
   userId: text('user_id').notNull().references(() => users.id),
   role: text('role').notNull().default('member'), // owner | admin | member
   joinedAt: text('joined_at').notNull().$defaultFn(() => new Date().toISOString()),
-});
+}, (table) => ({
+  orgUserIdx: index('idx_org_members_org_user').on(table.orgId, table.userId),
+}));
 
 // ─── Principals (durable identity layer) ────────────────────
 export const principals = pgTable('clv_principals', {
@@ -43,7 +45,9 @@ export const principals = pgTable('clv_principals', {
   status: text('status').notNull().default('active'), // active | decommissioned
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
-});
+}, (table) => ({
+  orgIdx: index('idx_principals_org').on(table.orgId),
+}));
 
 // ─── Agents (ephemeral instances under a principal) ────────
 export const agents = pgTable('clv_agents', {
@@ -62,7 +66,9 @@ export const agents = pgTable('clv_agents', {
   status: text('status').notNull().default('active'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
-});
+}, (table) => ({
+  orgPrinIdx: index('idx_agents_org_prin').on(table.orgId, table.principalId),
+}));
 
 // ─── Attention Budgets (owned by principals) ────────────────
 export const attentionBudgets = pgTable('clv_attention_budgets', {
@@ -117,8 +123,10 @@ export const tasks = pgTable('clv_tasks', {
   metadata: text('metadata'),                    // JSON
   budgetSpent: integer('budget_spent').notNull().default(5),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
-});
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  prinIdx: index('idx_tasks_principal').on(table.principalId),
+}));
 
 // ─── Reviews ────────────────────────────────────────────────
 export const reviews = pgTable('clv_reviews', {
@@ -136,7 +144,9 @@ export const reviews = pgTable('clv_reviews', {
   status: text('status').notNull().default('submitted'), // pending | submitted | disputed
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at'),
-});
+}, (table) => ({
+  taskRevIdx: index('idx_reviews_task_rev').on(table.taskId, table.reviewerId),
+}));
 
 // ─── Opinions ───────────────────────────────────────────────
 export const opinions = pgTable('clv_opinions', {
@@ -194,4 +204,37 @@ export const spotChecks = pgTable('clv_spot_checks', {
   comment: text('comment'),
   dimensionsOverride: text('dimensions_override'), // JSON
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+// ─── Fleet Configuration ───────────────────────────────────────
+export const fleetConfig = pgTable('clv_fleet_config', {
+  orgId: text('org_id').primaryKey().references(() => organizations.id),
+  server: text('server').notNull(),
+  scope: text('scope').notNull().default('public'), // public | private | hybrid
+  providers: text('providers'),                    // JSON object: provider_name -> url
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const fleetReviewers = pgTable('clv_fleet_reviewers', {
+  id: text('id').primaryKey(),                      // rev_blueprint_<uuidv7>
+  orgId: text('org_id').notNull().references(() => fleetConfig.orgId),
+  name: text('name').notNull(),
+  channels: text('channels').notNull(),             // JSON array
+  type: text('type').notNull().default('llm'),     // llm | slim | code | pipeline
+  model: text('model'),
+  provider: text('provider'),
+  llmUrl: text('llm_url'),
+  llmKey: text('llm_key'),                          // Stored as Vault reference or encrypted
+  command: text('command'),
+  replicas: integer('replicas').notNull().default(1),
+  mode: text('mode').notNull().default('auto'),     // auto | human | hybrid
+  confidenceThreshold: integer('confidence_threshold').notNull().default(8),
+  prompt: text('prompt'),
+  instructions: text('instructions'),
+  skills: text('skills'),                           // JSON array
+  steps: text('steps'),                             // JSON array (for pipelines)
+  interval: integer('interval'),
+  maxConcurrent: integer('max_concurrent').notNull().default(1),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
