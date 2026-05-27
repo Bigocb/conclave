@@ -276,12 +276,30 @@ export class FleetManager extends EventEmitter {
         }
       }
 
-      // 3. Create API client with the first agent's ID (for polling/reviewing)
+      // 3. Create API client with the first agent's ID and its own token
+      let agentToken = agents[0]?.token || '';
+      if (!agentToken) {
+        // Try to get/fetch a token for the first agent so auth resolves correctly
+        try {
+          const agentTokenResp = await fetch(`${this.config.server}/v1/agents/${agents[0]?.agentId}/regenerate-token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.config.token}`,
+            },
+          });
+          if (agentTokenResp.ok) {
+            const tokenData = await agentTokenResp.json() as any;
+            agentToken = tokenData.data?.token ?? tokenData.token ?? '';
+            agents[0] = { ...agents[0], token: agentToken };
+          }
+        } catch { /* fallback */ }
+      }
       const pollingClient = new ConclaveApiClient({
         serverUrl: this.config.server,
         principalId,
         agentId: agents[0]?.agentId,
-        token: this.config.token,
+        token: agentToken || this.config.token,
       });
       if (agents[0]?.token) {
         pollingClient.setToken(agents[0].token);
