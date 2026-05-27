@@ -205,6 +205,31 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
     reply.send(success({ tasks, total: tasks.length }));
   });
 
+  // GET /v1/active-view
+  fastify.get('/active-view', async (request: any, reply) => {
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId) return reply.code(403).send(error('FORBIDDEN', 'Organization context missing'));
+
+    const aTasks = await db.select({
+      id: schema.tasks.id,
+      description: schema.tasks.description,
+      requestedReviews: schema.tasks.requestedReviews,
+      status: schema.tasks.status,
+      createdAt: schema.tasks.createdAt,
+    })
+    .from(schema.tasks)
+    .innerJoin(schema.agents, eq(schema.tasks.agentId, schema.agents.id))
+    .where(eq(schema.agents.orgId, currentOrgId as any))
+    .where(sql`status IN ('open', 'in_review')`);
+
+    const result = await Promise.all(aTasks.map(async (t) => {
+      const reviews = await taskSvc.getReviewsForTask(t.id);
+      return { ...t, currentReviews: reviews.length };
+    }));
+
+    reply.send(success({ activeTasks: result }));
+  });
+
   // POST /v1/tasks/:id/reviews
   fastify.post('/tasks/:id/reviews', async (request, reply) => {
     const { id: taskId } = request.params as { id: string };
