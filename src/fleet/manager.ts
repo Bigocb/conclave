@@ -14,17 +14,12 @@ import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import { ConclaveApiClient } from '../mcp/api-client.js';
 import { loadPromptTemplate, DEFAULT_REVIEW_PROMPT } from '../reviewer/prompts.js';
-import { 
-  FleetConfig, 
-  ReviewerMode, 
+import {
+  FleetConfig,
+  ReviewerMode,
   principalSlug,
-  ReviewerConfig 
 } from './config.js';
 import { runLlmReview, runSlimReview, runCodeReview, runPipelineReview, type ReviewInput, type ReviewOutput } from './backends.js';
-import { ConclaveDb } from '../db/index.js';
-import { fleetConfig, fleetReviewers } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
-import { VaultService } from '../services/vault.js';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -87,95 +82,9 @@ export interface FleetStats {
   uptime_seconds: number;
 }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+// ─── LLM Client ─────────────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+async function callLLM(opts: {
   url: string;
   key: string;
   model: string;
@@ -246,24 +155,24 @@ function parseReviewResponse(raw: string): {
   }
 }
 
+// ─── Fleet Manager ──────────────────────────────────────────
+
 export class FleetManager extends EventEmitter {
-  private db: ConclaveDb;
-  private vault: VaultService;
-  private config: FleetConfig | null = null;
+  private config: FleetConfig;
   private processes: Map<string, ReviewerProcess> = new Map();
   private pendingApprovals: PendingReview[] = [];
   private totalReviewsCompleted: Map<string, number> = new Map();
   private apiClients: Map<string, ConclaveApiClient> = new Map();
   private startTime: number = 0;
   private running: boolean = false;
-  private syncTimer?: ReturnType<typeof setInterval>;
 
-  constructor(db: ConclaveDb, initialConfig: FleetConfig) {
+  constructor(config: FleetConfig) {
     super();
-    this.db = db;
-    this.vault = new VaultService(db);
-    this.config = initialConfig;
+    this.config = config;
   }
+
+  // ─── Provisioning ────────────────────────────────────────
+
   async provision(): Promise<void> {
     console.log('🔧 Provisioning fleet...\n');
 
@@ -459,95 +368,9 @@ export class FleetManager extends EventEmitter {
     console.log('\n✅ Fleet provisioned\n');
   }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+  // ─── Start / Stop ────────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  async start(): Promise<void> {
     this.running = true;
     this.startTime = Date.now();
     console.log('🚀 Starting fleet...\n');
@@ -564,95 +387,9 @@ export class FleetManager extends EventEmitter {
 
     this.emit('started');
     console.log('\n✅ Fleet running\n');
-  // ─── Sync & Reconciliation ────────────────────────────────
-
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
   }
 
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  async stop(): Promise<void> {
     this.running = false;
 
     const pids = Array.from(this.processes.keys());
@@ -669,95 +406,9 @@ export class FleetManager extends EventEmitter {
     console.log('\n🛑 Fleet stopped');
   }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+  // ─── Polling Loop ────────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  private startPolling(principalId: string): void {
     const proc = this.processes.get(principalId)!;
 
     // Immediate first poll
@@ -842,95 +493,9 @@ export class FleetManager extends EventEmitter {
     }
   }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+  // ─── Review Task ─────────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  private async reviewTask(principalId: string, task: any, channel: string): Promise<void> {
     const proc = this.processes.get(principalId)!;
     const client = this.apiClients.get(principalId)!;
     const agent = proc.agents[0];
@@ -1116,95 +681,9 @@ export class FleetManager extends EventEmitter {
     this.totalReviewsCompleted.set(principalId, current + 1);
   }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+  // ─── Human Approval ─────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  getPendingApprovals(): PendingReview[] {
     return [...this.pendingApprovals];
   }
 
@@ -1241,95 +720,9 @@ export class FleetManager extends EventEmitter {
     this.emit('review_rejected', { pendingId, taskId: pending.taskId });
   }
 
-  // ─── Sync & Reconciliation ────────────────────────────────
+  // ─── Status ──────────────────────────────────────────────
 
-  async syncFromDb(): Promise<void> {
-    console.log('📡 Syncing fleet configuration from DB...');
-    try {
-      const [configRow] = await this.db.select().from(fleetConfig).limit(1);
-      if (!configRow) {
-        console.warn('  ⚠ No fleet configuration found in DB');
-        return;
-      }
-
-      const reviewersRows = await this.db.select().from(fleetReviewers);
-      
-      const newConfig: FleetConfig = {
-        server: configRow.server,
-        token: configRow.token,
-        org_id: configRow.org_id,
-        scope: configRow.scope,
-        reviewers: reviewersRows.map(r => ({
-          name: r.name,
-          mode: r.mode as ReviewerMode,
-          replicas: r.replicas,
-          channels: (r.channels as string).split(','),
-          type: r.type as any,
-          model: r.model,
-          provider: r.provider,
-          llm_url: r.llm_url,
-          llm_key: r.llm_key,
-          command: r.command,
-          steps: r.steps ? (r.steps as string).split(',') : undefined,
-          instructions: r.instructions,
-          skills: r.skills ? (r.skills as string).split(',') : undefined,
-          confidence_threshold: r.confidence_threshold,
-          interval: r.interval,
-          max_concurrent: r.max_concurrent,
-          prompt: r.prompt,
-        })),
-      };
-
-      if (JSON.stringify(newConfig) === JSON.stringify(this.config)) {
-        console.log('  ✅ Config unchanged');
-        return;
-      }
-
-      console.log('  🔄 Config change detected! Reconciling fleet...');
-      this.config = newConfig;
-      await this.reconcileFleet();
-    } catch (err: any) {
-      console.error('  ❌ DB sync failed:', err.message);
-    }
-  }
-
-  private async reconcileFleet(): Promise<void> {
-    const targetReviewers = this.config?.reviewers || [];
-    const targetNames = targetReviewers.map(r => r.name);
-    const currentPids = Array.from(this.processes.keys());
-    const currentProcs = Array.from(this.processes.values());
-
-    // 1. Stop and remove reviewers no longer in config
-    for (const proc of currentProcs) {
-      if (!targetNames.includes(proc.reviewerName)) {
-        console.log(`  🗑️ Removing reviewer: ${proc.reviewerName}`);
-        this.stopPolling(proc.principalId);
-        this.processes.delete(proc.principalId);
-        this.apiClients.delete(proc.principalId);
-        this.totalReviewsCompleted.delete(proc.principalId);
-      }
-    }
-
-    // 2. Provision new or update existing reviewers
-    for (const reviewer of targetReviewers) {
-      const existingProc = currentProcs.find(p => p.reviewerName === reviewer.name);
-
-      if (!existingProc) {
-        await this.provisionSingleReviewer(reviewer);
-      } else {
-        // Check for updates to replicas or settings
-        if (existingProc.agents.length !== reviewer.replicas || 
-            existingProc.mode !== reviewer.mode || 
-            existingProc.model !== reviewer.model) {
-          console.log(`  🔄 Updating reviewer: ${reviewer.name}`);
-          this.stopPolling(existingProc.principalId);
-          this.processes.delete(existingProc.principalId);
-          await this.provisionSingleReviewer(reviewer);
-        }
-      }
-    }
-  }
-
+  getStats(): FleetStats {
     const pids = Array.from(this.processes.keys());
 
     return {
