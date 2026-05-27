@@ -9,6 +9,8 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 import { orgVault } from './vault.js';
 
+const fullSchema = { ...schema, orgVault };
+
 export type ConclaveDb = ReturnType<typeof drizzle<typeof schema>> & {
   query: any; // Rough type to stop the RelationalQuery a-la 'orgVault' errors
 };
@@ -25,7 +27,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     max: 10,
   });
 
-  db = drizzle(client, { schema });
+  db = drizzle(client, { schema: fullSchema });
 
   // Verify connection and push schema
   await client`SELECT 1`;

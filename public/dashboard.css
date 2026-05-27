@@ -591,3 +591,151 @@ button, a, select, input, textarea, [role="button"] {
 .skip-nav:focus {
   left: 0;
 }
+
+/* ── Swipe indicator on modals (phone) ──────────────────────── */
+.swipe-indicator {
+  display: none;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  margin: 0 auto 8px;
+}
+
+@media (max-width: 767px) {
+  .swipe-indicator {
+    display: block;
+  }
+}
+
+/* ── Pull-to-refresh spinner ─────────────────────────────────── */
+#pull-to-refresh-indicator {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(6, 9, 15, 0.9);
+  backdrop-filter: blur(8px);
+  color: #00d98b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: opacity 200ms;
+}
+
+#pull-to-refresh-indicator.active {
+  display: flex;
+}
+
+.pull-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 217, 139, 0.2);
+  border-top-color: #00d98b;
+  border-radius: 50%;
+  animation: pull-spin 600ms linear infinite;
+}
+
+@keyframes pull-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Refresh button (mobile) ─────────────────────────────────── */
+.mobile-refresh-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgba(0, 217, 139, 0.1);
+  border: 1px solid rgba(0, 217, 139, 0.25);
+  color: #00d98b;
+  cursor: pointer;
+  transition: background 150ms;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 36px;
+}
+.mobile-refresh-btn:hover,
+.mobile-refresh-btn:active {
+  background: rgba(0, 217, 139, 0.2);
+}
+.mobile-refresh-btn i {
+  width: 14px;
+  height: 14px;
+}
+.mobile-refresh-btn.spinning i {
+  animation: pull-spin 600ms linear infinite;
+}
+
+@media (max-width: 767px) {
+  .mobile-refresh-btn {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .mobile-refresh-btn {
+    display: inline-flex;
+  }
+}
+
+/* ── Summary-only mode (compact card toggle) ─────────────────── */
+.summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid #1e2d4a;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 150ms;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 32px;
+  white-space: nowrap;
+}
+.summary-toggle.active {
+  background: rgba(0, 217, 139, 0.1);
+  border-color: rgba(0, 217, 139, 0.3);
+  color: #00d98b;
+}
+
+/* Summary mode: condensed task cards */
+.summary-mode #task-list > div .text-sm {
+  -webkit-line-clamp: 1 !important;
+}
+.summary-mode #task-list > div .flex-wrap.gap-1 {
+  display: none;
+}
+.summary-mode #task-list > div .flex.justify-between.text-\\[10px\\] {
+  font-size: 0.625rem !important;
+}
+.summary-mode #agent-grid > div {
+  padding: 0.75rem !important;
+}
+.summary-mode #agent-grid > div h3 {
+  font-size: 0.875rem !important;
+  margin-bottom: 0 !important;
+}
+.summary-mode #agent-grid > div p.text-xs {
+  display: none;
+}
+.summary-mode #agent-grid > div .pt-4 {
+  padding-top: 0.5rem !important;
+}
+.summary-mode #agent-grid > div .flex.gap-2 button {
+  font-size: 0.625rem !important;
+  padding: 0.25rem 0.5rem !important;
+}
+

@@ -144,6 +144,9 @@
         </div>
     </aside>
 
+    <!-- Pull-to-refresh indicator -->
+    <div id="pull-to-refresh-indicator"><div class="pull-spinner"></div><span>Refreshing...</span></div>
+
     <!-- Tablet hamburger button + mobile header -->
     <button id="hamburger-btn" onclick="openMobileSidebar()" aria-label="Open navigation menu">
         <i data-lucide="menu" class="w-5 h-5"></i>
@@ -156,9 +159,17 @@
                     <h1 class="text-3xl font-extrabold tracking-tight">Principals</h1>
                     <p class="text-gray-400 text-sm">Durable identities that own reputation, subscriptions, and agents.</p>
                 </div>
-                <button onclick="switchView('org')" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
+                <div class="flex items-center gap-2">
+                    <button class="summary-toggle" id="summary-toggle-fleet" onclick="toggleSummaryMode()">
+                        <i data-lucide="list" class="w-3.5 h-3.5"></i> Compact
+                    </button>
+                    <button class="mobile-refresh-btn" onclick="refreshFleet()">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                    </button>
+                    <button onclick="switchView('org')" class="bg-green-500 hover:bg-cyan-400 text-black font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all">
                     <i data-lucide="user-plus" class="w-4 h-4"></i> Manage Principals
                 </button>
+                </div>
             </header>
             <div id="agent-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </div>
@@ -182,10 +193,18 @@
             <header class="mb-12">
                 <h1 class="text-3xl font-extrabold tracking-tight">Task Feed</h1>
                 <p class="text-gray-400 text-sm">Monitor verification progress and peer consensus.</p>
-                <label class="inline-flex items-center gap-2 mt-2 text-xs text-gray-500 cursor-pointer">
-                    <input id="show-dismissed-toggle" type="checkbox" onchange="refreshTasks()" class="accent-green-500">
-                    Show dismissed tasks
-                </label>
+                <div class="flex items-center gap-2 mt-2 flex-wrap">
+                    <label class="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                        <input id="show-dismissed-toggle" type="checkbox" onchange="refreshTasks()" class="accent-green-500">
+                        Show dismissed tasks
+                    </label>
+                    <button class="summary-toggle" id="summary-toggle-tasks" onclick="toggleSummaryMode()">
+                        <i data-lucide="list" class="w-3.5 h-3.5"></i> Compact
+                    </button>
+                    <button class="mobile-refresh-btn" onclick="refreshTasks()">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+                    </button>
+                </div>
             </header>
             <div id="task-list" class="space-y-4"></div>
         </div>
@@ -428,7 +447,8 @@
 
     <!-- Task Detail Modal -->
     <div id="task-detail-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-3xl shadow-2xl max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-3xl shadow-2xl max-h-[80vh] overflow-y-auto" id="td-modal-content">
+            <div class="swipe-indicator"></div>
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-bold text-white"><span id="td-task-id" class="font-mono text-sm text-gray-500"></span></h2>
                 <div class="flex items-center gap-2">
