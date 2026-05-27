@@ -23,33 +23,28 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
 // ─── Real-time Pulse Infrastructure ────────────────────────────
 
 function initPulse() {
-    if (!STATE.token) return;
-
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${window.location.host}/v1/pulse`;
+    console.log('📡 Initializing Pulse SSE...');
     
-    const socket = new WebSocket(wsUrl);
+    const eventSource = new EventSource('/v1/pulse');
 
-    socket.onopen = () => {
-        console.log('[Pulse] Connected to real-time stream');
-        socket.send(JSON.stringify({ token: STATE.token })); 
+    eventSource.onopen = () => {
+        console.log('✅ Connected to Conclave Pulse');
+        showToast('Connected to real-time pulse', 'info');
     };
 
-    socket.onmessage = (event) => {
+    eventSource.onerror = (err) => {
+        console.error('❌ Pulse SSE connection error:', err);
+    };
+
+    eventSource.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
+            console.log('🚀 Pulse Event Received:', data);
             handlePulseEvent(data);
         } catch (e) {
-            console.error('[Pulse] Failed to parse event:', e);
+            console.error('Failed to parse Pulse event:', e);
         }
     };
-
-    socket.onclose = () => {
-        console.log('[Pulse] Connection closed. Reconnecting in 5s...');
-        setTimeout(initPulse, 5000);
-    };
-
-    socket.onerror = (err) => console.error('[Pulse] WebSocket error:', err);
 }
 
 function handlePulseEvent(event) {

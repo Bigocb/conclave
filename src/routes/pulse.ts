@@ -1,51 +1,44 @@
 /**
- * Pulse WebSocket Route
- * Handles real-time connection and org-based subscription.
+ * Pulse SSE Route
+ * Streams real-time events to the client via Server-Sent Events.
  */
 import type { FastifyPluginCallback } from 'fastify';
 import { pulseHub } from '../services/pulse.js';
-import WebSocket from 'ws';
 
 export const pulseRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   
-  fastify.get('/pulse', { 
-    websocket: true 
-  } as any, async (connection: any, req: any) => {
-    const socket = connection.socket;
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader) {
-      socket.close(1008);
-      return;
+  fastify.get('/pulse', async (request, reply) => {
+    // 1. Resolve Organization Context
+    const orgId = (request as any).orgId;
+    if (!orgId) {
+      return reply.code(403).send({ error: 'No organization context found in session' });
     }
 
-    try {
-      const token = authHeader.slice(7);
-      let orgId: string | undefined;
+    // 2. Set SSE Headers
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
 
-      if (token.startsWith('clv_')) {
-        const db = (fastify as any).db;
-        const agent = await db.query.agents.findFirst({
-          where: (agents: any, { eq }: any) => eq(agents.token, token),
-        });
-        if (!agent) throw new Error('Invalid agent token');
-        orgId = agent.orgId;
-      } else {
-        throw new Error('JWT auth not implemented for WS yet');
-      }
+    // 3. Event Handler
+    const handler = (event: any) => {
+      const data = `data: ${JSON.stringify(event)}\n\n`;
+      reply.raw.write(data);
+    };
 
-      if (orgId) {
-        pulseHub.register(orgId, socket);
-        
-        socket.on('close', () => {
-          // Cleanup handled by PulseHub
-        });
-      } else {
-        socket.close(1008);
-      }
-    } catch (err) {
-      socket.close(1008);
-    }
+    // Subscribe to this org's events AND global events
+    pulseHub.on(`org:${orgId}`, handler);
+    pulseHub.on('global', handler);
+
+    // 4. Cleanup on disconnect
+    request.raw.on('close', () => {
+      pulseHub.removeListener(`org:${orgId}`, handler);
+      pulseHub.removeListener('global', handler);
+    });
+
+    // Prevent Fastify from closing the connection automatically
+    return reply.raw;
   });
 
   done();
