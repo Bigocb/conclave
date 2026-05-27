@@ -463,11 +463,19 @@ export class FleetManager extends EventEmitter {
 
           // Fetch full task details (feed only has summary)
           let fullTask = feedItem;
+          let taskFetchFailed = false;
           try {
             const taskResp = await client.getTask(taskId);
             fullTask = taskResp.data;
           } catch {
-            // Use feed item as fallback
+            taskFetchFailed = true;
+          }
+
+          // Skip tasks we can't fetch — wrong org or insufficient permissions
+          if (taskFetchFailed) {
+            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — skipping`);
+            proc.reviewedTaskIds.delete(taskId);
+            continue;
           }
 
           // Process async
