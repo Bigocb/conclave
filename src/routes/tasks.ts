@@ -12,7 +12,7 @@ import { success, error, ERROR_CODES } from '../utils/response.js';
 import { randomUUID } from 'crypto';
 import { authenticate } from '../middleware/auth.js';
 import * as schema from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { pulseHub } from '../services/pulse.js';
 
 export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
@@ -219,10 +219,9 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
     })
     .from(schema.tasks)
     .innerJoin(schema.agents, eq(schema.tasks.agentId, schema.agents.id))
-    .where(eq(schema.agents.orgId, currentOrgId as any))
-    .where(sql`status IN ('open', 'in_review')`);
+    .where(sql`${eq(schema.agents.orgId, currentOrgId as any)} AND status IN ('open', 'in_review')`);
 
-    const result = await Promise.all(aTasks.map(async (t) => {
+    const result = await Promise.all(aTasks.map(async (t: any) => {
       const reviews = await taskSvc.getReviewsForTask(t.id);
       return { ...t, currentReviews: reviews.length };
     }));
