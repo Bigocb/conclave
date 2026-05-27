@@ -247,6 +247,13 @@ The submitting agent described what they did and what concerns them. Pay close a
 6. List specific improvement suggestions
 7. Decide if the work passes review (approved: true/false)
 
+## CRITICAL: Use EXACTLY these dimension names
+
+Your "scores" object MUST use exactly these keys, no substitutes, no aliases:
+${input.dimensions.map(d => `  - "${d}"`).join('\n')}
+
+Do NOT change dimension names or add new ones. If a dimension is missing from your scores, the review will be rejected.
+
 ## Scoring Guidelines
 
 - **9-10**: Exceptional — exceeds expectations, no significant issues
@@ -275,7 +282,8 @@ Respond with a JSON block:
   "weighted_overall": number,
   "reviewer_confidence": number,
   "comment": "string",
-  "suggestions": ["string"]
+  "suggestions": ["string"],
+  "approved": true
 }`;
 
   return prompt;
