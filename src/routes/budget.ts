@@ -35,11 +35,14 @@ export const budgetRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
   // GET /v1/principals/:id/budget — Get principal budget (defined in principal routes)
 
   // POST /v1/principals/:id/budget/grant — Manually add budget to a principal
-  fastify.post('/principals/:id/budget/grant', async (request: any, reply) => {
+  fastify.post('/principals/:id/budget/grant', async (requestS, reply) => {
+    const request = requestS as any;
     const { id } = request.params as { id: string };
     const { amount, reason } = request.body as { amount: number; reason?: string };
-    const currentOrgId = (request as any).orgId;
-    if (!currentOrgId) return reply.code(403).send(error('FORBIDDEN', 'No org context'));
+    
+    const currentOrgId = request.orgId;
+    if (!currentOrgId) return reply.code(403).send(error('FORBIDDEN', 'No org context found in session'));
+    
     const orgId: string = currentOrgId;
 
     if (!amount || amount <= 0) return reply.code(422).send(error('VALIDATION_ERROR', 'Amount must be positive'));

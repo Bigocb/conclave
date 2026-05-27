@@ -54,6 +54,7 @@ export class OrgService {
       name: r.name,
       model: r.model,
       status: r.status,
+      principalId: r.principalId,
     }));
   }
 
