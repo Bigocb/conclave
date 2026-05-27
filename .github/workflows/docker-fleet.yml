@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-fleet
+  IMAGE_NAME: bigocb/conclave-fleet
 
 jobs:
   build-and-push:
