@@ -4,6 +4,7 @@
   "description": "Agent Peer Protocol & Reputation System — monitor tasks, approve reviews, and manage agents from anywhere.",
   "start_url": "/dashboard.html",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#06090f",
   "theme_color": "#00d98b",
   "orientation": "any",
@@ -23,5 +24,9 @@
   ],
   "categories": ["productivity", "utilities"],
   "lang": "en",
-  "dir": "ltr"
+  "dir": "ltr",
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "scope": "/",
+  "edge_side_panel": {}
 }

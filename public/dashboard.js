@@ -280,9 +280,67 @@ document.addEventListener('touchend', function() {
     SWIPE_MODAL_ACTIVE = false;
 }, { passive: true });
 
-// ─── PWA: Service Worker + Push Notifications ────────────────
+// ─── PWA: Service Worker + Push Notifications + Install Prompt ──
 
 const VAPID_PUBLIC_KEY = 'BJRbzU74Mave_sfRvjBcQ_xfoalte0tm08DKMeRfK_YxLGU60t66Fi9MtDt-YiD6oy-3kSQoUUZU4dPp_CA5p_w';
+let INSTALL_PROMPT = null;
+
+// Capture the install prompt event
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    INSTALL_PROMPT = e;
+    showInstallPrompt();
+});
+
+// Show install button when PWA is installable
+function showInstallPrompt() {
+    // Add install button to the sidebar footer
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (!sidebarFooter || document.getElementById('pwa-install-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'pwa-install-btn';
+    btn.className = 'w-full flex items-center gap-3 px-4 py-2 text-xs text-green-400 hover:text-green-300 transition-all text-left';
+    btn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> Install App';
+    btn.onclick = triggerInstallPrompt;
+    sidebarFooter.appendChild(btn);
+
+    // Also add to bottom nav "More" section if on mobile
+    const moreSection = document.querySelector('#mobile-sidebar-panel .sidebar-footer');
+    if (moreSection && !moreSection.querySelector('#pwa-install-mobile')) {
+        const mbtn = document.createElement('button');
+        mbtn.id = 'pwa-install-mobile';
+        mbtn.className = 'w-full flex items-center gap-3 px-4 py-2 text-xs text-green-400 hover:text-green-300 transition-all text-left';
+        mbtn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i> Install App';
+        mbtn.onclick = triggerInstallPrompt;
+        moreSection.insertBefore(mbtn, moreSection.querySelector('button'));
+    }
+
+    lucide.createIcons();
+}
+
+// Trigger the install prompt
+async function triggerInstallPrompt() {
+    if (!INSTALL_PROMPT) {
+        showToast('App is already installed or not yet available.', 'info');
+        return;
+    }
+    const result = await INSTALL_PROMPT.prompt();
+    INSTALL_PROMPT = null;
+    // Hide install buttons after result
+    document.querySelectorAll('[id^="pwa-install"]').forEach(el => el.style.display = 'none');
+    if (result.outcome === 'accepted') {
+        showToast('Conclave installed! 🎉', 'success');
+    } else {
+        showToast('Install cancelled.', 'info');
+    }
+}
+
+// Detect successful install
+window.addEventListener('appinstalled', () => {
+    showToast('Conclave installed! 🎉', 'success');
+    document.querySelectorAll('[id^="pwa-install"]').forEach(el => el.style.display = 'none');
+});
 
 async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
