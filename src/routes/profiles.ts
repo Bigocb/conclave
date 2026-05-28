@@ -38,13 +38,13 @@ export async function profileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send(error('VALIDATION_ERROR', 'orgId and name are required'));
     }
 
-    const result = await fastify.db.insert(agentProfiles).values({
+    const result = await fastify.db.insert(agentProfiles).values({ id: `prof_${crypto.randomUUID()}`,
       orgId,
       name,
       model: model || null,
       provider: provider || null,
       instructions: instructions || null,
-      skills: typeof skills === 'string' ? skills : (skills ? JSON.stringify(skills) : null),
+      skills: typeof skills === 'string' ? skills : (body.skills ? JSON.stringify(body.skills) : null),
       temperature: body.temperature || 0.3,
     }).returning();
 
@@ -66,7 +66,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
     if (body.model) updates.model = body.model;
     if (body.provider) updates.provider = body.provider;
     if (body.instructions) updates.instructions = body.instructions;
-    if (body.skills) updates.skills = typeof body.skills === 'string' ? body.skills : (skills ? JSON.stringify(skills) : null);
+    if (body.skills) updates.skills = typeof body.skills === 'string' ? body.skills : (body.skills ? JSON.stringify(body.skills) : null);
     if (body.temperature !== undefined) updates.temperature = body.temperature;
 
     const result = await fastify.db.update(agentProfiles)

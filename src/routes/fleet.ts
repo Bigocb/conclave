@@ -198,4 +198,38 @@ export async function fleetRoutes(fastify: FastifyInstance) {
 
     reply.send(success({ id, status: 'deleted' }));
   });
+
+  /**
+   * GET /v1/fleet/status
+   * Provides high-level health and metrics for the War Room.
+   */
+  fastify.get('/fleet/status', async (request, reply) => {
+    const { orgId } = request.query as any;
+    if (!orgId) return reply.code(400).send(error('VALIDATION_ERROR', 'orgId is required'));
+
+    const config = await fastify.db.query.fleetConfig.findFirst({
+      where: eq(fleetConfig.orgId, orgId),
+    });
+
+    const reviewers = await fastify.db.query.fleetReviewers.findMany({
+      where: eq(fleetReviewers.orgId, orgId),
+    });
+
+    // We'll calculate basic metrics from the current database state
+    // Since we are in the API, we don't have the live memory of the FleetManager,
+    // but we can return the target configuration and basic stats.
+    reply.send(success({
+      satellite: config ? 'ONLINE' : 'OFFLINE',
+      metrics: {
+        activeReviewers: reviewers.length,
+        totalReplicas: reviewers.reduce((acc, curr) => acc + (curr.replicas || 0), 0),
+      },
+      fleet: reviewers.map(r => ({
+        name: r.name,
+        replicas: r.replicas,
+        channel: r.channel
+      }))
+    }));
+  });
+
 }
