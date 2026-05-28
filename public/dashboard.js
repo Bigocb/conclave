@@ -1570,3 +1570,124 @@ document.addEventListener('DOMContentLoaded', () => {
         form.onsubmit = (e) => profileController.saveProfile(e);
     }
 });
+
+
+/**
+ * Fleet Controller
+ * Manages the mapping of Profiles to Channels and scaling.
+ */
+const fleetController = {
+    async init() {
+        this.awaitLoadFleet();
+    },
+
+    async awaitLoadFleet() {
+        try {
+            const res = await fetch(`/v1/fleet/reviewers?orgId=${currentOrgId}`);
+            const data = await res.json();
+            if (data.success) {
+                this.renderFleet(data.data.reviewers);
+            }
+        } catch (e) {
+            console.error('Failed to load fleet:', e);
+        }
+    },
+
+    renderFleet(reviewers) {
+        const grid = document.getElementById('fleet-grid');
+        if (!grid) return;
+
+        grid.innerHTML = reviewers.map(r => `
+            <div class="bg-zinc-900 border border-white/10 p-6 rounded-xl space-y-6">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white">${r.name}</h3>
+                    <span class="px-2 py-1 rounded bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-wider">${r.mode}</span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-xs font-medium text-gray-500 uppercase">Channel</label>
+                        <input type="text" value="${r.channels}" onchange="fleetController.updateReviewer('${r.id}', {channels: this.value})" 
+                            class="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-green-500">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-medium text-gray-500 uppercase">Replicas</label>
+                        <input type="number" value="${r.replicas}" onchange="fleetController.updateReviewer('${r.id}', {replicas: parseInt(this.value)})" 
+                            class="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-green-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <label class="text-xs font-medium text-gray-500 uppercase">Interval (s)</label>
+                        <input type="number" value="${r.interval || 30}" onchange="fleetController.updateReviewer('${r.id}', {interval: parseInt(this.value)})" 
+                            class="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-green-500">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-medium text-gray-500 uppercase">Profile</label>
+                        <select onchange="fleetController.updateReviewer('${r.id}', {profileId: this.value})" 
+                            class="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-green-500">
+                            <option value="">No Profile</option>
+                            ${(window.profiles || []).map(p => `<option value="${p.id}" ${r.profileId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    async updateReviewer(id, updates) {
+        try {
+            const res = await fetch(`/v1/fleet/reviewers/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                this.awaitLoadFleet();
+            }
+        } catch (e) {
+            console.error('Error updating reviewer:', e);
+        }
+    },
+
+    async reload() {
+        await this.awaitLoadFleet();
+    }
+};
+
+// Integrating into Factory: Add Profile Dropdown logic
+async function updateAgentFactoryProfiles() {
+    const dropdown = document.getElementById('agent-profile-select');
+    if (!dropdown) return;
+    
+    const res = await fetch(`/v1/profiles?orgId=${currentOrgId}`);
+    const data = await res.json();
+    
+    if (data.success) {
+        dropdown.innerHTML = '<option value="">-- Select a Profile --</option>' + 
+            data.data.profiles.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    }
+}
+
+// Update currentOrgId context if needed (assuming it's global)
+
+
+document.addEventListener('change', async (e) => {
+    if (e.target.id === 'agent-profile-select') {
+        const profileId = e.target.value;
+        if (!profileId) return;
+        
+        // Fetch the profile and fill the form
+        const res = await fetch(`/v1/profiles/${profileId}`); 
+        // Note: I need to make sure /v1/profiles/:id exists. I'll implement it if missing.
+        const data = await res.json();
+        if (data.success) {
+            const p = data.data;
+            document.getElementById('agent-model').value = p.model || '';
+            document.getElementById('agent-provider').value = p.provider || '';
+            document.getElementById('agent-instructions').value = p.instructions || '';
+            document.getElementById('agent-skills').value = p.skills || '';
+        }
+    }
+});

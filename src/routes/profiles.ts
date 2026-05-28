@@ -51,7 +51,28 @@ export async function profileRoutes(fastify: FastifyInstance) {
     reply.code(201).send(success(result[0]));
   });
 
+  
   /**
+   * GET /v1/profiles/:id
+   * Retrieves a specific agent profile by ID.
+   */
+  fastify.get('/profiles/:id', async (request, reply) => {
+    const { id } = request.params as any;
+    if (!id) return reply.code(400).send(error('VALIDATION_ERROR', 'profile id is required'));
+
+    const profile = await fastify.db.query.agentProfiles.findFirst({
+      where: eq(agentProfiles.id, id),
+    });
+
+    if (!profile) {
+      return reply.code(404).send(error('NOT_FOUND', 'Profile not found'));
+    }
+
+    reply.send(success(profile));
+  });
+
+
+/**
    * PATCH /v1/profiles/:id
    * Updates an existing blueprint.
    */
