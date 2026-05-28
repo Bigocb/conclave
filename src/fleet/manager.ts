@@ -171,7 +171,27 @@ export class FleetManager extends EventEmitter {
     this.config = config;
   }
 
-  // ─── Provisioning ────────────────────────────────────────
+  // ─── Pulse Relay ───────────────────────────────────────────
+
+  private async broadcastPulse(type: string, payload: any): Promise<void> {
+    try {
+      // Note: This is a fire-and-forget call to the Pulse Daemon (on Render)
+      // We don't 'await' it in a way that blocks the main fleet loop
+      const pulseUrl = `${process.env.PULSE_URL || 'http://pulse-daemon:3001'}/broadcast`;
+      
+      fetch(pulseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId: this.config.org_id,
+          event: { type, payload, timestamp: new Date().toISOString() },
+        }),
+      }).catch(err => console.error(`[Pulse Relay] Background broadcast failed: ${err.message}`));
+    } catch (err: any) {
+      console.error(`[Pulse Relay] Fatal error: ${err.message}`);
+    }
+  }
+
 
   async provision(): Promise<void> {
     console.log('🔧 Provisioning fleet...\n');
@@ -428,7 +448,14 @@ export class FleetManager extends EventEmitter {
     const proc = this.processes.get(principalId)!;
     const client = this.apiClients.get(principalId)!;
 
+    // Heartbeat broadcast for the NOC page
+    this.broadcastPulse('FLEET_HEARTBEAT', { 
+      reviewerName: proc.reviewerName, 
+      principalId 
+    });
+
     if (proc.activeReviews >= proc.maxConcurrent) return;
+
 
     for (const channel of proc.channels) {
       try {
