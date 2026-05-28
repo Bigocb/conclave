@@ -3,7 +3,7 @@
  * Channel management, subscription (by principals), and feed
  */
 
-import { eq, and, notIn } from 'drizzle-orm';
+import { eq, and, not, inArray } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
@@ -74,7 +74,7 @@ export class ChannelService {
     const tasks = await this.db.select().from(schema.tasks)
       .where(and(
         eq(schema.tasks.channel, channelName),
-        notIn(schema.tasks.status, ['completed', 'cancelled'])
+        not(inArray(schema.tasks.status, ['completed', 'cancelled']))
       ))
       .limit(limit);
 
