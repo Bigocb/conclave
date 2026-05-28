@@ -477,11 +477,13 @@ export class FleetManager extends EventEmitter {
           const taskStatus = feedItem.status;
           if (taskStatus === 'completed' || taskStatus === 'cancelled') {
             console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (status: ${taskStatus})`);
+            this.broadcastPulse('FLEET_SKIP', { taskId, reason: `status: ${taskStatus}`, reviewerName: proc.reviewerName });
             continue;
           }
           // Skip own org's tasks in private mode
           if (this.config.scope === 'private' && feedItem.org_id && feedItem.org_id !== this.config.org_id) {
             console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (private scope mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
+            this.broadcastPulse('FLEET_SKIP', { taskId, reason: 'private scope mismatch', reviewerName: proc.reviewerName });
             continue;
           }
 
@@ -490,6 +492,7 @@ export class FleetManager extends EventEmitter {
           // Mark as seen to prevent duplicate picks
           proc.reviewedTaskIds.add(taskId);
           console.log(`  🎯 ${proc.reviewerName} found task ${taskId} on channel ${channel}`);
+          this.broadcastPulse('FLEET_TASK_FOUND', { taskId, channel, reviewerName: proc.reviewerName });
 
           // Fetch full task details (feed only has summary)
           let fullTask = feedItem;
@@ -504,6 +507,7 @@ export class FleetManager extends EventEmitter {
           // Skip tasks we can't fetch — wrong org or insufficient permissions
           if (taskFetchFailed) {
             console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — skipping`);
+            this.broadcastPulse('FLEET_FETCH_ERROR', { taskId, reviewerName: proc.reviewerName, error: 'Cannot fetch task' });
             proc.reviewedTaskIds.delete(taskId);
             continue;
           }
@@ -531,6 +535,7 @@ export class FleetManager extends EventEmitter {
     const agent = proc.agents[0];
 
     console.log(`  📋 ${proc.reviewerName}: Reviewing task ${task.id ?? task.task_id} from ${channel}`);
+    this.broadcastPulse('FLEET_REVIEW_START', { taskId: task.id ?? task.task_id, channel, reviewerName: proc.reviewerName });
 
     try {
       // 1. Build input for any backend type
@@ -662,6 +667,7 @@ export class FleetManager extends EventEmitter {
         await client.submitReview(taskId, reviewPayload);
         this.incrementCompleted(principalId);
         console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${taskId} (overall: ${draft.weighted_overall})`);
+        this.broadcastPulse('FLEET_REVIEW_SUBMITTED', { taskId, reviewerName: proc.reviewerName, mode: 'auto' });
         this.emit('review_completed', { principalId, taskId, mode: 'auto' });
 
       } else if (proc.mode === 'human') {
@@ -677,6 +683,7 @@ export class FleetManager extends EventEmitter {
         };
         this.pendingApprovals.push(pending);
         console.log(`  👤 ${proc.reviewerName}: Draft queued for human approval — task ${task.id} (pending: ${this.pendingApprovals.length})`);
+        this.broadcastPulse('FLEET_REVIEW_QUEUED', { taskId: task.id, reviewerName: proc.reviewerName, mode: 'human' });
         this.emit('review_pending', pending);
 
       } else if (proc.mode === 'hybrid') {
@@ -698,6 +705,7 @@ export class FleetManager extends EventEmitter {
           };
           this.pendingApprovals.push(pending);
           console.log(`  🔀 ${proc.reviewerName}: Low confidence (${draft.reviewer_confidence} < ${proc.confidenceThreshold}) — queued for human — task ${task.id}`);
+          this.broadcastPulse('FLEET_REVIEW_QUEUED', { taskId: task.id, reviewerName: proc.reviewerName, mode: 'hybrid_low_conf' });
           this.emit('review_pending', pending);
         }
       }
