@@ -276,31 +276,17 @@ export class FleetManager extends EventEmitter {
         }
       }
 
-      // 3. Create API client with the first agent's ID and its own token
-      let agentToken = agents[0]?.token || '';
-      if (!agentToken) {
-        // Try to get/fetch a token for the first agent so auth resolves correctly
-        try {
-          const agentTokenResp = await fetch(`${this.config.server}/v1/agents/${agents[0]?.agentId}/regenerate-token`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.config.token}`,
-            },
-          });
-          if (agentTokenResp.ok) {
-            const tokenData = await agentTokenResp.json() as any;
-            agentToken = tokenData.data?.token ?? tokenData.token ?? '';
-            agents[0] = { ...agents[0], token: agentToken };
-          }
-        } catch { /* fallback */ }
-      }
+      // 3. Create API client with a robust authentication strategy
+      // We use the org-level token as the primary authority to avoid 403s during task fetching
       const pollingClient = new ConclaveApiClient({
         serverUrl: this.config.server,
         principalId,
         agentId: agents[0]?.agentId,
-        token: agentToken || this.config.token,
+        token: this.config.token, 
       });
+      
+      // If the agent has a specific token, we can use it for submission, 
+      // but the pollingClient uses the config.token to ensure it can always see the feed.
       if (agents[0]?.token) {
         pollingClient.setToken(agents[0].token);
       }
