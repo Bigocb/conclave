@@ -1451,3 +1451,122 @@ window.onload = async () => {    initPulse();
         switchView('fleet');
     }
 };
+
+
+/**
+ * Profile Controller
+ * Manages the blueprint library for agents.
+ */
+const profileController = {
+    async init() {
+        this.currentProfileId = null;
+        this.awaitLoadProfiles();
+    },
+
+    async awaitLoadProfiles() {
+        try {
+            const res = await fetch(`/v1/profiles?orgId=${currentOrgId}`);
+            const data = await res.json();
+            if (data.success) {
+                this.renderProfiles(data.data.profiles);
+            }
+        } catch (e) {
+            console.error('Failed to load profiles:', e);
+        }
+    },
+
+    renderProfiles(profiles) {
+        const list = document.getElementById('profiles-list');
+        if (!list) return;
+
+        list.innerHTML = profiles.map(p => `
+            <div class="bg-zinc-900 border border-white/10 p-5 rounded-xl hover:border-green-500/50 transition-all group">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="font-bold text-white">${p.name}</h3>
+                    <div class="flex gap-2">
+                        <button onclick="editProfile('${p.id}')" class="p-2 text-gray-400 hover:text-white transition-colors">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteProfile('${p.id}')" class="p-2 text-gray-400 hover:text-red-400 transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-2 mb-4">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">Model</span>
+                        <span class="text-gray-300">${p.model || 'N/A'}</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-500">Provider</span>
+                        <span class="text-gray-300">${p.provider || 'N/A'}</span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 line-clamp-2 italic">"${p.instructions || 'No instructions provided.'}"</p>
+            </div>
+        `).join('');
+        
+        if (window.lucide) window.lucide.createIcons();
+    },
+
+    async saveProfile(e) {
+        e.preventDefault();
+        const id = document.getElementById('profile-id').value;
+        const payload = {
+            orgId: currentOrgId,
+            name: document.getElementById('profile-name').value,
+            model: document.getElementById('profile-model').value,
+            provider: document.getElementById('profile-provider').value,
+            instructions: document.getElementById('profile-instructions').value,
+            skills: document.getElementById('profile-skills').value.split(',').map(s => s.trim()).filter(s => s),
+            temperature: parseFloat(document.getElementById('profile-temperature')?.value || 0.3)
+        };
+
+        const method = id ? 'PATCH' : 'POST';
+        const url = id ? `/v1/profiles/${id}` : '/v1/profiles';
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeProfileModal();
+                this.awaitLoadProfiles();
+            }
+        } catch (e) {
+            console.error('Error saving profile:', e);
+        }
+    }
+};
+
+// Modal Helpers
+function openProfileModal(id = null) {
+    const modal = document.getElementById('profile-modal');
+    const form = document.getElementById('profile-form');
+    form.reset();
+    document.getElementById('profile-id').value = '';
+    document.getElementById('profile-modal-title').innerText = 'Create Profile';
+
+    if (id) {
+        // We could fetch the specific profile here, but for simplicity, 
+        // we'll just find it in the current list if available or fetch it.
+        // For now, let's trigger a fetch for the specific profile if needed.
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeProfileModal() {
+    document.getElementById('profile-modal').classList.add('hidden');
+}
+
+// Attach form listener
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('profile-form');
+    if (form) {
+        form.onsubmit = (e) => profileController.saveProfile(e);
+    }
+});
