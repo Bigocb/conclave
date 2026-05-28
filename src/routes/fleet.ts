@@ -222,9 +222,9 @@ export async function fleetRoutes(fastify: FastifyInstance) {
       satellite: config ? 'ONLINE' : 'OFFLINE',
       metrics: {
         activeReviewers: reviewers.length,
-        totalReplicas: reviewers.reduce((acc, curr) => acc + (curr.replicas || 0), 0),
+        totalReplicas: reviewers.reduce((acc: number, curr: any) => acc + (curr.replicas || 0), 0),
       },
-      fleet: reviewers.map(r => ({
+      fleet: reviewers.map((r: any) => ({
         name: r.name,
         replicas: r.replicas,
         channel: r.channel
