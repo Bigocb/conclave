@@ -1,3 +1,4 @@
+import { migrateFleetToProfiles } from './db/migrations/fleet_profiles.js';
 /**
  * Conclave — Entry point
  * Starts the server when run directly.
@@ -21,6 +22,7 @@ const config = {
   try {
     // Apply performance indexes before starting server
     await applyPerformanceIndexes();
+    await migrateFleetToProfiles();
     await startServer(config);
   } catch (err) {
     console.error('Fatal error starting Conclave:', err);
