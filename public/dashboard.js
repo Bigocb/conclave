@@ -53,6 +53,7 @@ function initPulse() {
     };
 }
 
+
 function handlePulseEvent(event) {
     const { type, payload, orgId } = event;
     if (orgId && STATE.orgId !== orgId) return;
@@ -65,7 +66,26 @@ function handlePulseEvent(event) {
             if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
                 refreshTasks(); 
             }
-            
+            break;
+        case 'REVIEW_SUBMITTED':
+            showToast(`New review submitted for task ${payload.taskId.slice(0,8)}`, 'success');
+            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
+                refreshTasks();
+            }
+            break;
+    }
+
+    // Route to War Room NOC
+    if (typeof appendToVoid === 'function') {
+        if (type.startsWith('FLEET_')) {
+            appendToVoid(type, payload);
+        }
+        if (type === 'FLEET_HEARTBEAT') {
+            handleNOCHeartbeat(payload);
+        }
+    }
+}
+
 // ─── War Room / NOC Controller ──────────────────────────────────────
 
 const NOC_STATE = {
@@ -73,13 +93,20 @@ const NOC_STATE = {
     fleet: new Map(), // principalId -> { name, lastSeen }
 };
 
+function handleNOCHeartbeat(payload) {
+    NOC_STATE.fleet.set(payload.principalId, { 
+        name: payload.reviewerName, 
+        lastSeen: Date.now() 
+    });
+    updateNOCFleetList();
+}
+
 function updateNOCMetric(key, value) {
     if (NOC_STATE.metrics[key] === value) return;
     NOC_STATE.metrics[key] = value;
     const el = document.getElementById(`metric-${key}`);
     if (el) {
         el.innerText = value;
-        // Flash effect for updates
         el.classList.add('text-white');
         setTimeout(() => el.classList.remove('text-white'), 100);
     }
@@ -106,7 +133,7 @@ function appendToVoid(type, payload) {
         color = 'text-amber-400';
         prefix = '[SYNC]';
     } else if (type === 'FLEET_HEARTBEAT') {
-        return; // Heartbeats don't flood the void, they only update the list
+        return; 
     }
 
     const message = typeof payload === 'object' ? JSON.stringify(payload) : payload;
@@ -120,9 +147,17 @@ function appendToVoid(type, payload) {
     stream.appendChild(row);
     stream.scrollTop = stream.scrollHeight;
 
-    // Cap the void to 100 lines to prevent DOM bloating
     while (stream.children.length > 100) {
         stream.removeChild(stream.firstChild);
+    }
+
+    if (type === 'FLEET_TASK_FOUND') {
+        updateNOCMetric('active', NOC_STATE.metrics.active + 1);
+    } else if (type === 'FLEET_REVIEW_SUBMITTED') {
+        updateNOCMetric('completed', NOC_STATE.metrics.completed + 1);
+        updateNOCMetric('active', Math.max(0, NOC_STATE.metrics.active - 1));
+    } else if (type === 'FLEET_FETCH_ERROR') {
+        updateNOCMetric('faults', NOC_STATE.metrics.faults + 1);
     }
 }
 
@@ -139,57 +174,10 @@ function updateNOCFleetList() {
                 <span class="truncate">${data.name}</span>
                 <span class="${statusColor}">${since}s ago</span>
             </div>`;
-        }).join('
-');
+        }).join('\n');
     
     if (listEl.innerText !== items) {
         listEl.innerHTML = items || 'No active cores...';
-    }
-}
-
-// Integrate NOC logic into the existing Pulse handler
-const originalHandlePulse = handlePulseEvent;
-handlePulseEvent = function(event) {
-    // Run original logic first
-    originalHandlePulse(event);
-
-    const { type, payload, orgId } = event;
-    if (orgId && STATE.orgId !== orgId) return;
-
-    // 1. Handle Heartbeats
-    if (type === 'FLEET_HEARTBEAT') {
-        NOC_STATE.fleet.set(payload.principalId, { 
-            name: payload.reviewerName, 
-            lastSeen: Date.now() 
-        });
-        updateNOCFleetList();
-        return;
-    }
-
-    // 2. Route specifically to the Void
-    if (type.startsWith('FLEET_')) {
-        appendToVoid(type, payload);
-    }
-
-    // 3. Update Metrics
-    if (type === 'FLEET_TASK_FOUND') {
-        // This is a naive increment; in a real scenario we'd track unique task IDs
-        updateNOCMetric('active', NOC_STATE.metrics.active + 1);
-    } else if (type === 'FLEET_REVIEW_SUBMITTED') {
-        updateNOCMetric('completed', NOC_STATE.metrics.completed + 1);
-        updateNOCMetric('active', Math.max(0, NOC_STATE.metrics.active - 1));
-    } else if (type === 'FLEET_FETCH_ERROR') {
-        updateNOCMetric('faults', NOC_STATE.metrics.faults + 1);
-    }
-};
-
-break;
-        case 'REVIEW_SUBMITTED':
-            showToast(`New review submitted for task ${payload.taskId.slice(0,8)}`, 'success');
-            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
-                refreshTasks();
-            }
-            break;
     }
 }
 // ─── Toast Notifications ─────────────────────────────────────
