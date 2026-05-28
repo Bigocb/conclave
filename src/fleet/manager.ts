@@ -448,10 +448,13 @@ export class FleetManager extends EventEmitter {
 
           // Skip tasks that are already completed or have enough reviews
           const taskStatus = feedItem.status;
-          if (taskStatus === 'completed' || taskStatus === 'cancelled') continue;
-
+          if (taskStatus === 'completed' || taskStatus === 'cancelled') {
+            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (status: ${taskStatus})`);
+            continue;
+          }
           // Skip own org's tasks in private mode
           if (this.config.scope === 'private' && feedItem.org_id && feedItem.org_id !== this.config.org_id) {
+            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (private scope mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
             continue;
           }
 
