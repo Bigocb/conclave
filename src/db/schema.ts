@@ -206,6 +206,25 @@ export const spotChecks = pgTable('clv_spot_checks', {
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+
+// ─── Agent Profiles (Blueprints) ──────────────────────────────────
+export const agentProfiles = pgTable('clv_agent_profiles', {
+  id: text('id').primaryKey(),               // prof_<uuidv7>
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  name: text('name').notNull(),
+  model: text('model'),
+  provider: text('provider'),
+  temperature: doublePrecision('temperature').default(0.3),
+  instructions: text('instructions'),
+  skills: text('skills'),                    // JSON array
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  orgIdx: index('idx_profiles_org').on(table.orgId),
+  nameIdx: index('idx_profiles_name').on(table.name),
+}));
+
+
 // ─── Fleet Configuration ───────────────────────────────────────
 export const fleetConfig = pgTable('clv_fleet_config', {
   orgId: text('org_id').primaryKey().references(() => organizations.id),

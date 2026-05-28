@@ -27,6 +27,7 @@ import { cronRoutes } from '../routes/cron.js';
 import { authRoutes } from '../routes/auth.js';
 import { vaultRoutes } from '../routes/vault.js';
 import { pushRoutes } from '../routes/push.js';
+import { profileRoutes } from '../routes/profiles.js';
 import { pulseRoutes } from '../routes/pulse.js';
 import type { FleetManager } from '../fleet/manager.js';
 
