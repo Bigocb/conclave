@@ -617,7 +617,7 @@ async function loadPrincipals() {
 // ─── View Switching ────────────────────────────────────────────
 
 function switchView(viewId) {
-    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory'];
+    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'noc'];
     views.forEach(v => {
         const el = document.getElementById(`view-${v}`);
         if (el) el.classList.toggle('hidden', v !== viewId);
