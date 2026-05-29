@@ -403,7 +403,8 @@ button, a, select, input, textarea, [role="button"] {
 }
 
 .mobile-sidebar-panel.open {
-  transform: translateX(0);
+  transform: translateX(0) !important;
+  display: flex !important;
 }
 
 .mobile-sidebar-panel .sidebar-header {

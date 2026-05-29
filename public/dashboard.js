@@ -213,11 +213,11 @@ function openMobileSidebar() {
     document.getElementById('mobile-sidebar-overlay').classList.add('open');
     document.getElementById('mobile-sidebar-panel').classList.add('open');
     document.body.style.overflow = 'hidden';
-    // Focus the close button
     setTimeout(() => {
         const closeBtn = document.querySelector('.mobile-sidebar-panel [aria-label="Close navigation menu"]');
         if (closeBtn) closeBtn.focus();
     }, 100);
+}, 100);
 }
 
 function closeMobileSidebar() {
