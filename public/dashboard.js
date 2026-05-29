@@ -19,183 +19,50 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     return data;
 }
 
+function showAuth() {
+    document.getElementById('auth-overlay')?.classList.remove('hidden');
+}
+
 // ─── Real-time Pulse Infrastructure ────────────────────────────
 
 function initPulse() {
-    console.log('📡 Initializing Pulse SSE (Render Daemon)...');
-    
-    if (!STATE.token || !STATE.orgId) {
-        console.warn('⚠️ Missing token or orgId, skipping Pulse initialization');
-        return;
-    }
-
+    if (!STATE.token || !STATE.orgId) return;
     const daemonUrl = 'https://conclave-bp4o.onrender.com';
     const eventSource = new EventSource(`${daemonUrl}/pulse?token=${STATE.token}&orgId=${STATE.orgId}`);
-
-    eventSource.onopen = () => {
-        console.log('✅ Connected to Conclave Pulse');
-        showToast('Connected to real-time pulse', 'info');
-    };
-
-    eventSource.onerror = (err) => {
-        console.error('❌ Pulse SSE connection error:', err);
-    };
-
     eventSource.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            console.log('🚀 Pulse Event Received:', data);
             handlePulseEvent(data);
-        } catch (e) {
-            console.error('Failed to parse Pulse event:', e);
-        }
+        } catch (e) { console.error('Pulse parse error:', e); }
     };
 }
 
 function handlePulseEvent(event) {
-    const { type, payload, orgId } = event;
-    if (orgId && STATE.orgId !== orgId) return;
-
-    console.log(`[Pulse Event] ${type}:`, payload);
-
+    const { type, payload } = event;
     switch (type) {
         case 'TASK_CREATED':
-            showToast(`New task submitted to ${payload.channel}`, 'info');
-            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
-                refreshTasks(); 
-            }
+            showToast(`New task in ${payload.channel}`, 'info');
+            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) refreshTasks();
             break;
         case 'REVIEW_SUBMITTED':
-            showToast(`New review submitted for task ${payload.taskId.slice(0,8)}`, 'success');
-            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) {
-                refreshTasks();
-            }
+            showToast(`New review for ${payload.taskId.slice(0,8)}`, 'success');
+            if (document.getElementById('view-tasks')?.classList.contains('hidden') === false) refreshTasks();
             break;
     }
-
-    if (typeof appendToVoid === 'function') {
-        if (type.startsWith('FLEET_')) {
-            appendToVoid(type, payload);
-        }
-        if (type === 'FLEET_HEARTBEAT') {
-            handleNOCHeartbeat(payload);
-        }
-    }
 }
-
-// ─── War Room / NOC Controller ──────────────────────────────────────
-
-const NOC_STATE = {
-    metrics: { active: 0, completed: 0, faults: 0 },
-    fleet: new Map(), 
-};
-
-function handleNOCHeartbeat(payload) {
-    NOC_STATE.fleet.set(payload.principalId, { 
-        name: payload.reviewerName, 
-        lastSeen: Date.now() 
-    });
-    updateNOCFleetList();
-}
-
-function updateNOCMetric(key, value) {
-    if (NOC_STATE.metrics[key] === value) return;
-    NOC_STATE.metrics[key] = value;
-    const el = document.getElementById(`metric-${key}`);
-    if (el) {
-        el.innerText = value;
-        el.classList.add('text-white');
-        setTimeout(() => el.classList.remove('text-white'), 100);
-    }
-}
-
-function appendToVoid(type, payload) {
-    const stream = document.getElementById('noc-stream');
-    if (!stream) return;
-
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
-    const row = document.createElement('div');
-    row.className = 'flex gap-3 py-0.5 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors';
-    
-    let color = 'text-gray-400';
-    let prefix = '[INFO]';
-
-    if (type.includes('ERROR') || type.includes('FAULT')) {
-        color = 'text-red-500';
-        prefix = '[FAIL]';
-    } else if (type.includes('FOUND') || type.includes('START')) {
-        color = 'text-green-400';
-        prefix = '[PICK]';
-    } else if (type.includes('SUBMITTED') || type.includes('QUEUED')) {
-        color = 'text-amber-400';
-        prefix = '[SYNC]';
-    } else if (type === 'FLEET_HEARTBEAT') {
-        return; 
-    }
-
-    const message = typeof payload === 'object' ? JSON.stringify(payload) : payload;
-    
-    row.innerHTML = `
-        <span class="text-gray-600 shrink-0">${time}</span>
-        <span class="font-bold ${color} shrink-0 w-12">${prefix}</span>
-        <span class="text-gray-300">${message}</span>
-    `;
-
-    stream.appendChild(row);
-    stream.scrollTop = stream.scrollHeight;
-
-    while (stream.children.length > 100) {
-        stream.removeChild(stream.firstChild);
-    }
-
-    if (type === 'FLEET_TASK_FOUND') {
-        updateNOCMetric('active', NOC_STATE.metrics.active + 1);
-    } else if (type === 'FLEET_REVIEW_SUBMITTED') {
-        updateNOCMetric('completed', NOC_STATE.metrics.completed + 1);
-        updateNOCMetric('active', Math.max(0, NOC_STATE.metrics.active - 1));
-    } else if (type === 'FLEET_FETCH_ERROR') {
-        updateNOCMetric('faults', NOC_STATE.metrics.faults + 1);
-    }
-}
-
-function updateNOCFleetList() {
-    const listEl = document.getElementById('noc-fleet-list');
-    if (!listEl) return;
-
-    const items = Array.from(NOC_STATE.fleet.entries())
-        .sort((a, b) => b[1].lastSeen - a[1].lastSeen)
-        .map(([id, data]) => {
-            const since = Math.floor((Date.now() - data.lastSeen) / 1000);
-            const statusColor = since < 60 ? 'text-green-500' : since < 300 ? 'text-amber-500' : 'text-red-500';
-            return `<div class="flex justify-between items-center">
-                <span class="truncate">${data.name}</span>
-                <span class="${statusColor}">${since}s ago</span>
-            </div>`;
-        }).join('\n');
-    
-    if (listEl.innerText !== items) {
-        listEl.innerHTML = items || 'No active cores...';
-    }
-}
-
-// ─── Toast Notifications ─────────────────────────────────────
 
 function showToast(message, type = 'info', duration = 4000) {
     const container = document.getElementById('toast-container');
     if (!container) { alert(message); return; }
-
     const icons = { success: 'check-circle', error: 'alert-circle', info: 'info', warning: 'alert-triangle' };
-    const icon = icons[type] || 'info';
-
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 flex-shrink-0"></i><span>${escapeHtml(message)}</span>`;
+    toast.innerHTML = `<i data-lucide="${icons[type] || 'info'}" class="w-4 h-4 flex-shrink-0"></i><span>${escapeHtml(message)}</span>`;
     container.appendChild(toast);
     lucide.createIcons({ attrs: { root: toast } });
-
     setTimeout(() => {
         toast.classList.add('toast-out');
-        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 250);
+        setTimeout(() => toast.remove(), 250);
     }, duration);
 }
 
@@ -208,45 +75,36 @@ function escapeHtml(str) {
 // ─── Navigation & View Controller ──────────────────────────────────────
 
 function switchView(viewId) {
-    console.log(`[UI] Switching to view: ${viewId}`);
-    
     const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
-    if (!views.includes(viewId)) {
-        console.error(`[UI] View ID '${viewId}' is not in the whitelist.`);
-        return;
-    }
+    if (!views.includes(viewId)) return;
 
     const target = document.getElementById(`view-${viewId}`);
-    if (!target) {
-        console.error(`[UI] Target element #view-${viewId} not found in DOM.`);
-        return;
-    }
+    if (!target) return;
 
     document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
     target.classList.remove('hidden');
     
     document.querySelectorAll('.sidebar-item').forEach(item => {
         item.classList.remove('active');
-        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) {
-            item.classList.add('active');
-        }
+        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) item.classList.add('active');
     });
     
+    if (viewId === 'fleet') refreshFleet();
+    if (viewId === 'vault') refreshVault();
+    if (viewId === 'tasks') refreshTasks();
+    if (viewId === 'channels') refreshChannels();
+    if (viewId === 'workers') refreshWorker();
+    if (viewId === 'org') refreshOrg();
+    if (viewId === 'factory') refreshFactory();
     if (viewId === 'profiles') profileController.loadProfiles();
     if (viewId === 'fleet-manager') fleetController.reload();
     if (viewId === 'noc') initPulse();
 }
 
-// ─── Mobile Sidebar ──────────────────────────────────────────
-
 function openMobileSidebar() {
     document.getElementById('mobile-sidebar-overlay').classList.add('open');
     document.getElementById('mobile-sidebar-panel').classList.add('open');
     document.body.style.overflow = 'hidden';
-    setTimeout(() => {
-        const closeBtn = document.querySelector('.mobile-sidebar-panel [aria-label="Close navigation menu"]');
-        if (closeBtn) closeBtn.focus();
-    }, 100);
 }
 
 function closeMobileSidebar() {
@@ -255,185 +113,169 @@ function closeMobileSidebar() {
     document.body.style.overflow = '';
 }
 
-// ─── Profile Controller ────────────────────────────────────────────────
+// ─── Data Fetchers (The "Engine") ─────────────────────────────────────
+
+async function refreshFleet() {
+    const grid = document.getElementById('agent-grid');
+    if (!grid) return;
+    try {
+        const data = await apiRequest('/v1/principals');
+        const principals = data.data || data;
+        grid.innerHTML = principals.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No principals found.</p>';
+        principals.forEach(p => {
+            grid.innerHTML += `
+                <div class="bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
+                            <i data-lucide="user-check" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500">${p.id}</span>
+                    </div>
+                    <h3 class="font-bold text-lg mb-1">${p.name}</h3>
+                    <p class="text-xs text-gray-400 mb-4">Principal Identity</p>
+                    <div class="pt-4 border-t border-[#1e2d4a] flex gap-2">
+                        <button onclick="managePrincipalSubs('${p.id}','${p.name}')" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1.5 rounded-lg">Manage Channels</button>
+                    </div>
+                </div>`;
+        });
+        lucide.createIcons();
+    } catch (e) {
+        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`;
+    }
+}
+
+async function refreshTasks() {
+    const list = document.getElementById('task-list');
+    if (!list) return;
+    try {
+        const data = await apiRequest('/v1/tasks');
+        const tasks = data.data?.tasks || data.data || data || [];
+        list.innerHTML = tasks.length ? '' : '<p class="text-gray-500 text-center py-8">No tasks found.</p>';
+        tasks.forEach(t => {
+            list.innerHTML += `
+                <div onclick="viewTaskDetail('${t.id}')" class="cursor-pointer p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl hover:border-green-500/50 transition-all">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-mono text-gray-500">${t.id}</span>
+                        <span class="text-xs font-bold text-gray-400 uppercase">${t.status}</span>
+                    </div>
+                    <div class="text-sm mb-2 text-gray-300">${(t.description || t.task_description || '').slice(0,120)}</div>
+                </div>`;
+        });
+    } catch (e) { list.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`; }
+}
+
+async function refreshChannels() {
+    const grid = document.getElementById('channels-grid');
+    if (!grid) return;
+    try {
+        const data = await apiRequest('/v1/channels');
+        const channels = data.data?.channels || data.data || data || [];
+        grid.innerHTML = channels.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No channels found.</p>';
+        channels.forEach(ch => {
+            grid.innerHTML += `
+                <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
+                            <i data-lucide="radio" class="w-4 h-4"></i>
+                        </div>
+                        <h3 class="font-bold text-lg">${ch.name || ch}</h3>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-4">${ch.description || 'No description'}</p>
+                </div>`;
+        });
+        lucide.createIcons();
+    } catch (e) { grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`; }
+}
+
+async function refreshVault() {
+    const list = document.getElementById('vault-list');
+    if (!list) return;
+    try {
+        const data = await apiRequest('/v1/vault/keys');
+        const keys = data.data || data || [];
+        list.innerHTML = keys.length ? '' : '<p class="text-gray-500 text-center py-8">No keys stored.</p>';
+        keys.forEach(k => {
+            list.innerHTML += `
+                <div class="flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="key" class="w-4 h-4 text-green-400"></i>
+                        <span class="font-mono text-sm">${k.provider}</span>
+                    </div>
+                    <span class="text-[10px] text-gray-500 uppercase">Encrypted</span>
+                </div>`;
+        });
+        lucide.createIcons();
+    } catch (e) { list.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`; }
+}
+
+async function refreshWorker() {
+    const badge = document.getElementById('worker-status-badge');
+    if (!badge) return;
+    try {
+        const data = await apiRequest('/v1/health');
+        badge.innerText = 'API Online';
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400';
+    } catch (e) {
+        badge.innerText = 'API Offline';
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400';
+    }
+}
+
+async function refreshOrg() {
+    const el = document.getElementById('org-name');
+    if (!el) return;
+    try {
+        const data = await apiRequest('/v1/org');
+        el.innerText = data.data?.name || data.name || 'Unknown Org';
+    } catch (e) { el.innerText = 'Error loading org'; }
+}
+
+function refreshFactory() {
+    showToast('Agent Factory is ready', 'info');
+}
+
+// ─── Controllers for Special Views ─────────────────────────────────────
 
 const profileController = {
     async loadProfiles() {
         const listEl = document.getElementById('profiles-list');
         if (!listEl) return;
-        
         try {
             const profiles = await apiRequest('/v1/profiles');
-            listEl.innerHTML = '';
-            
-            if (profiles.length === 0) {
-                listEl.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500 italic">No agent profiles found. Create one to get started.</div>';
-                return;
-            }
-
+            listEl.innerHTML = profiles.length ? '' : '<p class="text-center py-12 text-gray-500">No profiles found.</p>';
             profiles.forEach(p => {
-                const card = document.createElement('div');
-                card.className = 'bg-zinc-900 border border-white/10 p-4 rounded-xl hover:border-green-500/50 transition-all group';
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-3">
+                listEl.innerHTML += `
+                    <div class="bg-zinc-900 border border-white/10 p-4 rounded-xl">
                         <h3 class="font-bold text-white">${p.name}</h3>
-                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="profileController.editProfile('${p.id}')" class="p-1 hover:text-green-400"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
-                            <button onclick="profileController.deleteProfile('${p.id}')" class="p-1 hover:text-red-400"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
-                        </div>
-                    </div>
-                    <div class="text-[10px] space-y-1 font-mono text-gray-500">
-                        <div class="flex justify-between"><span>MODEL:</span><span class="text-gray-300">${p.model}</span></div>
-                        <div class="flex justify-between"><span>PROV:</span><span class="text-gray-300">${p.provider}</span></div>
-                    </div>
-                `;
-                listEl.appendChild(card);
+                        <p class="text-xs text-gray-500 font-mono">${p.model} / ${p.provider}</p>
+                    </div>`;
             });
             lucide.createIcons();
-        } catch (e) {
-            console.error('Failed to load profiles:', e);
-            showToast('Failed to load profiles', 'error');
-        }
-    },
-
-    async saveProfile(e) {
-        e.preventDefault();
-        const id = document.getElementById('profile-id').value;
-        const profile = {
-            name: document.getElementById('profile-name').value,
-            model: document.getElementById('profile-model').value,
-            provider: document.getElementById('profile-provider').value,
-            instructions: document.getElementById('profile-instructions').value,
-            skills: document.getElementById('profile-skills').value
-        };
-
-        try {
-            if (id) {
-                await apiRequest(`/v1/profiles/${id}`, 'PATCH', profile);
-            } else {
-                await apiRequest('/v1/profiles', 'POST', profile);
-            }
-            showToast('Profile saved', 'success');
-            closeProfileModal();
-            this.loadProfiles();
-        } catch (err) {
-            showToast(err.message, 'error');
-        }
-    },
-
-    async editProfile(id) {
-        try {
-            const p = await apiRequest(`/v1/profiles/${id}`);
-            document.getElementById('profile-id').value = p.id;
-            document.getElementById('profile-name').value = p.name;
-            document.getElementById('profile-model').value = p.model;
-            document.getElementById('profile-provider').value = p.provider;
-            document.getElementById('profile-instructions').value = p.instructions;
-            document.getElementById('profile-skills').value = p.skills || '';
-            document.getElementById('profile-modal-title').innerText = 'Edit Profile';
-            openProfileModal();
-        } catch (e) {
-            showToast('Failed to load profile details', 'error');
-        }
-    },
-
-    async deleteProfile(id) {
-        if (!confirm('Delete this profile?')) return;
-        try {
-            await apiRequest(`/v1/profiles/${id}`, 'DELETE');
-            showToast('Profile deleted', 'success');
-            this.loadProfiles();
-        } catch (e) {
-            showToast('Delete failed', 'error');
-        }
+        } catch (e) { listEl.innerHTML = `<p class="text-red-400 text-center py-12">Error: ${e.message}</p>`; }
     }
 };
-
-// ─── Fleet Orchestration Controller ─────────────────────────────────────
 
 const fleetController = {
     async reload() {
         const grid = document.getElementById('fleet-grid');
         if (!grid) return;
-        
         try {
             const reviewers = await apiRequest('/v1/fleet/reviewers');
-            grid.innerHTML = '';
-            
-            if (reviewers.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500 italic">No fleet reviewers configured.</div>';
-                return;
-            }
-
+            grid.innerHTML = reviewers.length ? '' : '<p class="text-center py-12 text-gray-500">No reviewers configured.</p>';
             reviewers.forEach(r => {
-                const card = document.createElement('div');
-                card.className = 'bg-zinc-900 border border-white/10 p-6 rounded-xl space-y-4';
-                card.innerHTML = `
-                    <div class="flex justify-between items-center">
+                grid.innerHTML += `
+                    <div class="bg-zinc-900 border border-white/10 p-6 rounded-xl">
                         <h3 class="font-bold text-white">${r.channel}</h3>
-                        <span class="text-xs font-mono text-green-400 bg-green-400/10 px-2 py-1 rounded">Active</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 text-xs font-mono">
-                        <div class="p-3 bg-black rounded-lg border border-white/5">
-                            <label class="text-gray-500 block mb-1">Profile</label>
-                            <select onchange="fleetController.updateProfile('${r.id}', this.value)" class="bg-transparent text-white w-full outline-none">
-                                <option value="">Select Profile...</option>\n                                ${this.getProfileOptions(r.profileId)}
-                            </select>
-                        </div>
-                        <div class="p-3 bg-black rounded-lg border border-white/5">
-                            <label class="text-gray-500 block mb-1">Replicas</label>
-                            <input type="number" value="${r.replicas}" 
-                                onchange="fleetController.updateReplicas('${r.id}', this.value)"
-                                class="bg-transparent text-white w-full outline-none">
-                        </div>
-                    </div>
-                `;
-                grid.appendChild(card);
+                        <p class="text-xs text-green-400">Active</p>
+                    </div>`;
             });
-        } catch (e) {
-            console.error('Fleet reload failed:', e);
-            showToast('Failed to load fleet config', 'error');
-        }
-    },
-
-    async getProfileOptions(currentId) {
-        try {
-            const profiles = await apiRequest('/v1/profiles');
-            return profiles.map(p => `<option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${p.name}</option>`).join('');
-        } catch (e) { return ''; }
-    },
-
-    async updateProfile(id, profileId) {
-        try {
-            await apiRequest(`/v1/fleet/reviewers/${id}`, 'PATCH', { profileId });
-            showToast('Profile linked', 'success');
-        } catch (e) { showToast('Update failed', 'error'); }
-    },
-
-    async updateReplicas(id, replicas) {
-        try {
-            await apiRequest(`/v1/fleet/reviewers/${id}`, 'PATCH', { replicas: parseInt(replicas) });
-            showToast('Scale updated', 'success');
-        } catch (e) { showToast('Scale failed', 'error'); }
+        } catch (e) { grid.innerHTML = `<p class="text-red-400 text-center py-12">Error: ${e.message}</p>`; }
     }
 };
-
-function openProfileModal() {
-    document.getElementById('profile-id').value = '';
-    document.getElementById('profile-form').reset();
-    document.getElementById('profile-modal-title').innerText = 'Create Profile';
-    document.getElementById('profile-modal').classList.remove('hidden');
-}
-
-function closeProfileModal() {
-    document.getElementById('profile-modal').classList.add('hidden');
-}
 
 window.onload = async () => {
     initPulse();
     lucide.createIcons();
     if (!STATE.token) showAuth();
-    else {
-        switchView('fleet');
-    }
+    else switchView('fleet');
 };
