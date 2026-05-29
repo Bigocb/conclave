@@ -616,10 +616,38 @@ async function loadPrincipals() {
 
 // ─── View Switching ────────────────────────────────────────────
 
+
 function switchView(viewId) {
-    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'noc'];
-    views.forEach(v => {
-        const el = document.getElementById(`view-${v}`);
+    console.log(`[UI] Switching to view: ${viewId}`);
+    
+    // Whitelist check
+    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
+    if (!views.includes(viewId)) {
+        console.error(`[UI] View ID '${viewId}' is not in the whitelist.`);
+        return;
+    }
+
+    const target = document.getElementById(`view-${viewId}`);
+    if (!target) {
+        console.error(`[UI] Target element #view-${viewId} not found in DOM.`);
+        return;
+    }
+
+    // Hide all views
+    document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+    
+    // Show target
+    target.classList.remove('hidden');
+    
+    // Update sidebar active state
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) {
+            item.classList.add('active');
+        }
+    });
+}
+`);
         if (el) el.classList.toggle('hidden', v !== viewId);
     });
 
