@@ -617,8 +617,44 @@ async function loadPrincipals() {
 // ─── View Switching ────────────────────────────────────────────
 
 
+
 function switchView(viewId) {
     console.log(`[UI] Switching to view: ${viewId}`);
+    
+    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
+    if (!views.includes(viewId)) {
+        console.error(`[UI] View ID '${viewId}' is not in the whitelist.`);
+        return;
+    }
+
+    const target = document.getElementById(`view-${viewId}`);
+    if (!target) {
+        console.error(`[UI] Target element #view-${viewId} not found in DOM.`);
+        return;
+    }
+
+    // NUCLEAR OPTION: Use style.display instead of classList.add('hidden')
+    document.querySelectorAll('[id^="view-"]').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    target.style.display = 'flex'; // Most views are flex containers
+    if (viewId === 'fleet' || viewId === 'vault') {
+        target.style.display = 'block'; // Some legacy views are blocks
+    }
+    
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) {
+            item.classList.add('active');
+        }
+    });
+    
+    if (viewId === 'profiles') profileController.loadProfiles();
+    if (viewId === 'fleet-manager') fleetController.reload();
+    if (viewId === 'noc') initPulse();
+}
+`);
     
     // Whitelist check
     const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
@@ -1723,8 +1759,44 @@ document.addEventListener('change', async (e) => {
 
 // ─── Navigation & View Controller ──────────────────────────────────────
 
+
 function switchView(viewId) {
     console.log(`[UI] Switching to view: ${viewId}`);
+    
+    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
+    if (!views.includes(viewId)) {
+        console.error(`[UI] View ID '${viewId}' is not in the whitelist.`);
+        return;
+    }
+
+    const target = document.getElementById(`view-${viewId}`);
+    if (!target) {
+        console.error(`[UI] Target element #view-${viewId} not found in DOM.`);
+        return;
+    }
+
+    // NUCLEAR OPTION: Use style.display instead of classList.add('hidden')
+    document.querySelectorAll('[id^="view-"]').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    target.style.display = 'flex'; // Most views are flex containers
+    if (viewId === 'fleet' || viewId === 'vault') {
+        target.style.display = 'block'; // Some legacy views are blocks
+    }
+    
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) {
+            item.classList.add('active');
+        }
+    });
+    
+    if (viewId === 'profiles') profileController.loadProfiles();
+    if (viewId === 'fleet-manager') fleetController.reload();
+    if (viewId === 'noc') initPulse();
+}
+`);
     
     const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
     if (!views.includes(viewId)) {
@@ -1936,4 +2008,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (form) form.onsubmit = (e) => profileController.saveProfile(e);
     lucide.createIcons();
     initPulse();
+});
+
+
+// Force clean state on load
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('[UI] Forcing initial view state...');
+    document.querySelectorAll('[id^="view-"]').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Default to fleet view
+    const home = document.getElementById('view-fleet');
+    if (home) home.style.display = 'block';
+    
+    lucide.createIcons();
 });
