@@ -297,7 +297,7 @@ const fleetController = {
         try {
             const reviewers = await apiRequest('/v1/fleet/reviewers');
             grid.innerHTML = reviewers.length ? '' : '<p class=\"text-center py-12 text-gray-500\">No reviewers configured.</p>';
-            review reviewers.forEach(r => {
+            reviewers.forEach(r => {
                 grid.innerHTML += `
                     <div class=\"bg-zinc-900 border border-white/10 p-6 rounded-xl\">
                         <h3 class=\"font-bold text-white\">${r.channel}</h3>
