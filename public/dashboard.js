@@ -1719,3 +1719,221 @@ document.addEventListener('change', async (e) => {
         }
     }
 });
+
+
+// ─── Navigation & View Controller ──────────────────────────────────────
+
+function switchView(viewId) {
+    console.log(`[UI] Switching to view: ${viewId}`);
+    
+    const views = ['fleet', 'vault', 'tasks', 'channels', 'workers', 'org', 'factory', 'profiles', 'noc', 'fleet-manager'];
+    if (!views.includes(viewId)) {
+        console.error(`[UI] View ID '${viewId}' is not in the whitelist.`);
+        return;
+    }
+
+    const target = document.getElementById(`view-${viewId}`);
+    if (!target) {
+        console.error(`[UI] Target element #view-${viewId} not found in DOM.`);
+        return;
+    }
+
+    document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+    target.classList.remove('hidden');
+    
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick')?.includes(`switchView('${viewId}')`)) {
+            item.classList.add('active');
+        }
+    });
+    
+    // Trigger data refresh for specific views
+    if (viewId === 'profiles') profileController.loadProfiles();
+    if (viewId === 'fleet-manager') fleetController.reload();
+    if (viewId === 'noc') initPulse();
+}
+
+// ─── Profile Controller ────────────────────────────────────────────────
+
+const profileController = {
+    async loadProfiles() {
+        const listEl = document.getElementById('profiles-list');
+        if (!listEl) return;
+        
+        try {
+            const profiles = await apiRequest('/v1/profiles');
+            listEl.innerHTML = '';
+            
+            if (profiles.length === 0) {
+                listEl.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500 italic">No agent profiles found. Create one to get started.</div>';
+                return;
+            }
+
+            profiles.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'bg-zinc-900 border border-white/10 p-4 rounded-xl hover:border-green-500/50 transition-all group';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-white">${p.name}</h3>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="profileController.editProfile('${p.id}')" class="p-1 hover:text-green-400"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                            <button onclick="profileController.deleteProfile('${p.id}')" class="p-1 hover:text-red-400"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                        </div>
+                    </div>
+                    <div class="text-[10px] space-y-1 font-mono text-gray-500">
+                        <div class="flex justify-between"><span>MODEL:</span><span class="text-gray-300">${p.model}</span></div>
+                        <div class="flex justify-between"><span>PROV:</span><span class="text-gray-300">${p.provider}</span></div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+            lucide.createIcons();
+        } catch (e) {
+            console.error('Failed to load profiles:', e);
+            showToast('Failed to load profiles', 'error');
+        }
+    },
+
+    async saveProfile(e) {
+        e.preventDefault();
+        const id = document.getElementById('profile-id').value;
+        const profile = {
+            name: document.getElementById('profile-name').value,
+            model: document.getElementById('profile-model').value,
+            provider: document.getElementById('profile-provider').value,
+            instructions: document.getElementById('profile-instructions').value,
+            skills: document.getElementById('profile-skills').value
+        };
+
+        try {
+            if (id) {
+                await apiRequest(`/v1/profiles/${id}`, 'PATCH', profile);
+            } else {
+                await apiRequest('/v1/profiles', 'POST', profile);
+            }
+            showToast('Profile saved', 'success');
+            closeProfileModal();
+            this.loadProfiles();
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    },
+
+    async editProfile(id) {
+        try {
+            const p = await apiRequest(`/v1/profiles/${id}`);
+            document.getElementById('profile-id').value = p.id;
+            document.getElementById('profile-name').value = p.name;
+            document.getElementById('profile-model').value = p.model;
+            document.getElementById('profile-provider').value = p.provider;
+            document.getElementById('profile-instructions').value = p.instructions;
+            document.getElementById('profile-skills').value = p.skills || '';
+            document.getElementById('profile-modal-title').innerText = 'Edit Profile';
+            openProfileModal();
+        } catch (e) {
+            showToast('Failed to load profile details', 'error');
+        }
+    },
+
+    async deleteProfile(id) {
+        if (!confirm('Delete this profile?')) return;
+        try {
+            await apiRequest(`/v1/profiles/${id}`, 'DELETE');
+            showToast('Profile deleted', 'success');
+            this.loadProfiles();
+        } catch (e) {
+            showToast('Delete failed', 'error');
+        }
+    }
+};
+
+// ─── Fleet Orchestration Controller ─────────────────────────────────────
+
+const fleetController = {
+    async reload() {
+        const grid = document.getElementById('fleet-grid');
+        if (!grid) return;
+        
+        try {
+            const reviewers = await apiRequest('/v1/fleet/reviewers');
+            grid.innerHTML = '';
+            
+            if (reviewers.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500 italic">No fleet reviewers configured.</div>';
+                return;
+            }
+
+            reviewers.forEach(r => {
+                const card = document.createElement('div');
+                card.className = 'bg-zinc-900 border border-white/10 p-6 rounded-xl space-y-4';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-white">${r.channel}</h3>
+                        <span class="text-xs font-mono text-green-400 bg-green-400/10 px-2 py-1 rounded">Active</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-3 bg-black rounded-lg border border-white/5">
+                            <label class="text-gray-500 block mb-1">Profile</label>
+                            <select onchange="fleetController.updateProfile('${r.id}', this.value)" class="bg-transparent text-white w-full outline-none">
+                                <option value="">Select Profile...</option>
+                                ${await this.getProfileOptions(r.profileId)}
+                            </select>
+                        </div>
+                        <div class="p-3 bg-black rounded-lg border border-white/5">
+                            <label class="text-gray-500 block mb-1">Replicas</label>
+                            <input type="number" value="${r.replicas}" 
+                                onchange="fleetController.updateReplicas('${r.id}', this.value)"
+                                class="bg-transparent text-white w-full outline-none">
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        } catch (e) {
+            console.error('Fleet reload failed:', e);
+            showToast('Failed to load fleet config', 'error');
+        }
+    },
+
+    async getProfileOptions(currentId) {
+        try {
+            const profiles = await apiRequest('/v1/profiles');
+            return profiles.map(p => `<option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${p.name}</option>`).join('');
+        } catch (e) { return ''; }
+    },
+
+    async updateProfile(id, profileId) {
+        try {
+            await apiRequest(`/v1/fleet/reviewers/${id}`, 'PATCH', { profileId });
+            showToast('Profile linked', 'success');
+        } catch (e) { showToast('Update failed', 'error'); }
+    },
+
+    async updateReplicas(id, replicas) {
+        try {
+            await apiRequest(`/v1/fleet/reviewers/${id}`, 'PATCH', { replicas: parseInt(replicas) });
+            showToast('Scale updated', 'success');
+        } catch (e) { showToast('Scale failed', 'error'); }
+    }
+};
+
+// Modal Helpers
+function openProfileModal() {
+    document.getElementById('profile-id').value = '';
+    document.getElementById('profile-form').reset();
+    document.getElementById('profile-modal-title').innerText = 'Create Profile';
+    document.getElementById('profile-modal').classList.remove('hidden');
+}
+
+function closeProfileModal() {
+    document.getElementById('profile-modal').classList.add('hidden');
+}
+
+// Wire events
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('profile-form');
+    if (form) form.onsubmit = (e) => profileController.saveProfile(e);
+    lucide.createIcons();
+    initPulse();
+});
