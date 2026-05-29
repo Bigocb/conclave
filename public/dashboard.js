@@ -8,7 +8,7 @@ const STATE = {
 
 async function apiRequest(endpoint, method = 'GET', body = null) {
     const headers = { 'Content-Type': 'application/json' };
-    if (STATE.token) headers['Authorization'] = `Bearer ${STATE.token}`];
+    if (STATE.token) headers['Authorization'] = `Bearer ${STATE.token}`;
 
     const config = { method, headers, body: body ? JSON.stringify(body) : null };
     const url = `${STATE.apiBase}${endpoint}`;
