@@ -172,33 +172,44 @@ function closeMobileSidebar() {
 
 // ─── Data Fetchers (The "Engine") ─────────────────────────────────────
 
+
 async function refreshFleet() {
     const grid = document.getElementById('agent-grid');
     if (!grid) return;
     try {
-        const data = await apiRequest('/v1/principals');
-        const principals = data.data || data;
-        grid.innerHTML = principals.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No principals found.</p>';
-        principals.forEach(p => {
+        const data = await apiRequest('/v1/agents');
+        const agents = data.data || data || [];
+        
+        grid.innerHTML = agents.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No agents found.</p>';
+        
+        agents.forEach(a => {
             grid.innerHTML += `
-                <div class="bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all">
+                <div class="bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all group">
                     <div class="flex justify-between items-start mb-4">
-                        <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
-                            <i data-lucide="user-check" class="w-5 h-5"></i>
+                        <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400 relative">
+                            <i data-lucide="bot" class="w-5 h-5"></i>
+                            <div class="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full border-2 border-[#0c111b]"></div>
                         </div>
-                        <span class="text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500">${p.id}</span>
+                        <span class="text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500">${a.id.slice(0,8)}</span>
                     </div>
-                    <h3 class="font-bold text-lg mb-1">${p.name}</h3>
-                    <p class="text-xs text-gray-400 mb-4">Principal Identity</p>
-                    <div class="pt-4 border-t border-[#1e2d4a] flex gap-2">
-                        <button onclick="managePrincipalSubs('${p.id}','${p.name}')" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1.5 rounded-lg">Manage Channels</button>
+                    <h3 class="font-bold text-lg mb-1 group-hover:text-green-400 transition-colors">${a.name}</h3>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-xs text-gray-400 font-medium">${a.model}</span>
+                        <span class="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500 border border-white/10">${a.provider}</span>
+                    </div>
+                    <div class="pt-4 border-t border-[#1e2d4a] flex justify-between items-center">
+                        <span class="text-[10px] text-gray-500 font-mono italic">${a.principal_id ? a.principal_id.slice(0,8) : 'N/A'}</span>
+                        <button onclick="switchView('profiles')" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1.5 rounded-lg transition-all">View Profile</button>
                     </div>
                 </div>`;
         });
         lucide.createIcons();
     } catch (e) {
-        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`;
+        console.error('Fleet refresh error:', e);
+        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error loading agents: ${e.message}</p>`;
     }
+}
+
 }
 
 async function refreshTasks() {
@@ -221,27 +232,44 @@ async function refreshTasks() {
     } catch (e) { list.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`; }
 }
 
+
 async function refreshChannels() {
     const grid = document.getElementById('channels-grid');
     if (!grid) return;
     try {
         const data = await apiRequest('/v1/channels');
         const channels = data.data?.channels || data.data || data || [];
+        
         grid.innerHTML = channels.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No channels found.</p>';
+        
         channels.forEach(ch => {
+            const subs = ch.subscriptions || [];
+            const subList = subs.length 
+                ? subs.map(s => `<span class="text-[10px] px-2 py-0.5 bg-green-500/10 text-green-400 rounded-full border border-green-500/20">${s.agent_name || s}</span>`).join(' ')
+                : '<span class="text-[10px] text-gray-600 italic">No agents subscribed</span>';
+
             grid.innerHTML += `
-                <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6">
+                <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6 hover:border-green-500/30 transition-all group">
                     <div class="flex items-center gap-3 mb-4">
-                        <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
+                        <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400 group-hover:bg-green-500/20 transition-colors">
                             <i data-lucide="radio" class="w-4 h-4"></i>
                         </div>
                         <h3 class="font-bold text-lg">${ch.name || ch}</h3>
                     </div>
-                    <p class="text-xs text-gray-500 mb-4">${ch.description || 'No description'}</p>
+                    <p class="text-xs text-gray-500 mb-6 leading-relaxed">${ch.description || 'No channel description provided.'}</p>
+                    <div class="pt-4 border-t border-white/5">
+                        <p class="text-[10px] font-bold text-gray-600 uppercase mb-2 tracking-wider">Subscribed Agents</p>
+                        <div class="flex flex-wrap gap-2">${subList}</div>
+                    </div>
                 </div>`;
         });
         lucide.createIcons();
-    } catch (e) { grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`; }
+    } catch (e) {
+        console.error('Channels refresh error:', e);
+        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error loading channels: ${e.message}</p>`;
+    }
+}
+
 }
 
 async function refreshVault() {
