@@ -83,8 +83,7 @@
             <div class="w-8 h-8 bg-green-500 rounded flex items-center justify-center text-black font-bold text-xs">C</div>
             <span class="font-bold text-lg tracking-tight">Conclave</span>
         </div>
-        
-                <nav class="flex-1 px-3 space-y-1 mt-4">
+        <nav class="flex-1 px-3 space-y-1 mt-4">
             <a href="#" onclick="switchView('fleet')" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:bg-white/5">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Fleet Overview
             </a>
@@ -106,17 +105,7 @@
             <a href="#" onclick="switchView('factory')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
                 <i data-lucide="factory" class="w-4 h-4"></i> Agent Factory
             </a>
-            <a href="#" onclick="switchView('profiles')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
-                <i data-lucide="library" class="w-4 h-4"></i> Profiles
-            </a>
-            <a href="#" onclick="switchView('fleet-manager')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
-                <i data-lucide="layers" class="w-4 h-4"></i> Fleet Manager
-            </a>
-            <a href="#" onclick="switchView('noc')" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-gray-400 transition-all hover:bg-white/5">
-                <i data-lucide="terminal" class="w-4 h-4"></i> War Room
-            </a>
         </nav>
-
         <div class="p-4 border-t border-[#1e2d4a] space-y-4">
             <div class="p-3 bg-white/5 rounded-lg border border-white/10">
                 <p class="text-[10px] font-bold text-gray-500 uppercase">Current Org</p>
@@ -130,7 +119,7 @@
 
     <!-- Mobile Sidebar Panel (tablets + phones) -->
     <div id="mobile-sidebar-overlay" onclick="closeMobileSidebar()"></div>
-    <aside class="mobile-sidebar-panel hidden md:hidden" id="mobile-sidebar-panel" role="dialog" aria-label="Navigation menu">
+    <aside class="mobile-sidebar-panel" id="mobile-sidebar-panel" role="dialog" aria-label="Navigation menu">
         <div class="sidebar-header">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 bg-green-500 rounded flex items-center justify-center text-black font-bold text-xs">C</div>
@@ -140,8 +129,6 @@
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
-        
-        
         <nav>
             <a href="#" onclick="closeMobileSidebar();switchView('fleet')" class="active"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Fleet Overview</a>
             <a href="#" onclick="closeMobileSidebar();switchView('vault')"><i data-lucide="key" class="w-4 h-4"></i> Trust Vault</a>
@@ -150,12 +137,9 @@
             <a href="#" onclick="closeMobileSidebar();switchView('channels')"><i data-lucide="radio" class="w-4 h-4"></i> Channels</a>
             <a href="#" onclick="closeMobileSidebar();switchView('workers')"><i data-lucide="cpu" class="w-4 h-4"></i> Worker Status</a>
             <a href="#" onclick="closeMobileSidebar();switchView('factory')"><i data-lucide="factory" class="w-4 h-4"></i> Agent Factory</a>
-            <a href="#" onclick="closeMobileSidebar();switchView('profiles')"><i data-lucide="library" class="w-4 h-4"></i> Profiles</a>
-            <a href="#" onclick="closeMobileSidebar();switchView('fleet-manager')"><i data-lucide="layers" class="w-4 h-4"></i> Fleet Manager</a>
+        
             <a href="#" onclick="closeMobileSidebar();switchView('noc')"><i data-lucide="terminal" class="w-4 h-4"></i> War Room</a>
         </nav>
-
-
         <div class="sidebar-footer">
             <div class="org-badge">
                 <p>Current Org</p>
@@ -366,401 +350,8 @@
                 </table>
             </div>
         </div>
-    
-    <div id="view-profiles" class="hidden h-full flex flex-col p-6 overflow-y-auto">
-        <div class="flex items-center justify-between mb-8">
-            <div>
-                <h1 class="text-2xl font-bold text-white">Agent Profiles</h1>
-                <p class="text-gray-400 text-sm">Manage blueprints for fleet and standalone agents.</p>
-            </div>
-            <button onclick="openProfileModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i> New Profile
-            </button>
-        </div>
-        
-        <div id="profiles-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <!-- Profiles populated by JS -->
-        </div>
-
-        <!-- Profile Modal -->
-        <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div class="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-lg overflow-hidden">
-                <div class="p-4 border-b border-white/10 flex justify-between items-center">
-                    <h3 id="profile-modal-title" class="text-lg font-medium text-white">Create Profile</h3>
-                    <button onclick="closeProfileModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <form id="profile-form" class="p-6 space-y-4">
-                    <input type="hidden" id="profile-id">
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Profile Name</label>
-                        <input type="text" id="profile-name" required class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <label class="text-xs font-medium text-gray-400 uppercase">Model</label>
-                            <input type="text" id="profile-model" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                        </div>
-                        <div class="space-y-2">
-                            <label class="text-xs font-medium text-gray-400 uppercase">Provider</label>
-                            <input type="text" id="profile-provider" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                        </div>
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Instructions (System Prompt)</label>
-                        <textarea id="profile-instructions" rows="4" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"></textarea>
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Skills (Comma separated)</label>
-                        <input type="text" id="profile-skills" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                    </div>
-                    <div class="pt-4 flex justify-end gap-3">
-                        <button type="button" onclick="closeProfileModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save Profile</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-
-
-
-        <div class="flex items-center justify-between mb-8">
-            <div>
-                <h1 class="text-2xl font-bold text-white">Agent Profiles</h1>
-                <p class="text-gray-400 text-sm">Manage blueprints for fleet and standalone agents.</p>
-            </div>
-            <button onclick="openProfileModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i> New Profile
-            </button>
-        </div>
-        <div id="profiles-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-        <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div class="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-lg overflow-hidden">
-                <div class="p-4 border-b border-white/10 flex justify-between items-center">
-                    <h3 id="profile-modal-title" class="text-lg font-medium text-white">Create Profile</h3>
-                    <button onclick="closeProfileModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <form id="profile-form" class="p-6 space-y-4">
-                    <input type="hidden" id="profile-id">
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Profile Name</label>
-                        <input type="text" id="profile-name" required class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <label class="text-xs font-medium text-gray-400 uppercase">Model</label>
-                            <input type="text" id="profile-model" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                        </div>
-                        <div class="space-y-2">
-                            <label class="text-xs font-medium text-gray-400 uppercase">Provider</label>
-                            <input type="text" id="profile-provider" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                        </div>
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Instructions</label>
-                        <textarea id="profile-instructions" rows="4" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none"></textarea>
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-medium text-gray-400 uppercase">Skills (Comma separated)</label>
-                        <input type="text" id="profile-skills" class="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:border-green-500 outline-none">
-                    </div>
-                    <div class="pt-4 flex justify-end gap-3">
-                        <button type="button" onclick="closeProfileModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save Profile</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-
-    <div id="view-fleet-manager" class="hidden h-full flex flex-col p-6 overflow-y-auto">
-        <div class="flex items-center justify-between mb-8">
-            <div>
-                <h1 class="text-2xl font-bold text-white">Fleet Orchestrator</h1>
-                <p class="text-gray-400 text-sm">Assign profiles to channels and scale your reviewer pool.</p>
-            </div>
-            <button onclick="fleetController.reload()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-white/10">
-                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Fleet
-            </button>
-        </div>
-        <div id="fleet-grid" class="grid grid-cols-1 xl:grid-cols-2 gap-6"></div>
-    </div>
-
-</main>
-
-    <!-- Modals -->
-    <div id="deploy-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold">Deploy Verification Agent</h2>
-                <button onclick="toggleDeployModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Name</label>
-                    <input id="deploy-name" type="text" placeholder="e.g. Axiom-Alpha" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
-                    <select id="deploy-model" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                        <option value="gpt-4o">GPT-4o</option>
-                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-                        <option value="deepseek-v3">DeepSeek V3</option>
-                        <option value="llama-3-70b">Llama 3 70B</option>
-                    </select>
-                </div>
-                <div class="pt-4">
-                    <button id="btn-confirm-deploy" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Initialize Agent</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="factory-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">Register New Agent</h2>
-                <button onclick="toggleFactoryModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <form id="factory-reg-form" class="space-y-4">
-                <div class="space-y-2 mb-4">
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quick Profile Blueprint</label>
-                    <select id="agent-profile-select" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                        <option value="">-- Select a Profile to Auto-fill --</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Name</label>
-                    <input type="text" name="name" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Provider</label>
-                        <select name="provider" id="fact-provider" onchange="document.getElementById('fact-key-field').classList.toggle('hidden', !this.value); onProviderChange('fact-provider','fact-model')" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                            <option value="">Custom URL</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
-                        <select name="model" id="fact-model" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                            <option value="">Select provider first</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="fact-key-field" class="hidden">
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
-                    <input type="password" name="api_key" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Principal ID</label>
-                    <input type="text" name="principal_id" id="factory-principal-id" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="Auto-filled after login">
-                </div>
-                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all pt-4">Create Agent</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Edit Agent Modal -->
-    <div id="edit-agent-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-lg shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">Edit Agent</h2>
-                <button onclick="toggleEditAgentModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Name</label>
-                    <input id="edit-agent-name" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Provider</label>
-                        <select id="edit-agent-provider" onchange="onProviderChange('edit-agent-provider','edit-agent-model')" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                            <option value="">Custom URL</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
-                        <select id="edit-agent-model" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                            <option value="">Select provider first</option>
-                        </select>
-                        <p class="text-[10px] text-gray-500 mt-1">Pick from available models, or select "Custom URL" in provider to type a custom one.</p>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Instructions</label>
-                    <textarea id="edit-agent-instructions" rows="4" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500 font-mono text-sm" placeholder="Custom system prompt for this agent..."></textarea>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Vault Key</label>
-                    <select id="edit-agent-vault-key" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                        <option value="">Use agent-specific key (enter below)</option>
-                    </select>
-                    <p class="text-[10px] text-gray-500 mt-1">Select a vault-stored key to share across agents in your org.</p>
-                </div>
-                <div class="border-t border-[#1e2d4a] pt-4">
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Authentication Token</label>
-                    <div class="flex gap-2">
-                        <input id="edit-agent-token" type="password" class="flex-1 bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500 font-mono text-xs cursor-pointer" readonly onclick="this.type='text';setTimeout(()=>this.type='password',5000)">
-                        <button onclick="regenerateAgentToken()" class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 font-bold px-3 py-2 rounded-lg text-xs transition-all">Regenerate</button>
-                    </div>
-                    <p class="text-[10px] text-gray-500 mt-1">Click to reveal token. Regenerating invalidates the old one.</p>
-                </div>
-                <button onclick="saveEditAgent()" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Save Changes</button>
-                <input id="edit-agent-id" type="hidden">
-            </div>
-        </div>
-    </div>
-
-    <!-- Submit Task Modal -->
-    <div id="submit-task-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-2xl shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">Submit New Task</h2>
-                <button onclick="toggleSubmitTaskModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <form id="submit-task-form" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Channel</label>
-                    <select id="task-channel" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                        <option value="code-review">code-review</option>
-                        <option value="architecture">architecture</option>
-                        <option value="general-qa">general-qa</option>
-                        <option value="fact-check">fact-check</option>
-                        <option value="security-review">security-review</option>
-                        <option value="creative">creative</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                    <textarea id="task-description" required rows="2" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="What needs to be reviewed?"></textarea>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Output to Review</label>
-                    <textarea id="task-output" required rows="4" class="w-full font-mono text-sm bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="The code, text, or content to review..."></textarea>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Requested Reviews</label>
-                        <input id="task-requested" type="number" value="2" min="1" max="10" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Dimensions (comma-separated)</label>
-                        <input id="task-dimensions" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="correctness, completeness, efficiency">
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Submit</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Task Detail Modal -->
-    <div id="task-detail-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-3xl shadow-2xl max-h-[80vh] overflow-y-auto" id="td-modal-content">
-            <div class="swipe-indicator"></div>
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white"><span id="td-task-id" class="font-mono text-sm text-gray-500"></span></h2>
-                <div class="flex items-center gap-2">
-                    <button id="td-dismiss-btn" onclick="dismissTask(document.getElementById('td-task-id').innerText)" class="hidden text-xs px-3 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-all">Dismiss</button>
-                    <button id="td-restore-btn" onclick="restoreTask(document.getElementById('td-task-id').innerText)" class="hidden text-xs px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all">Restore</button>
-                    <button onclick="toggleTaskDetailModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-            </div>
-            <div id="td-content"></div>
-        </div>
-    </div>
-
-    <!-- Create Principal Modal -->
-    <div id="principal-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">New Principal</h2>
-                <button onclick="hideCreatePrincipalModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <form id="principal-form" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Principal Name</label>
-                    <input id="principal-name" type="text" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. My App Identity">
-                </div>
-                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Create Principal</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Create Organization Modal -->
-    <div id="org-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">New Organization</h2>
-                <button onclick="hideCreateOrgModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <form id="org-form" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Organization Name</label>
-                    <input id="new-org-name" type="text" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. My Company">
-                </div>
-                <button type="submit" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Create Organization</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Grant Budget Modal -->
-    <div id="grant-budget-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
-        <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">Grant Budget</h2>
-                <button onclick="hideGrantBudgetModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="space-y-4">
-                <p class="text-sm text-gray-300">Grant budget to <span id="grant-principal-name" class="text-green-400 font-bold"></span></p>
-                <input id="grant-principal-id" type="hidden">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Amount</label>
-                    <input id="grant-amount" type="number" min="1" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. 50">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Reason (optional)</label>
-                    <input id="grant-reason" type="text" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500" placeholder="e.g. manual top-up">
-                </div>
-                <button onclick="grantBudget()" class="w-full bg-green-500 hover:bg-cyan-400 text-black font-bold py-3 rounded-lg transition-all">Grant</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bottom Navigation (phone) -->
-    <nav id="mobile-bottom-nav" aria-label="Main navigation">
-        <a href="#" onclick="switchView('fleet')" class="active" 
-            <i data-lucide="layout-dashboard"></i> Home
-        </a>
-        <a href="#" onclick="switchView('tasks')" 
-            <i data-lucide="list-checks"></i> Tasks
-        </a>
-        <a href="#" onclick="switchView('factory')" 
-            <i data-lucide="factory"></i> Agents
-        </a>
-        <a href="#" onclick="switchView('vault')"<!-- Marker --> 
-            <i data-lucide="key"></i> Vault
-        </a>
-        <a href="#" onclick="openMobileSidebar()" aria-label="More options">
-            <i data-lucide="more-horizontal"></i> More
-        </a>
-    </nav>
-
-    <!-- Toast Container -->
-    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
-
-    <script src="dashboard.js"></script>
-</body>
-</html>    <div id="view-fleet-manager" class="hidden h-full flex flex-col p-6 overflow-y-auto">
-        <div class="flex items-center justify-between mb-8">
-            <div>
-                <h1 class="text-2xl font-bold text-white">Fleet Orchestrator</h1>
-                <p class="text-gray-400 text-sm">Assign profiles to channels and scale your reviewer pool.</p>
-            </div>
     </main>
+
     <!-- Modals -->
     <div id="deploy-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
         <div class="bg-[#0c111b] border border-[#1e2d4a] p-8 rounded-2xl w-full max-w-md shadow-2xl">
@@ -796,13 +387,6 @@
                 <button onclick="toggleFactoryModal(false)" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <form id="factory-reg-form" class="space-y-4">
-                <div class="space-y-2 mb-4">
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quick Profile Blueprint</label>
-                    <select id="agent-profile-select" class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
-                        <option value="">-- Select a Profile to Auto-fill --</option>
-                    </select>
-                </div>
-
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Name</label>
                     <input type="text" name="name" required class="w-full bg-[#131a2b] border border-[#1e2d4a] p-3 rounded-lg text-white outline-none focus:border-green-500">
@@ -1003,16 +587,16 @@
 
     <!-- Bottom Navigation (phone) -->
     <nav id="mobile-bottom-nav" aria-label="Main navigation">
-        <a href="#" onclick="switchView('fleet')" class="active" 
+        <a href="#" onclick="switchView('fleet')" class="active" data-view="fleet">
             <i data-lucide="layout-dashboard"></i> Home
         </a>
-        <a href="#" onclick="switchView('tasks')" 
+        <a href="#" onclick="switchView('tasks')" data-view="tasks">
             <i data-lucide="list-checks"></i> Tasks
         </a>
-        <a href="#" onclick="switchView('factory')" 
+        <a href="#" onclick="switchView('factory')" data-view="factory">
             <i data-lucide="factory"></i> Agents
         </a>
-        <a href="#" onclick="switchView('vault')"<!-- Marker --> 
+        <a href="#" onclick="switchView('vault')" data-view="vault">
             <i data-lucide="key"></i> Vault
         </a>
         <a href="#" onclick="openMobileSidebar()" aria-label="More options">
