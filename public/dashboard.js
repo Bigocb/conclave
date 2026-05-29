@@ -23,6 +23,41 @@ function showAuth() {
     document.getElementById('auth-overlay')?.classList.remove('hidden');
 }
 
+async function handleLogin() {
+    const token = document.getElementById('auth-token')?.value;
+    const orgId = document.getElementById('auth-orgid')?.value;
+
+    if (!token || !orgId) {
+        showToast('Both token and Org ID are required', 'warning');
+        return;
+    }
+
+    try {
+        // Verify token with a simple API call
+        await apiRequest('/v1/org');
+        
+        // Save to local storage
+        localStorage.setItem('clv_token', token);
+        localStorage.setItem('clv_orgId', orgId);
+        
+        // Update state
+        STATE.token = token;
+        STATE.orgId = orgId;
+        
+        document.getElementById('auth-overlay')?.classList.add('hidden');
+        showToast('Authenticated successfully', 'success');
+        switchView('fleet');
+    } catch (e) {
+        showToast('Login failed: ' + e.message, 'error');
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('clv_token');
+    localStorage.removeItem('clv_orgId');
+    window.location.reload();
+}
+
 // ─── Real-time Pulse Infrastructure ────────────────────────────
 
 function initPulse() {
@@ -121,26 +156,26 @@ async function refreshFleet() {
     try {
         const data = await apiRequest('/v1/principals');
         const principals = data.data || data;
-        grid.innerHTML = principals.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No principals found.</p>';
+        grid.innerHTML = principals.length ? '' : '<p class=\"col-span-full text-center py-12 text-gray-500\">No principals found.</p>';
         principals.forEach(p => {
             grid.innerHTML += `
-                <div class="bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
-                            <i data-lucide="user-check" class="w-5 h-5"></i>
+                <div class=\"bg-[#0c111b] border border-[#1e2d4a] p-6 rounded-2xl hover:border-green-500/50 transition-all\">
+                    <div class=\"flex justify-between items-start mb-4\">
+                        <div class=\"w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400\">
+                            <i data-lucide=\"user-check\" class=\"w-5 h-5\"></i>
                         </div>
-                        <span class="text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500">${p.id}</span>
+                        <span class=\"text-[10px] font-mono px-2 py-1 bg-white/5 rounded border border-white/10 text-gray-500\">${p.id}</span
                     </div>
-                    <h3 class="font-bold text-lg mb-1">${p.name}</h3>
-                    <p class="text-xs text-gray-400 mb-4">Principal Identity</p>
-                    <div class="pt-4 border-t border-[#1e2d4a] flex gap-2">
-                        <button onclick="managePrincipalSubs('${p.id}','${p.name}')" class="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1.5 rounded-lg">Manage Channels</button>
+                    <h3 class=\"font-bold text-lg mb-1\">${p.name}</h3>
+                    <p class=\"text-xs text-gray-400 mb-4\">Principal Identity</p>
+                    <div class=\"pt-4 border-t border-[#1e2d4a] flex gap-2\">
+                        <button onclick=\"managePrincipalSubs('${p.id}','${p.name}')\" class=\"text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1.5 rounded-lg\">Manage Channels</button>
                     </div>
                 </div>`;
         });
         lucide.createIcons();
     } catch (e) {
-        grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`;
+        grid.innerHTML = `<p class=\"col-span-full text-center py-12 text-red-400\">Error: ${e.message}</p>`;
     }
 }
 
@@ -150,18 +185,18 @@ async function refreshTasks() {
     try {
         const data = await apiRequest('/v1/tasks');
         const tasks = data.data?.tasks || data.data || data || [];
-        list.innerHTML = tasks.length ? '' : '<p class="text-gray-500 text-center py-8">No tasks found.</p>';
+        list.innerHTML = tasks.length ? '' : '<p class=\"text-gray-500 text-center py-8\">No tasks found.</p>';
         tasks.forEach(t => {
             list.innerHTML += `
-                <div onclick="viewTaskDetail('${t.id}')" class="cursor-pointer p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl hover:border-green-500/50 transition-all">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs font-mono text-gray-500">${t.id}</span>
-                        <span class="text-xs font-bold text-gray-400 uppercase">${t.status}</span>
+                <div onclick=\"viewTaskDetail('${t.id}')\" class=\"cursor-pointer p-4 bg-[#0c111b] border border-[#1e2d4a] rounded-xl hover:border-green-500/50 transition-all\">
+                    <div class=\"flex justify-between items-center mb-2\">
+                        <span class=\"text-xs font-mono text-gray-500\">${t.id}</span>
+                        <span class=\"text-xs font-bold text-gray-400 uppercase\">${t.status}</span>
                     </div>
-                    <div class="text-sm mb-2 text-gray-300">${(t.description || t.task_description || '').slice(0,120)}</div>
+                    <div class=\"text-sm mb-2 text-gray-300\">${(t.description || t.task_description || '').slice(0,120)}</div>
                 </div>`;
         });
-    } catch (e) { list.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`; }
+    } catch (e) { list.innerHTML = `<p class=\"text-red-400 text-center py-8\">Error: ${e.message}</p>`; }
 }
 
 async function refreshChannels() {
@@ -170,21 +205,21 @@ async function refreshChannels() {
     try {
         const data = await apiRequest('/v1/channels');
         const channels = data.data?.channels || data.data || data || [];
-        grid.innerHTML = channels.length ? '' : '<p class="col-span-full text-center py-12 text-gray-500">No channels found.</p>';
+        grid.innerHTML = channels.length ? '' : '<p class=\"col-span-full text-center py-12 text-gray-500\">No channels found.</p>';
         channels.forEach(ch => {
             grid.innerHTML += `
-                <div class="bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6">
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400">
-                            <i data-lucide="radio" class="w-4 h-4"></i>
+                <div class=\"bg-[#0c111b] border border-[#1e2d4a] rounded-2xl p-6\">
+                    <div class=\"flex items-center gap-3 mb-4\">
+                        <div class=\"w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400\">
+                            <i data-lucide=\"radio\" class=\"w-4 h-4\"></i>
                         </div>
-                        <h3 class="font-bold text-lg">${ch.name || ch}</h3>
+                        <h3 class=\"font-bold text-lg\">${ch.name || ch}</h3>
                     </div>
-                    <p class="text-xs text-gray-500 mb-4">${ch.description || 'No description'}</p>
+                    <p class=\"text-xs text-gray-500 mb-4\">${ch.description || 'No description'}</p>
                 </div>`;
         });
         lucide.createIcons();
-    } catch (e) { grid.innerHTML = `<p class="col-span-full text-center py-12 text-red-400">Error: ${e.message}</p>`; }
+    } catch (e) { grid.innerHTML = `<p class=\"col-span-full text-center py-12 text-red-400\">Error: ${e.message}</p>`; }
 }
 
 async function refreshVault() {
@@ -193,19 +228,19 @@ async function refreshVault() {
     try {
         const data = await apiRequest('/v1/vault/keys');
         const keys = data.data || data || [];
-        list.innerHTML = keys.length ? '' : '<p class="text-gray-500 text-center py-8">No keys stored.</p>';
+        list.innerHTML = keys.length ? '' : '<p class=\"text-gray-500 text-center py-8\">No keys stored.</p>';
         keys.forEach(k => {
             list.innerHTML += `
-                <div class="flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <i data-lucide="key" class="w-4 h-4 text-green-400"></i>
-                        <span class="font-mono text-sm">${k.provider}</span>
+                <div class=\"flex justify-between items-center p-3 bg-white/5 border border-white/10 rounded-lg\">
+                    <div class=\"flex items-center gap-3\">
+                        <i data-lucide=\"key\" class=\"w-4 h-4 text-green-400\"></i>
+                        <span class=\"font-mono text-sm\">${k.provider}</span>
                     </div>
-                    <span class="text-[10px] text-gray-500 uppercase">Encrypted</span>
+                    <span class=\"text-[10px] text-gray-500 uppercase\">Encrypted</span>
                 </div>`;
         });
         lucide.createIcons();
-    } catch (e) { list.innerHTML = `<p class="text-red-400 text-center py-8">Error: ${e.message}</p>`; }
+    } catch (e) { list.innerHTML = `<p class=\"text-red-400 text-center py-8\">Error: ${e.message}</p>`; }
 }
 
 async function refreshWorker() {
@@ -242,16 +277,16 @@ const profileController = {
         if (!listEl) return;
         try {
             const profiles = await apiRequest('/v1/profiles');
-            listEl.innerHTML = profiles.length ? '' : '<p class="text-center py-12 text-gray-500">No profiles found.</p>';
+            listEl.innerHTML = profiles.length ? '' : '<p class=\"text-center py-12 text-gray-500\">No profiles found.</p>';
             profiles.forEach(p => {
                 listEl.innerHTML += `
-                    <div class="bg-zinc-900 border border-white/10 p-4 rounded-xl">
-                        <h3 class="font-bold text-white">${p.name}</h3>
-                        <p class="text-xs text-gray-500 font-mono">${p.model} / ${p.provider}</p>
+                    <div class=\"bg-zinc-900 border border-white/10 p-4 rounded-xl\">
+                        <h3 class=\"font-bold text-white\">${p.name}</h3>
+                        <p class=\"text-xs text-gray-500 font-mono\">${p.model} / ${p.provider}</p>
                     </div>`;
             });
             lucide.createIcons();
-        } catch (e) { listEl.innerHTML = `<p class="text-red-400 text-center py-12">Error: ${e.message}</p>`; }
+        } catch (e) { listEl.innerHTML = `<p class=\"text-red-400 text-center py-12\">Error: ${e.message}</p>`; }
     }
 };
 
@@ -261,21 +296,26 @@ const fleetController = {
         if (!grid) return;
         try {
             const reviewers = await apiRequest('/v1/fleet/reviewers');
-            grid.innerHTML = reviewers.length ? '' : '<p class="text-center py-12 text-gray-500">No reviewers configured.</p>';
-            reviewers.forEach(r => {
+            grid.innerHTML = reviewers.length ? '' : '<p class=\"text-center py-12 text-gray-500\">No reviewers configured.</p>';
+            review reviewers.forEach(r => {
                 grid.innerHTML += `
-                    <div class="bg-zinc-900 border border-white/10 p-6 rounded-xl">
-                        <h3 class="font-bold text-white">${r.channel}</h3>
-                        <p class="text-xs text-green-400">Active</p>
+                    <div class=\"bg-zinc-900 border border-white/10 p-6 rounded-xl\">
+                        <h3 class=\"font-bold text-white\">${r.channel}</h3>
+                        <p class=\"text-xs text-green-400\">Active</p>
                     </div>`;
             });
-        } catch (e) { grid.innerHTML = `<p class="text-red-400 text-center py-12">Error: ${e.message}</p>`; }
+        } catch (e) { grid.innerHTML = `<p class=\"text-red-400 text-center py-12\">Error: ${e.message}</p>`; }
     }
 };
 
 window.onload = async () => {
     initPulse();
     lucide.createIcons();
+    
+    // Bind login/logout buttons
+    document.getElementById('btn-access-dashboard')?.addEventListener('click', handleLogin);
+    document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+
     if (!STATE.token) showAuth();
     else switchView('fleet');
 };
