@@ -23,4 +23,4 @@ RUN npm ci --omit=dev --ignore-scripts
 COPY --from=build /app/dist ./dist
 COPY fleet.docker.yaml ./
 
-CMD ["node", "dist/fleet/index.js", "start", "--config", "fleet.docker.yaml"]
+CMD ["node", "dist/fleet/index.js", "start"]
