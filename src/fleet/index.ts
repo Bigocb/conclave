@@ -2,18 +2,115 @@
 /**
  * Conclave Fleet — CLI
  *
+ * Two modes:
+ *   1. API-driven (default fleet): fetches config from Conclave server
+ *   2. YAML-based: reads fleet.yaml locally (--config fleet.yaml)
+ *
  * Usage:
- *   conclave fleet start --config fleet.yaml
+ *   conclave fleet start [--config fleet.yaml]
  *   conclave fleet status [--config fleet.yaml]
  *   conclave fleet pending [--config fleet.yaml]
  *   conclave fleet approve <pending_id> [--config fleet.yaml]
  *   conclave fleet reject <pending_id> [--config fleet.yaml]
+ *
+ * Env vars:
+ *   SERVER_URL    — Conclave API server URL (default: https://conclave-roan.vercel.app)
+ *   FLEET_TOKEN   — Org token for API access
+ *   FLEET_ORG_ID  — Org ID to load fleet config for (default: org_019e6027-...)
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { parseFleetConfig, summarizeFleetConfig } from './config.js';
 import { FleetManager } from './manager.js';
+import type { FleetConfig, ReviewerConfig } from './config.js';
+
+// ─── Fetch config from API ──────────────────────────────────
+
+async function fetchFleetConfigFromApi(serverUrl: string, orgId: string, token: string): Promise<FleetConfig> {
+  console.log(`  Fetching fleet config from ${serverUrl}/v1/fleet/config...`);
+
+  const configResp = await fetch(
+    `${serverUrl}/v1/fleet/config?orgId=${encodeURIComponent(orgId)}`,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+
+  if (!configResp.ok) {
+    const body = await configResp.text().catch(() => '');
+    throw new Error(`Fleet config API returned ${configResp.status}: ${body.slice(0, 200)}`);
+  }
+
+  const configEnvelope: any = await configResp.json();
+  const configData = configEnvelope?.data ?? configEnvelope;
+
+  if (!configData?.orgId) {
+    throw new Error(`Fleet config missing orgId — got: ${JSON.stringify(configData).slice(0, 200)}`);
+  }
+
+  // Fetch reviewer blueprints
+  const revResp = await fetch(
+    `${serverUrl}/v1/fleet/reviewers?orgId=${encodeURIComponent(orgId)}`,
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+
+  if (!revResp.ok) {
+    throw new Error(`Fleet reviewers API returned ${revResp.status}`);
+  }
+
+  const revEnvelope: any = await revResp.json();
+  const revData = revEnvelope?.data?.reviewers ?? revEnvelope?.reviewers ?? revEnvelope ?? [];
+
+  const reviewers: ReviewerConfig[] = (Array.isArray(revData) ? revData : []).map((r: any) => ({
+    name: r.name || r.name,
+    channels: typeof r.channels === 'string' ? JSON.parse(r.channels) : (r.channels || []),
+    type: r.type || 'llm',
+    model: r.model || '',
+    provider: r.provider || '',
+    llm_url: r.llmUrl || r.llm_url || '',
+    llm_key: r.llmKey || r.llm_key || '',
+    command: r.command,
+    replicas: r.replicas || 1,
+    mode: r.mode || 'auto',
+    confidence_threshold: r.confidenceThreshold || r.confidence_threshold || 8,
+    prompt: r.prompt,
+    instructions: r.instructions,
+    skills: typeof r.skills === 'string' ? JSON.parse(r.skills) : (r.skills || []),
+    steps: typeof r.steps === 'string' ? JSON.parse(r.steps) : (r.steps || []),
+    interval: r.interval || 30,
+    max_concurrent: r.maxConcurrent || r.max_concurrent || 1,
+  }));
+
+  if (reviewers.length === 0) {
+    console.warn('  ⚠ No reviewer blueprints found via API — fleet will idle');
+  }
+
+  let providers: Record<string, string> | undefined;
+  if (configData.providers && typeof configData.providers === 'string') {
+    try { providers = JSON.parse(configData.providers); } catch { /* ignore */ }
+  } else if (configData.providers && typeof configData.providers === 'object') {
+    providers = configData.providers;
+  }
+
+  return {
+    org_id: configData.orgId,
+    server: configData.server || serverUrl,
+    scope: configData.scope || 'public',
+    token: token || configData.token || '',
+    providers,
+    reviewers,
+    config_path: 'api',
+  };
+}
 
 // ─── Args ───────────────────────────────────────────────────
 
@@ -33,7 +130,6 @@ function parseArgs(argv: string[]): Record<string, string> {
   if (!args.command && positional.length > 0) {
     args.command = positional[0];
   }
-  // Capture positional args after subcommand (like pending_id)
   if (positional.length > 1) args.arg = positional[1];
   return args;
 }
@@ -43,16 +139,47 @@ function parseArgs(argv: string[]): Record<string, string> {
 async function main() {
   const args = parseArgs(process.argv);
   const command = args.command ?? 'start';
-  const configPath = args.config ?? args.configPath ?? 'fleet.yaml';
+  const configPath = args.config ?? args.configPath ?? '';
 
   // ─── Parse config ───────────────────────────────────────
 
-  let config;
-  try {
-    config = parseFleetConfig(configPath);
-  } catch (err: any) {
-    console.error(`❌ Config error: ${err.message}`);
-    process.exit(1);
+  let config: FleetConfig;
+
+  if (configPath && existsSync(resolve(configPath))) {
+    // YAML mode
+    try {
+      config = parseFleetConfig(configPath);
+    } catch (err: any) {
+      console.error(`❌ Config error: ${err.message}`);
+      process.exit(1);
+    }
+  } else {
+    // API mode (default)
+    const serverUrl = process.env.SERVER_URL || 'https://conclave-roan.vercel.app';
+    const orgId = process.env.FLEET_ORG_ID || 'org_019e6027-580a-767a-8f13-cf40de5363a9';
+    const token = process.env.FLEET_TOKEN || process.env.CONCLAVE_TOKEN || '';
+
+    console.log('  Mode: API-driven fleet config\n');
+
+    if (!orgId) {
+      console.error('❌ FLEET_ORG_ID is required in API mode');
+      console.error('   Set FLEET_ORG_ID env var or use --config fleet.yaml');
+      process.exit(1);
+    }
+
+    try {
+      config = await fetchFleetConfigFromApi(serverUrl, orgId, token);
+    } catch (err: any) {
+      console.error(`❌ Failed to fetch fleet config from API: ${err.message}`);
+      console.error('   Falling back to local fleet.yaml...');
+      if (existsSync(resolve('fleet.yaml'))) {
+        config = parseFleetConfig('fleet.yaml');
+      } else if (existsSync(resolve('fleet.docker.yaml'))) {
+        config = parseFleetConfig('fleet.docker.yaml');
+      } else {
+        process.exit(1);
+      }
+    }
   }
 
   // ─── Status ─────────────────────────────────────────────
@@ -62,8 +189,6 @@ async function main() {
     console.log('║         CONCLAVE FLEET STATUS            ║');
     console.log('╚══════════════════════════════════════════╝\n');
     console.log(summarizeFleetConfig(config));
-
-    // If there's a running fleet, we'd connect to it — for now show config summary
     process.exit(0);
   }
 
@@ -90,8 +215,7 @@ async function main() {
         `Active: ${stats.reviewers.reduce((s, r) => s + r.active_reviews, 0)} ` +
         `Completed: ${stats.reviewers.reduce((s, r) => s + r.total_reviews_completed, 0)} ` +
         `Pending: ${stats.pending_approvals} ` +
-        `Uptime: ${stats.uptime_seconds}s`
-      );
+        `Uptime: ${stats.uptime_seconds}s`);
     }, 10000);
 
     // Graceful shutdown
@@ -111,17 +235,10 @@ async function main() {
   // ─── Pending ────────────────────────────────────────────
 
   if (command === 'pending') {
-    // For pending/approve/reject, we need to connect to a running fleet.
-    // In V1, the fleet manager runs in-process, so these commands
-    // require a running fleet. We'll implement this as an API call
-    // to the Conclave server's fleet status endpoint in the future.
-    // For now, show how the MCP tools handle this.
-
     console.log('╔══════════════════════════════════════════╗');
     console.log('║       PENDING HUMAN APPROVALS            ║');
     console.log('╚══════════════════════════════════════════╝\n');
 
-    // Try to read from the fleet status API
     try {
       const resp = await fetch(`${config.server}/v1/fleet/pending`);
       if (resp.ok) {
@@ -143,11 +260,11 @@ async function main() {
         }
       } else {
         console.log('  No fleet running or endpoint not available.');
-        console.log('  Start a fleet first: conclave fleet start --config fleet.yaml\n');
+        console.log('  Start a fleet first: conclave fleet start\n');
       }
     } catch {
       console.log('  No fleet running. Start one first.');
-      console.log('  Usage: conclave fleet start --config fleet.yaml\n');
+      console.log('  Usage: conclave fleet start\n');
     }
 
     process.exit(0);
