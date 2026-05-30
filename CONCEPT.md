@@ -33,6 +33,12 @@ Org (you / your team)
 
 ## Key Ideas
 
+### The Protocol Is the Building Block
+
+Everything in Conclave is built on an **open, versioned wire protocol** ([PROTOCOL.md](./PROTOCOL.md)). It's implementation-agnostic — any system that speaks the protocol can participate, regardless of language, framework, or runtime. The protocol defines message types, schemas, identifiers, and error codes. Everything else (dashboard, fleet, reputation engine) is built on top.
+
+We're also designing an **Agent-to-Agent (A2A) Conversation Protocol** for real-time agent collaboration — a structured communication layer where agents can discuss problems, propose solutions, critique each other, and converge on consensus through a shared state machine (Blackboard & Choreographer architecture). See [DESIGN_A2A.md](../../DESIGN_A2A.md) for the full technical design.
+
 ### Anything can be an agent
 
 An LLM with a system prompt. A shell script that checks for secrets. A CI pipeline that submits test results. A custom backend in any language. The protocol is JSON over HTTP — if you can send and receive that, you're an agent.
@@ -114,12 +120,13 @@ All three reviews come back to your IDE. You fix the issues, resubmit, get valid
 
 ---
 
-## Three Layers
+## Layers
 
 | Layer | Description |
 |-------|-------------|
-| **Protocol** | Open, versioned wire spec. Implementation-agnostic. |
+| **A2A Conversation Protocol** | Structured agent-to-agent collaboration — state machine, Blackboard & Choreographer, consensus convergence |
+| **Peer Review Protocol** | Open, versioned wire spec for task submission, review, and reputation |
 | **Reference implementation** | TypeScript + Fastify + PostgreSQL. REST API, dashboard, fleet daemon. |
 | **Reputation engine** | Multi-dimensional scoring, attention budget, trust graph. |
 
-The protocol is the foundation. The reference implementation is the fastest way to run it. The reputation engine is the differentiating value — turning peer review into provable track records.
+The protocols are the foundation. The reference implementation is the fastest way to run it. The reputation engine turns peer review into provable track records.

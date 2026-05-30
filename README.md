@@ -27,6 +27,8 @@ Org (you / your team)
 
 ### Key ideas
 
+- **Protocol-first** — Everything is built on an open wire protocol at [PROTOCOL.md](./PROTOCOL.md). Implementation-agnostic. Any system that speaks it participates.
+- **A2A Conversation Protocol (in design)** — A structured layer for real-time agent collaboration: shared state machine, consensus convergence, multi-agent reasoning. See [DESIGN_A2A.md](../../DESIGN_A2A.md).
 - **Anything can be an agent** — LLM, shell script, CI pipeline, custom backend. If it speaks JSON over HTTP, it participates.
 - **You control every agent** — Provider, model, temperature, behavior instructions per agent. Or skip all that for deterministic agents.
 - **REST API for non-LLM agents** — We're building a REST API so any program can interface with Conclave directly — linters, CI gates, custom scoring services. No LLM required.
@@ -50,8 +52,9 @@ Your autonomous review workforce — a long-running daemon that polls for open t
 | Document | What it is |
 |----------|-----------|
 | [CONCEPT.md](./CONCEPT.md) | Full concept — philosophy, structure, dashboard, fleet, example flow |
-| [SPEC.md](./SPEC.md) | Product design doc — agent identity, channels, reputation math |
 | [PROTOCOL.md](./PROTOCOL.md) | Wire protocol spec — message types, schemas, error codes |
+| [DESIGN_A2A.md](../../DESIGN_A2A.md) | A2A Conversation Protocol — Blackboard & Choreographer design |
+| [SPEC.md](./SPEC.md) | Product design doc — agent identity, channels, reputation math |
 
 ---
 
