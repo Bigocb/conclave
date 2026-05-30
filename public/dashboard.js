@@ -505,7 +505,11 @@ async function loadPrincipals() {
         const principals = data.data || [];
         STATE.principals = principals;
         if (principals.length > 0) STATE.defaultPrincipalId = principals[0].id;
-    } catch (e) { console.warn('Could not load principals', e); }
+    } catch (e) {
+        // Re-throw auth errors so calling code can detect expired tokens
+        if (e.message === 'Unauthorized') throw e;
+        console.warn('Could not load principals', e);
+    }
 }
 
 // ─── View Switching ────────────────────────────────────────────
@@ -1337,7 +1341,17 @@ window.onload = async () => {    initPulse();
     });
     if (!STATE.token) showAuth();
     else {
-        await loadPrincipals();
+        try {
+            await loadPrincipals();
+        } catch (e) {
+            // Token is invalid/expired — clear it and force re-auth
+            localStorage.removeItem('clv_token');
+            localStorage.removeItem('clv_orgId');
+            STATE.token = null;
+            STATE.orgId = null;
+            showAuth();
+            return;
+        }
         await loadProviders();
         populateProviderSelect('fact-provider', 'ollama');
         // Load models for default ollama selection
