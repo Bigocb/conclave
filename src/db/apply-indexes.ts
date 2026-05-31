@@ -15,8 +15,8 @@ export async function applyPerformanceIndexes() {
   try {
     for (const query of indexes) {
       console.log(`Executing: ${query}`);
-      // In Drizzle, raw SQL is executed via db.run() for non-returning queries
-      await db.run(sql.raw(query));
+      // Cast to any to bypass type checking for the raw execute call on a session
+      await (db as any).session.execute(sql.raw(query));
     }
     console.log('✅ All performance indexes applied successfully.');
   } catch (e) {
