@@ -13,9 +13,9 @@ const config = {
   mode: (process.env.CONCLAVE_MODE || 'local') as 'local' | 'self-hosted' | 'cloud',
   port: parseInt(process.env.CONCLAVE_PORT || '3000'),
   host: process.env.CONCLAVE_HOST || '0.0.0.0',
-  database: {
-    url: process.env.DATABASE_URL || 'postgres://localhost:5432/conclave',
-  },
+    database: {
+      url: process.env.DATABASE_URL || '',
+    },
   jwtSecret: process.env.CONCLAVE_JWT_SECRET || 'conclave-dev-secret-change-in-production',
 };
 
