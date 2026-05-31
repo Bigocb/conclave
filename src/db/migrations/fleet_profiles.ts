@@ -11,49 +11,70 @@ import * as fs from 'fs';
  * Inside dbClient.begin(), the `sql` tagged template IS safe for inline DDL
  * because the SQL is written directly in the template literal (no variables).
  * But for dynamic SQL read from a file, we must use dbClient.unsafe().
+ *
+ * NOTE: All ID columns use TEXT (not UUID) to match the existing Conclave
+ * schema. Existing tables like clv_agents use TEXT IDs (e.g. 'agt_xxx').
  */
 export async function migrateFleetToProfiles(dbClient: any) {
     try {
         console.log('[Migration] Starting Fleet Profile migration...');
-        
-        await dbClient.begin(async (sql) => {
+
+        await dbClient.begin(async (sql: any) => {
             // 1. Tables — inline DDL is safe in tagged templates (no variables)
+            // Using TEXT IDs to match the rest of the Conclave schema
             await sql`
                 CREATE TABLE IF NOT EXISTS clv_agent_profiles (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    id TEXT PRIMARY KEY,
+                    org_id TEXT NOT NULL REFERENCES clv_organizations(id),
                     name TEXT NOT NULL UNIQUE,
                     model TEXT,
                     provider TEXT,
                     temperature FLOAT DEFAULT 0.3,
                     instructions TEXT,
                     skills TEXT[],
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
+                    updated_at TEXT
                 );
             `;
 
             await sql`
                 CREATE TABLE IF NOT EXISTS clv_fleet_config (
-                    key TEXT PRIMARY KEY,
-                    value TEXT,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    org_id TEXT PRIMARY KEY REFERENCES clv_organizations(id),
+                    server TEXT NOT NULL,
+                    scope TEXT NOT NULL DEFAULT 'public',
+                    providers TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
                 );
             `;
 
             await sql`
                 CREATE TABLE IF NOT EXISTS clv_fleet_reviewers (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    profile_id UUID REFERENCES clv_agent_profiles(id),
-                    channel TEXT NOT NULL,
-                    mode TEXT NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    org_id TEXT NOT NULL REFERENCES clv_fleet_config(org_id),
+                    name TEXT NOT NULL,
+                    channels TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'llm',
+                    model TEXT,
+                    provider TEXT,
+                    llm_url TEXT,
+                    llm_key TEXT,
+                    command TEXT,
                     replicas INTEGER DEFAULT 1,
-                    interval INTEGER DEFAULT 30,
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(profile_id, channel)
+                    mode TEXT NOT NULL DEFAULT 'auto',
+                    confidence_threshold INTEGER DEFAULT 8,
+                    prompt TEXT,
+                    instructions TEXT,
+                    skills TEXT,
+                    steps TEXT,
+                    interval INTEGER,
+                    max_concurrent INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
                 );
             `;
 
+            // Add fleet_reviewer_id to agents — TEXT to match agents.id convention
             await sql`
-                ALTER TABLE clv_agents ADD COLUMN IF NOT EXISTS clv_fleet_reviewer_id UUID REFERENCES clv_fleet_reviewers(id);
+                ALTER TABLE clv_agents ADD COLUMN IF NOT EXISTS fleet_reviewer_id TEXT REFERENCES clv_fleet_reviewers(id);
             `;
         });
 
@@ -65,7 +86,7 @@ export async function migrateFleetToProfiles(dbClient: any) {
 
         if (count === 0) {
             console.log('[Migration] Importing data from fleet.yaml...');
-            
+
             try {
                 const dataSql = fs.readFileSync('/tmp/fleet_data.sql', 'utf8');
                 // Must use unsafe() — dynamic SQL cannot be parameterized
