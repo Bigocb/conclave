@@ -21,6 +21,10 @@ const config = {
 
 (async () => {
   try {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is missing. Conclave cannot start.');
+    }
+
     // Apply performance indexes before starting server
     const { client } = await initDb(config.database);
     await applyPerformanceIndexes(client);
