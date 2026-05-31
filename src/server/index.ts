@@ -29,6 +29,7 @@ import { vaultRoutes } from '../routes/vault.js';
 import { pushRoutes } from '../routes/push.js';
 import { profileRoutes } from '../routes/profiles.js';
 import { pulseRoutes } from '../routes/pulse.js';
+import { pulseHub } from '../services/pulse.js';
 import type { FleetManager } from '../fleet/manager.js';
 
 export interface ConclaveConfig {
@@ -120,7 +121,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     }
 
     // Public routes that don't need auth
-    const publicPaths = ['/health', '/v1/health', '/auth/register', '/auth/login', '/register', '/login'];
+    const publicPaths = ['/health', '/v1/health', '/v1/broadcast', '/auth/register', '/auth/login', '/register', '/login'];
     if (publicPaths.includes(request.url)) return;
 
     // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
@@ -139,6 +140,20 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
 
   // Health check (no prefix)
   await fastify.register(healthRoutes);
+
+  // Public broadcast endpoint — receives events from fleet/Vercel PulseHub
+  fastify.post('/v1/broadcast', async (request, reply) => {
+    const { event, orgId } = request.body as any;
+    if (!event || !event.type) {
+      return reply.status(400).send({ error: 'Invalid event payload' });
+    }
+    if (orgId) {
+      pulseHub.emit(`org:${orgId}`, event);
+    } else {
+      pulseHub.emit('global', event);
+    }
+    return { success: true };
+  });
 
   // Auth routes
   await fastify.register(authRoutes, { prefix: '/v1/auth' });
