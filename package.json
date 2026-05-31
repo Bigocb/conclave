@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
-    "build": "tsc --noEmitOnError false || true",
+    "build": "tsc --noEmitOnError false",
     "start": "node dist/main.js",
     "daemon": "tsx src/reviewer-daemon.ts",
     "worker:reviewer": "tsx src/workers/reviewer.ts",
