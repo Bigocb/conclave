@@ -88,31 +88,29 @@ export interface FleetStats {
 // ─── LLM Client ─────────────────────────────────────────────
 
 async function callLLM(opts: {
-    url: string;
-    key: string;
-    model: string;
-    systemPrompt: string;
-    userMessage: string;
-  }): Promise<string> {
-    // Handle Ollama Cloud Specifics
-    const isOllamaCloud = opts.url.includes('ollama.com');
-    let endpoint = opts.url.replace(/\\/$/, '');
+  url: string;
+  key: string;
+  model: string;
+  systemPrompt: string;
+  userMessage: string;
+}): Promise<string> {
+  // Normalize URL: ensure /v1/chat/completions endpoint
+  let endpoint = opts.url.replace(/\/$/, '');
+  if (endpoint.endsWith('/v1')) {
+    endpoint += '/chat/completions';
+  } else if (endpoint.endsWith('/chat/completions')) {
+    // already full
+  } else if (!endpoint.includes('/chat/completions')) {
+    endpoint += '/v1/chat/completions';
+  }
 
-    if (isOllamaCloud) {
-      // Ollama Cloud uses /api/chat instead of /v1/chat/completions
-      endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
-    } else {
-      // Normalize OpenAI-style URL
-      if (endpoint.endsWith('/v1')) {
-        endpoint += '/chat/completions';
-      } else if (endpoint.endsWith('/chat/completions')) {
-        // already full
-      } else if (!endpoint.includes('/chat/completions')) {
-        endpoint += '/v1/chat/completions';
-      }
-    }
-
-    const body = {
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${opts.key}`,
+    },
+    body: JSON.stringify({
       model: opts.model,
       messages: [
         { role: 'system', content: opts.systemPrompt },
@@ -120,31 +118,17 @@ async function callLLM(opts: {
       ],
       temperature: 0.3,
       max_tokens: 2000,
-      stream: false,
-    };
+    }),
+  });
 
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.key}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!resp.ok) {
-      const bodyText = await resp.text().catch(() => '');
-      throw new Error(`LLM API error ${resp.status}: ${bodyText.slice(0, 200)}`);
-    }
-
-    const data = await resp.json() as any;
-    
-    if (isOllamaCloud) {
-      return data.message?.content ?? '';
-    }
-    
-    return data.choices?.[0]?.message?.content ?? '';
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`LLM API error ${resp.status}: ${body.slice(0, 200)}`);
   }
+
+  const data = await resp.json() as any;
+  return data.choices?.[0]?.message?.content ?? '';
+}
 
 // ─── Parse LLM structured review output ─────────────────────
 
@@ -157,7 +141,7 @@ function parseReviewResponse(raw: string): {
   approved: boolean;
 } | null {
   try {
-    const jsonMatch = raw.match(/```json\\s*([\\s\\S]*?)\\s*```/) || raw.match(/\\{[\\s\\S]*\\}/);
+    const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const obj = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
 
@@ -213,7 +197,7 @@ export class FleetManager extends EventEmitter {
 
 
   async provision(): Promise<void> {
-    console.log('🔧 Provisioning fleet...\\n');
+    console.log('🔧 Provisioning fleet...\n');
 
     for (const reviewer of this.config.reviewers) {
       const slug = principalSlug(reviewer.name);
@@ -238,6 +222,7 @@ export class FleetManager extends EventEmitter {
           console.log(`  Principal exists: ${principalId} (${reviewer.name})`);
         }
       } catch { /* list failed */ }
+
       if (!principal) {
         console.log(`  Creating principal: ${reviewer.name}`);
         const resp = await tempClient.createPrincipal({
@@ -407,7 +392,7 @@ export class FleetManager extends EventEmitter {
       this.totalReviewsCompleted.set(principalId, 0);
     }
 
-    console.log('\\n✅ Fleet provisioned\\n');
+    console.log('\n✅ Fleet provisioned\n');
   }
 
   // ─── Start / Stop ────────────────────────────────────────
@@ -415,7 +400,7 @@ export class FleetManager extends EventEmitter {
   async start(): Promise<void> {
     this.running = true;
     this.startTime = Date.now();
-    console.log('🚀 Starting fleet...\\n');
+    console.log('🚀 Starting fleet...\n');
 
     const pids = Array.from(this.processes.keys());
     for (const principalId of pids) {
@@ -428,7 +413,7 @@ export class FleetManager extends EventEmitter {
     }
 
     this.emit('started');
-    console.log('\\n✅ Fleet running\\n');
+    console.log('\n✅ Fleet running\n');
   }
 
   async stop(): Promise<void> {
@@ -445,7 +430,7 @@ export class FleetManager extends EventEmitter {
     }
 
     this.emit('stopped');
-    console.log('\\n🛑 Fleet stopped');
+    console.log('\n🛑 Fleet stopped');
   }
 
   // ─── Polling Loop ────────────────────────────────────────
@@ -513,10 +498,313 @@ export class FleetManager extends EventEmitter {
 
           // Mark as seen to prevent duplicate picks
           proc.reviewedTaskIds.add(taskId);
+          console.log(`  🎯 ${proc.reviewerName} found task ${taskId} on channel ${channel}`);
+          this.broadcastPulse('FLEET_TASK_FOUND', { taskId, channel, reviewerName: proc.reviewerName });
+
+          // Fetch full task details (feed only has summary)
+          let fullTask = feedItem;
+          let taskFetchFailed = false;
+          try {
+            const taskResp = await client.getTask(taskId);
+            fullTask = taskResp.data;
+          } catch {
+            taskFetchFailed = true;
+          }
+
+          // Skip tasks we can't fetch — wrong org or insufficient permissions
+          if (taskFetchFailed) {
+            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — skipping`);
+            this.broadcastPulse('FLEET_FETCH_ERROR', { taskId, reviewerName: proc.reviewerName, error: 'Cannot fetch task' });
+            proc.reviewedTaskIds.delete(taskId);
+            continue;
+          }
+
+          // Process async
+          this.reviewTask(principalId, fullTask, channel).catch(err => {
+            const isDuplicate = err.message?.includes('409') && (
+              err.message?.includes('DUPLICATE_REVIEW') ||
+              err.message?.includes('already reviewed')
+            );
+            if (isDuplicate) {
+              console.log(`  ⏭ ${proc.reviewerName}: Already reviewed task ${taskId} (server-side dedup)`);
+              // Keep in reviewedTaskIds — don't retry tasks we've already reviewed
+            } else {
+              console.error(`  ❌ Review failed for task ${taskId}:`, err.message);
+              // Remove from seen set so it can be retried on the next poll
+              proc.reviewedTaskIds.delete(taskId);
+            }
+          });
+
+          proc.activeReviews++;
         }
       } catch (err: any) {
-        console.error(`  ❌ ${proc.reviewerName} poll error:`, err.message);
+        console.error(`  ⚠ Feed error for ${channel}:`, err.message);
       }
     }
+  }
+
+  // ─── Review Task ─────────────────────────────────────────
+
+  private async reviewTask(principalId: string, task: any, channel: string): Promise<void> {
+    const proc = this.processes.get(principalId)!;
+    const client = this.apiClients.get(principalId)!;
+    const agent = proc.agents[0];
+
+    console.log(`  📋 ${proc.reviewerName}: Reviewing task ${task.id ?? task.task_id} from ${channel}`);
+    this.broadcastPulse('FLEET_REVIEW_START', { taskId: task.id ?? task.task_id, channel, reviewerName: proc.reviewerName });
+
+    try {
+      // 1. Build input for any backend type
+      const taskId = task.id ?? task.task_id;
+      const reviewInput: ReviewInput = {
+        task_id: taskId,
+        task_description: task.description,
+        output: task.output,
+        dimensions: Array.isArray(task.dimensions) ? task.dimensions : JSON.parse(task.dimensions || '[]'),
+        channel,
+        instructions: proc.instructions,
+        skills: proc.skills,
+      };
+
+      // Build a minimal agent record for the backend
+      const agentRecord: any = {
+        model: proc.model,
+        instructions: proc.instructions,
+        skills: proc.skills,
+      };
+
+      // 2. Dispatch to the right backend based on type
+      let draft: ReviewOutput;
+      const reviewerType = proc.type || 'llm';
+
+      if (reviewerType === 'code') {
+        if (!proc.command) throw new Error('Code reviewer has no command configured');
+        draft = await runCodeReview(agentRecord, reviewInput, proc.command);
+      } else if (reviewerType === 'slim') {
+        draft = await runSlimReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+      } else if (reviewerType === 'pipeline') {
+        if (!proc.steps || proc.steps.length === 0) throw new Error('Pipeline reviewer has no steps');
+        draft = await runPipelineReview(
+          proc.steps,
+          agentRecord,
+          reviewInput,
+          async (stepName: string, input: ReviewInput) => {
+            // Find the step's process
+            const stepProc = Array.from(this.processes.values()).find(p => p.reviewerName === stepName);
+            if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
+            const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
+            const stepType = stepProc.type || 'llm';
+            if (stepType === 'code') return runCodeReview(stepAgent, input, stepProc.command!);
+            if (stepType === 'slim') return runSlimReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
+            return runLlmReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
+          },
+        );
+      } else {
+        // Default: full LLM review
+        draft = await runLlmReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+      }
+
+      if (!draft || draft.weighted_overall === undefined) {
+        console.warn(`  ⚠ ${proc.reviewerName}: Backend returned invalid review for task ${task.id} — skipping`);
+        return;
+      }
+
+      // 2. Sanitize scores to meet API constraints (int 1-10, weighted_overall >= 1)
+      const sanitizedScores: Record<string, number> = {};
+      for (const [dim, val] of Object.entries(draft.scores)) {
+        sanitizedScores[dim] = Math.max(1, Math.min(10, Math.round(val)));
+      }
+
+      // 3. PROTOCOL ENFORCEMENT: Force exact dimension names matching the task
+      const taskDimensions: string[] = Array.isArray(task.dimensions)
+        ? task.dimensions
+        : (typeof task.dimensions === 'string' ? JSON.parse(task.dimensions) : []);
+      const finalScores: Record<string, number> = {};
+
+      if (taskDimensions.length > 0) {
+        // Check which task dimensions are covered by the LLM output
+        const missingDims = taskDimensions.filter(d => sanitizedScores[d] === undefined);
+        const extraDims = Object.keys(sanitizedScores).filter(d => !taskDimensions.includes(d));
+
+        if (missingDims.length > 0 || extraDims.length > 0) {
+          // Attempt fuzzy match: find the closest task dimension for each LLM dimension
+          const llmDims = Object.keys(sanitizedScores);
+          const dimMap: Record<string, string> = {};
+          for (const taskDim of taskDimensions) {
+            // Find the closest LLM dimension by substring matching
+            const match = llmDims.find(ld =>
+              ld.toLowerCase().includes(taskDim.toLowerCase()) ||
+              taskDim.toLowerCase().includes(ld.toLowerCase())
+            );
+            if (match) {
+              dimMap[match] = taskDim;
+            }
+          }
+
+          // Build final scores using the mapping, fall back to 'correctness' or 5
+          for (const taskDim of taskDimensions) {
+            const llmKey = Object.entries(dimMap).find(([llm, task]) => task === taskDim)?.[0];
+            if (llmKey && sanitizedScores[llmKey] !== undefined) {
+              finalScores[taskDim] = sanitizedScores[llmKey];
+            } else if (sanitizedScores[taskDim] !== undefined) {
+              finalScores[taskDim] = sanitizedScores[taskDim];
+            } else {
+              finalScores[taskDim] = 5; // neutral fallback
+            }
+          }
+
+          if (missingDims.length > 0) {
+            console.log(`  ⚠ ${proc.reviewerName}: LLM used wrong dimensions for task ${taskId}. ` +
+              `Missing: [${missingDims.join(', ')}], Extra: [${extraDims.join(', ')}]. Corrected via fuzzy match.`);
+          }
+        } else {
+          // All dimensions match exactly — use as-is
+          Object.assign(finalScores, sanitizedScores);
+        }
+      } else {
+        // No defined dimensions on the task — use LLM output as-is
+        Object.assign(finalScores, sanitizedScores);
+      }
+
+      const sanitizedOverall = Math.max(1, Math.min(10, Math.round(draft.weighted_overall)));
+
+      // 4. Protocol: compute approved from overall score
+      const approved = sanitizedOverall >= 7;
+      const reviewPayload = {
+        scores: finalScores,
+        weighted_overall: sanitizedOverall,
+        reviewer_confidence: draft.reviewer_confidence ?? 5,
+        comment: draft.comment || '',
+        suggestions: draft.suggestions || [],
+        approved,
+      };
+
+      if (proc.mode === 'auto') {
+        await client.submitReview(taskId, reviewPayload);
+        this.incrementCompleted(principalId);
+        console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${taskId} (overall: ${draft.weighted_overall})`);
+        this.broadcastPulse('FLEET_REVIEW_SUBMITTED', { taskId, reviewerName: proc.reviewerName, mode: 'auto' });
+        this.emit('review_completed', { principalId, taskId, mode: 'auto' });
+
+      } else if (proc.mode === 'human') {
+        const pending: PendingReview = {
+          id: `pnd_${randomUUID().replace(/-/g, '').slice(0, 24)}`,
+          taskId,
+          channel,
+          reviewerName: proc.reviewerName,
+          principalId,
+          agentId: agent.agentId,
+          draft: reviewPayload,
+          createdAt: new Date().toISOString(),
+        };
+        this.pendingApprovals.push(pending);
+        console.log(`  👤 ${proc.reviewerName}: Draft queued for human approval — task ${task.id} (pending: ${this.pendingApprovals.length})`);
+        this.broadcastPulse('FLEET_REVIEW_QUEUED', { taskId: task.id, reviewerName: proc.reviewerName, mode: 'human' });
+        this.emit('review_pending', pending);
+
+      } else if (proc.mode === 'hybrid') {
+        if (draft.reviewer_confidence ?? 5 >= proc.confidenceThreshold) {
+          await client.submitReview(task.id, reviewPayload);
+          this.incrementCompleted(principalId);
+          console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed (confidence ${draft.reviewer_confidence} ≥ ${proc.confidenceThreshold}) task ${task.id}`);
+          this.emit('review_completed', { principalId, taskId: task.id, mode: 'hybrid_auto' });
+        } else {
+          const pending: PendingReview = {
+            id: `pnd_${randomUUID().replace(/-/g, '').slice(0, 24)}`,
+            taskId: task.id,
+            channel,
+            reviewerName: proc.reviewerName,
+            principalId,
+            agentId: agent.agentId,
+            draft: reviewPayload,
+            createdAt: new Date().toISOString(),
+          };
+          this.pendingApprovals.push(pending);
+          console.log(`  🔀 ${proc.reviewerName}: Low confidence (${draft.reviewer_confidence} < ${proc.confidenceThreshold}) — queued for human — task ${task.id}`);
+          this.broadcastPulse('FLEET_REVIEW_QUEUED', { taskId: task.id, reviewerName: proc.reviewerName, mode: 'hybrid_low_conf' });
+          this.emit('review_pending', pending);
+        }
+      }
+    } finally {
+      proc.activeReviews--;
+    }
+  }
+
+  private incrementCompleted(principalId: string): void {
+    const current = this.totalReviewsCompleted.get(principalId) ?? 0;
+    this.totalReviewsCompleted.set(principalId, current + 1);
+  }
+
+  // ─── Human Approval ─────────────────────────────────────
+
+  getPendingApprovals(): PendingReview[] {
+    return [...this.pendingApprovals];
+  }
+
+  async approvePending(pendingId: string, edits?: Partial<PendingReview['draft']>): Promise<void> {
+    const idx = this.pendingApprovals.findIndex(p => p.id === pendingId);
+    if (idx === -1) throw new Error(`Pending review ${pendingId} not found`);
+
+    const pending = this.pendingApprovals[idx];
+    const client = this.apiClients.get(pending.principalId)!;
+
+    const final = { ...pending.draft, ...edits };
+
+    await client.submitReview(pending.taskId, final);
+
+    this.pendingApprovals.splice(idx, 1);
+    this.incrementCompleted(pending.principalId);
+
+    console.log(`  ✅ Approved: ${pending.reviewerName} review of task ${pending.taskId}`);
+    this.emit('review_approved', { pendingId, taskId: pending.taskId });
+  }
+
+  rejectPending(pendingId: string): void {
+    const idx = this.pendingApprovals.findIndex(p => p.id === pendingId);
+    if (idx === -1) throw new Error(`Pending review ${pendingId} not found`);
+
+    const pending = this.pendingApprovals[idx];
+    this.pendingApprovals.splice(idx, 1);
+
+    // Un-mark so another reviewer could pick it up
+    const proc = this.processes.get(pending.principalId);
+    if (proc) proc.reviewedTaskIds.delete(pending.taskId);
+
+    console.log(`  ❌ Rejected: ${pending.reviewerName} review of task ${pending.taskId}`);
+    this.emit('review_rejected', { pendingId, taskId: pending.taskId });
+  }
+
+  // ─── Status ──────────────────────────────────────────────
+
+  getStats(): FleetStats {
+    const pids = Array.from(this.processes.keys());
+
+    return {
+      org_id: this.config.org_id,
+      scope: this.config.scope,
+      reviewers: pids.map(principalId => {
+        const proc = this.processes.get(principalId)!;
+        return {
+          name: proc.reviewerName,
+          principal_id: principalId,
+          mode: proc.mode,
+          agents: proc.agents.length,
+          status: proc.running ? 'running' as const : 'stopped' as const,
+          active_reviews: proc.activeReviews,
+          total_reviews_completed: this.totalReviewsCompleted.get(principalId) ?? 0,
+        };
+      }),
+      pending_approvals: this.pendingApprovals.length,
+      total_agents: pids.reduce((s, pid) => s + (this.processes.get(pid)?.agents.length ?? 0), 0),
+      uptime_seconds: this.running ? Math.floor((Date.now() - this.startTime) / 1000) : 0,
+    };
+  }
+
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  getConfig(): FleetConfig {
+    return this.config;
   }
 }
