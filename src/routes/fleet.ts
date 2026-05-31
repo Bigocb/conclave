@@ -124,11 +124,9 @@ export async function fleetRoutes(fastify: FastifyInstance) {
       interval: interval || null,
       maxConcurrent: maxConcurrent || 1,
       createdAt: now,
-      updatedAt: now,
     }).returning();
 
     reply.code(201).send(success(result[0]));
-  });
 
   /**
    * PATCH /v1/fleet/reviewers/:id
@@ -165,8 +163,6 @@ export async function fleetRoutes(fastify: FastifyInstance) {
         updates.llmKey = `${body.provider || 'fleet-reviewer'}_${body.name || 'unknown'}`;
       }
     }
-
-    updates.updatedAt = new Date().toISOString();
 
     const result = await fastify.db.update(fleetReviewers)
       .set(updates)
