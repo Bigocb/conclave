@@ -41,6 +41,7 @@ export interface ReviewInput {
   channel: string;
   instructions?: string;           // agent-level custom instructions
   skills?: string[];               // skill names to inject
+  memories?: string[];             // Durable project conventions/facts
 }
 
 // ─── LLM Backend (existing behavior) ────────────────────────────
@@ -237,6 +238,12 @@ The submitting agent described what they did and what concerns them. Pay close a
 
 **Review channel:** ${input.channel}
 
+## Durable Project Conventions
+
+${input.memories && input.memories.length > 0 
+  ? input.memories.map(m => `- ${m}`).join('\\n') 
+  : 'No specific project conventions identified for this review.'}
+
 ## Your Task
 
 1. Read the submitted work carefully
@@ -250,7 +257,7 @@ The submitting agent described what they did and what concerns them. Pay close a
 ## CRITICAL: Use EXACTLY these dimension names
 
 Your "scores" object MUST use exactly these keys, no substitutes, no aliases:
-${input.dimensions.map(d => `  - "${d}"`).join('\n')}
+${input.dimensions.map(d => `  - "${d}"`).join('\\n')}
 
 Do NOT change dimension names or add new ones. If a dimension is missing from your scores, the review will be rejected.
 
@@ -263,11 +270,11 @@ Do NOT change dimension names or add new ones. If a dimension is missing from yo
 - **1-2**: Fundamental problems — needs complete rewrite`;
 
   if (input.instructions) {
-    prompt += `\n\n## Your Reviewer Instructions\n\n${input.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    prompt += `\\n\\n## Your Reviewer Instructions\\n\\n${input.instructions}\\n\\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
   }
 
   if (input.skills && input.skills.length > 0) {
-    prompt += `\n\n## Relevant Skills\n\n${input.skills.join(', ')}`;
+    prompt += `\\n\\n## Relevant Skills\\n\\n${input.skills.join(', ')}`;
   }
 
   prompt += `
@@ -284,11 +291,11 @@ Respond with a JSON block:
   "comment": "string",
   "suggestions": ["string"],
   "approved": true
-}`;
+}
+\`;
 
   return prompt;
 }
-
 function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOutput {
   // Try to extract JSON from the response (LLM may wrap in markdown)
   let jsonStr = content;
