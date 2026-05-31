@@ -52,9 +52,28 @@ export async function runLlmReview(
   llmUrl: string,
   llmKey?: string,
   timeoutMs = 60000,
+export async function runLlmReview(
+  agent: AgentRecord,
+  input: ReviewInput,
+  llmUrl: string,
+  llmKey?: string,
+  timeoutMs = 60000,
 ): Promise<ReviewOutput> {
   const systemPrompt = buildLlmSystemPrompt(input);
   const userPrompt = input.output || input.task_description || 'No output provided';
+
+  const isOllamaCloud = llmUrl.includes('ollama.com');
+  let endpoint = llmUrl.replace(/\\/$/, '');
+  
+  if (isOllamaCloud) {
+    endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
+  } else {
+    if (endpoint.endsWith('/v1')) {
+      endpoint += '/chat/completions';
+    } else if (!endpoint.includes('/chat/completions')) {
+      endpoint += '/v1/chat/completions';
+    }
+  }
 
   const body = {
     model: agent.model || 'gpt-4o-mini',
@@ -64,27 +83,22 @@ export async function runLlmReview(
     ],
     temperature: 0.3,
     max_tokens: 1500,
+    stream: false,
   };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    const finalUrl = `${llmUrl}/chat/completions`;
-    console.log(`[LLM-DEBUG] Requesting review for ${agent.name || 'unknown agent'}`);
-    console.log(`  URL: ${finalUrl}`);
-    console.log(`  Model: ${body.model}`);
-    console.log(`  Key: ${llmKey ? llmKey.slice(0, 4) + '...' + llmKey.slice(-4) : 'NONE'}`);
-
-    try {
-      const res = await fetch(finalUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -92,7 +106,10 @@ export async function runLlmReview(
     }
 
     const json: any = await res.json();
-    const content = json.choices?.[0]?.message?.content || '';
+    const content = isOllamaCloud 
+      ? (json.message?.content || '') 
+      : (json.choices?.[0]?.message?.content || '');
+      
     console.log(`[LLM] Raw response for ${agent.name} (${content.length} chars):`, content.slice(0, 500));
     return parseLlmReviewResponse(content, input.dimensions);
   } finally {
