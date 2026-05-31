@@ -11,11 +11,12 @@ export async function applyPerformanceIndexes() {
     'CREATE INDEX IF NOT EXISTS idx_tasks_principal ON clv_tasks (principal_id)',
     'CREATE INDEX IF NOT EXISTS idx_reviews_task_rev ON clv_reviews (task_id, reviewer_id)',
   ];
-
+  
   try {
     for (const query of indexes) {
       console.log(`Executing: ${query}`);
-      await db.execute(sql.raw(query));
+      // In Drizzle, raw SQL is executed via db.run() for non-returning queries
+      await db.run(sql.raw(query));
     }
     console.log('✅ All performance indexes applied successfully.');
   } catch (e) {
