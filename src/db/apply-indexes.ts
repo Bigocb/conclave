@@ -1,5 +1,13 @@
-import { db } from './index.js';
-import { sql } from 'drizzle-orm';
+/**
+ * Apply performance indexes to the Conclave database.
+ *
+ * IMPORTANT: The postgres.js (postgres) client treats template literal
+ * interpolations (${var}) as parameterized query values ($1, $2, …).
+ * DDL statements like CREATE INDEX cannot use parameters — PostgreSQL
+ * rejects them with "syntax error at or near $1".
+ *
+ * We use dbClient.unsafe() to send raw SQL strings without parameterization.
+ */
 
 export async function applyPerformanceIndexes(dbClient: any) {
   console.log('🚀 Applying performance indexes to database...');
@@ -15,7 +23,7 @@ export async function applyPerformanceIndexes(dbClient: any) {
   try {
     for (const query of indexes) {
       console.log(`Executing: ${query}`);
-      await dbClient` ${query}`;
+      await dbClient.unsafe(query);
     }
     console.log('✅ All performance indexes applied successfully.');
   } catch (e) {

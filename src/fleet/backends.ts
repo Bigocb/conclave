@@ -228,6 +228,16 @@ export async function runPipelineReview(
 
 function buildLlmSystemPrompt(input: ReviewInput): string {
   const dims = input.dimensions.join(', ');
+
+  // Build output format section using string concatenation
+  // (can't use triple backticks inside template literals)
+  const dimsJson = input.dimensions.map(d => '"' + d + '": number').join(', ');
+  const outputFormat = '\n\n## Output Format\n\nRespond with a JSON block:\n\n' +
+    '```json\n{\n  "scores": { ' + dimsJson + ' },\n' +
+    '  "weighted_overall": number,\n  "reviewer_confidence": number,\n' +
+    '  "comment": "string",\n  "suggestions": ["string"],\n' +
+    '  "approved": true\n}\n```';
+
   let prompt = `You are an expert peer reviewer in the Conclave Agent Peer Protocol.
 
 ## Context
@@ -240,8 +250,8 @@ The submitting agent described what they did and what concerns them. Pay close a
 
 ## Durable Project Conventions
 
-${input.memories && input.memories.length > 0 
-  ? input.memories.map(m => `- ${m}`).join('\n') 
+${input.memories && input.memories.length > 0
+  ? input.memories.map(m => '- ' + m).join('\n')
   : 'No specific project conventions identified for this review.'}
 
 ## Your Task
@@ -257,45 +267,31 @@ ${input.memories && input.memories.length > 0
 ## CRITICAL: Use EXACTLY these dimension names
 
 Your "scores" object MUST use exactly these keys, no substitutes, no aliases:
-${input.dimensions.map(d => `  - "${d}"`).join('\n')}
+${input.dimensions.map(d => '  - "' + d + '"').join('\n')}
 
 Do NOT change dimension names or add new ones. If a dimension is missing from your scores, the review will be rejected.
 
 ## Scoring Guidelines
 
 - **9-10**: Exceptional — exceeds expectations, no significant issues
-- **7-8**: Good — meets expectations, minor issues only  
+- **7-8**: Good — meets expectations, minor issues only
 - **5-6**: Adequate — functional but notable gaps
 - **3-4**: Below standard — significant issues that need rework
 - **1-2**: Fundamental problems — needs complete rewrite`;
 
   if (input.instructions) {
-    prompt += `\n\n## Your Reviewer Instructions\n\n${input.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    prompt += '\n\n## Your Reviewer Instructions\n\n' + input.instructions + '\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.';
   }
 
   if (input.skills && input.skills.length > 0) {
-    prompt += `\n\n## Relevant Skills\n\n${input.skills.join(', ')}`;
+    prompt += '\n\n## Relevant Skills\n\n' + input.skills.join(', ');
   }
 
-  prompt += `
-
-## Output Format
-
-Respond with a JSON block:
-
-\`\`\`json
-{
-  "scores": { ${input.dimensions.map(d => `"${d}": number`).join(', ')} },
-  "weighted_overall": number,
-  "reviewer_confidence": number,
-  "comment": "string",
-  "suggestions": ["string"],
-  "approved": true
-}
-\`;
+  prompt += outputFormat;
 
   return prompt;
 }
+
 function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOutput {
   // Try to extract JSON from the response (LLM may wrap in markdown)
   let jsonStr = content;
@@ -361,7 +357,7 @@ function parseLlmReviewResponse(content: string, dimensions: string[]): ReviewOu
       // Close unclosed brackets and braces
       for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
       for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
-      
+
       const parsed = JSON.parse(repaired);
       const scores: Record<string, number> = {};
       for (const dim of dimensions) {

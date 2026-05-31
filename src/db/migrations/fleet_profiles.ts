@@ -1,11 +1,23 @@
-import fs from 'fs';
+import * as fs from 'fs';
 
+/**
+ * Migrate fleet config from YAML to DB-driven profiles.
+ *
+ * IMPORTANT: The postgres.js (postgres) client treats template literal
+ * interpolations (${var}) as parameterized query values ($1, $2, …).
+ * DDL and raw SQL scripts cannot use parameterized values — PostgreSQL
+ * rejects them with "syntax error at or near $1".
+ *
+ * Inside dbClient.begin(), the `sql` tagged template IS safe for inline DDL
+ * because the SQL is written directly in the template literal (no variables).
+ * But for dynamic SQL read from a file, we must use dbClient.unsafe().
+ */
 export async function migrateFleetToProfiles(dbClient: any) {
     try {
         console.log('[Migration] Starting Fleet Profile migration...');
         
         await dbClient.begin(async (sql) => {
-            // 1. Tables
+            // 1. Tables — inline DDL is safe in tagged templates (no variables)
             await sql`
                 CREATE TABLE IF NOT EXISTS clv_agent_profiles (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -56,9 +68,10 @@ export async function migrateFleetToProfiles(dbClient: any) {
             
             try {
                 const dataSql = fs.readFileSync('/tmp/fleet_data.sql', 'utf8');
-                await dbClient` ${dataSql}`;
+                // Must use unsafe() — dynamic SQL cannot be parameterized
+                await dbClient.unsafe(dataSql);
                 console.log('[Migration] Initial data import completed.');
-            } catch (fileErr) {
+            } catch (fileErr: any) {
                 console.warn('[Migration] Could not load /tmp/fleet_data.sql, skipping import:', fileErr.message);
             }
         } else {
