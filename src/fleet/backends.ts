@@ -69,16 +69,22 @@ export async function runLlmReview(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const res = await fetch(`${llmUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    const finalUrl = `${llmUrl}/chat/completions`;
+    console.log(`[LLM-DEBUG] Requesting review for ${agent.name || 'unknown agent'}`);
+    console.log(`  URL: ${finalUrl}`);
+    console.log(`  Model: ${body.model}`);
+    console.log(`  Key: ${llmKey ? llmKey.slice(0, 4) + '...' + llmKey.slice(-4) : 'NONE'}`);
+
+    try {
+      const res = await fetch(finalUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
