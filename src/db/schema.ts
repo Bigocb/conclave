@@ -234,6 +234,28 @@ export const fleetConfig = pgTable('clv_fleet_config', {
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+export const fleetReviewers = pgTable('clv_fleet_reviewers', {
+  id: text('id').primaryKey(),                      // rev_blueprint_<uuidv7>
+  orgId: text('org_id').notNull().references(() => fleetConfig.orgId),
+  name: text('name').notNull(),
+  channels: text('channels').notNull(),             // JSON array
+  type: text('type').notNull().default('llm'),     // llm | slim | code | pipeline
+  model: text('model'),
+  provider: text('provider'),
+  llmUrl: text('llm_url'),
+  llmKey: text('llm_key'),                          // Stored as Vault reference or encrypted
+  command: text('command'),
+  replicas: integer('replicas').notNull().default(1),
+  mode: text('mode').notNull().default('auto'),     // auto | human | hybrid
+  confidenceThreshold: integer('confidence_threshold').notNull().default(8),
+  prompt: text('prompt'),
+  instructions: text('instructions'),
+  skills: text('skills'),                           // JSON array
+  steps: text('steps'),                             // JSON array (for pipelines)
+  interval: integer('interval'),
+  maxConcurrent: integer('max_concurrent').notNull().default(1),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+});
 
 // ─── Principal Memory (durable facts/conventions) ──────────────────
 export const principalMemory = pgTable('clv_principal_memory', {
