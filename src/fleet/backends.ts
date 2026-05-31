@@ -270,11 +270,11 @@ Do NOT change dimension names or add new ones. If a dimension is missing from yo
 - **1-2**: Fundamental problems — needs complete rewrite`;
 
   if (input.instructions) {
-    prompt += `\\n\\n## Your Reviewer Instructions\\n\\n${input.instructions}\\n\\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    prompt += `\n\n## Your Reviewer Instructions\n\n${input.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
   }
 
   if (input.skills && input.skills.length > 0) {
-    prompt += `\\n\\n## Relevant Skills\\n\\n${input.skills.join(', ')}`;
+    prompt += `\n\n## Relevant Skills\n\n${input.skills.join(', ')}`;
   }
 
   prompt += `
