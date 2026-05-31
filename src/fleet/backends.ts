@@ -241,7 +241,7 @@ The submitting agent described what they did and what concerns them. Pay close a
 ## Durable Project Conventions
 
 ${input.memories && input.memories.length > 0 
-  ? input.memories.map(m => `- ${m}`).join('\\n') 
+  ? input.memories.map(m => `- ${m}`).join('\n') 
   : 'No specific project conventions identified for this review.'}
 
 ## Your Task
@@ -257,7 +257,7 @@ ${input.memories && input.memories.length > 0
 ## CRITICAL: Use EXACTLY these dimension names
 
 Your "scores" object MUST use exactly these keys, no substitutes, no aliases:
-${input.dimensions.map(d => `  - "${d}"`).join('\\n')}
+${input.dimensions.map(d => `  - "${d}"`).join('\n')}
 
 Do NOT change dimension names or add new ones. If a dimension is missing from your scores, the review will be rejected.
 
