@@ -24,7 +24,7 @@ const config = {
     // Apply performance indexes before starting server
     const { client } = await initDb(config.database);
     await applyPerformanceIndexes(client);
-    await migrateFleetToProfiles();
+    await migrateFleetToProfiles(client);
     await startServer(config);
   } catch (err) {
     console.error('Fatal error starting Conclave:', err);
