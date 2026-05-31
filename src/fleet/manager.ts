@@ -527,10 +527,12 @@ export class FleetManager extends EventEmitter {
             );
             if (isDuplicate) {
               console.log(`  ⏭ ${proc.reviewerName}: Already reviewed task ${taskId} (server-side dedup)`);
+              // Keep in reviewedTaskIds — don't retry tasks we've already reviewed
             } else {
               console.error(`  ❌ Review failed for task ${taskId}:`, err.message);
+              // Remove from seen set so it can be retried on the next poll
+              proc.reviewedTaskIds.delete(taskId);
             }
-            proc.reviewedTaskIds.delete(taskId);
           });
 
           proc.activeReviews++;
