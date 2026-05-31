@@ -103,8 +103,16 @@ async function fetchFleetConfigFromApi(serverUrl: string, orgId: string, token: 
 
   // Resolve provider shortcuts to actual llm_url for each reviewer
   // (YAML path does this in parseFleetConfig, API path must do it here too)
+  // Normalize variant provider names (e.g. 'ollama-cloud' -> 'ollama_cloud')
+  const providerAliases: Record<string, string> = {
+    'ollama-cloud': 'ollama_cloud',
+  };
   const allProviders = { ...BUILTIN_PROVIDERS, ...(providers ?? {}) };
   for (const reviewer of reviewers) {
+    // Normalize provider alias before lookup
+    if (reviewer.provider && providerAliases[reviewer.provider]) {
+      reviewer.provider = providerAliases[reviewer.provider];
+    }
     if (!reviewer.llm_url && reviewer.provider) {
       const resolved = allProviders[reviewer.provider];
       if (resolved) {
