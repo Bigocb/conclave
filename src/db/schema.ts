@@ -255,5 +255,17 @@ export const fleetReviewers = pgTable('clv_fleet_reviewers', {
   interval: integer('interval'),
   maxConcurrent: integer('max_concurrent').notNull().default(1),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
+
+// ─── Principal Memory (durable facts/conventions) ──────────────────
+export const principalMemory = pgTable('clv_principal_memory', {
+  id: text('id').primaryKey(),               // mem_<uuidv7>
+  principalId: text('principal_id').notNull().references(() => principals.id),
+  key: text('key').notNull(),               // namespace:category:detail
+  value: text('value').notNull(),           // The durable fact
+  category: text('category').default('general'), // convention | preference | fact
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  prinKeyIdx: index('idx_mem_prin_key').on(table.principalId, table.key),
+  prinIdx: index('idx_mem_prin').on(table.principalId),
+}));

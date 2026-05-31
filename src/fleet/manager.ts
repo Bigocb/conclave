@@ -20,8 +20,11 @@ import {
   principalSlug,
 } from './config.js';
 import { runLlmReview, runSlimReview, runCodeReview, runPipelineReview, type ReviewInput, type ReviewOutput } from './backends.js';
+import { MemoryService } from '../services/index.js';
+import { eq, and } from 'drizzle-orm';
+import { fleetReviewers } from '../db/schema.js';
+import { db } from '../db/index.js';
 
-// ─── Types ──────────────────────────────────────────────────
 
 export interface PendingReview {
   id: string;
