@@ -521,8 +521,15 @@ export class FleetManager extends EventEmitter {
 
           // Process async
           this.reviewTask(principalId, fullTask, channel).catch(err => {
-            console.error(`  ❌ Review failed for task ${taskId}:`, err.message);
-            // Remove from seen set so it can be retried on the next poll
+            const isDuplicate = err.message?.includes('409') && (
+              err.message?.includes('DUPLICATE_REVIEW') ||
+              err.message?.includes('already reviewed')
+            );
+            if (isDuplicate) {
+              console.log(`  ⏭ ${proc.reviewerName}: Already reviewed task ${taskId} (server-side dedup)`);
+            } else {
+              console.error(`  ❌ Review failed for task ${taskId}:`, err.message);
+            }
             proc.reviewedTaskIds.delete(taskId);
           });
 
