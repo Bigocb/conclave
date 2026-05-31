@@ -1,4 +1,5 @@
 import { migrateFleetToProfiles } from './db/migrations/fleet_profiles.js';
+import { initDb } from './db/index.js';
 /**
  * Conclave — Entry point
  * Starts the server when run directly.
@@ -21,7 +22,8 @@ const config = {
 (async () => {
   try {
     // Apply performance indexes before starting server
-    await applyPerformanceIndexes();
+    const { client } = await initDb(config.database);
+    await applyPerformanceIndexes(client);
     await migrateFleetToProfiles();
     await startServer(config);
   } catch (err) {

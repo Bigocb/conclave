@@ -1,7 +1,7 @@
 import { db } from './index.js';
 import { sql } from 'drizzle-orm';
 
-export async function applyPerformanceIndexes() {
+export async function applyPerformanceIndexes(dbClient: any) {
   console.log('🚀 Applying performance indexes to database...');
   
   const indexes = [
@@ -15,8 +15,7 @@ export async function applyPerformanceIndexes() {
   try {
     for (const query of indexes) {
       console.log(`Executing: ${query}`);
-      // Use the raw client for DDL to avoid drizzle session issues during boot
-      await (db as any).$client.execute(sql.raw(query));
+      await dbClient` ${query}`;
     }
     console.log('✅ All performance indexes applied successfully.');
   } catch (e) {
