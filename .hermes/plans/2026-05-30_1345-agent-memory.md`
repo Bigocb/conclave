@@ -1,0 +1,107 @@
+# Agent Memory Implementation Plan
+
+> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
+
+**Goal:** Implement a persistent, principal-scoped memory system that allows Conclave reviewers to remember and share project conventions and lessons.
+
+**Architecture:** 
+- **Storage:** New `clv_agent_memory` table in PostgreSQL.
+- **Service:** `MemoryService` for CRUD and filtered retrieval.
+- **API:** `/v1/principals/:id/memory` endpoints for manual management.
+- **Injection:** Memories injected into the system prompt in `src/fleet/backends.ts`.
+- **Extraction:** Post-review LLM call in `FleetManager` to save new findings.
+
+**Tech Stack:** TypeScript, Fastify, Drizzle ORM, PostgreSQL.
+
+---
+
+## Phase 1: Backend Foundation (Storage & API)
+
+### Task 1: Create Memory Database Schema
+**Objective:** Define the `clv_agent_memory` table.
+**Files:**
+- Modify: `src/db/schema.ts`
+**Step 1:** Add the `agentMemory` table definition following the spec in `references/agent-memory.md`.
+**Step 2:** Run `npx tsc --noEmit` to verify types.
+**Step 3:** Commit.
+
+### Task 2: Implement MemoryService
+**Objective:** Create a robust service for managing memories.
+**Files:**
+- Create: `src/services/memory.ts`
+- Modify: `src/services/index.ts` (export the service)
+**Step 1:** Implement `MemoryService` with methods: `create`, `getById`, `getForPrincipal(principalId, channel)`, `update`, `delete`.
+**Step 2:** Implement `key_prefix` filtering logic in `getForPrincipal`.
+**Step 3:** Commit.
+
+### Task 3: Create Memory REST Endpoints
+**Objective:** Provide API access for memory management.
+**Files:**
+- Create: `src/routes/memory.ts`
+- Modify: `src/server/index.ts` (register the routes)
+**Step 1:** Implement `POST /v1/principals/:id/memory` (store)
+**Step 2:** Implement `GET /v1/principals/:id/memory` (list/filter)
+**Step 3:** Implement `PATCH /v1/principals/:id/memory/:id` (update score/value)
+**Step 4:** Implement `DELETE /v1/principals/:id/memory/:id`
+**Step 5:** Verify with `curl` calls to the API.
+**Step 6:** Commit.
+
+---
+
+## Phase 2: Injection & Automatic Extraction
+
+### Task 4: Extend ConclaveApiClient for Memory
+**Objective:** Allow the fleet daemon to fetch memories via the API.
+**Files:**
+- Modify: `src/mcp/api-client.ts`
+**Step 1:** Add `getMemories(principalId, channel)` method.
+**Step 2:** Commit.
+
+### Task 5: Inject Memories into LLM Prompts
+**Objective:** Make the agent "remember" facts during a review.
+**Files:**
+- Modify: `src/fleet/backends.ts`
+**Step 1:** Update `runLlmReview` to accept `memories` in its arguments.
+**Step 2:** In `buildLlmSystemPrompt`, append a `## Known Project Facts` section if memories are present.
+**Step 3:** Commit.
+
+### Task 6: Integrate Memory Fetching in Fleet Manager
+**Objective:** Connect the API client to the review pipeline.
+**Files:**
+- Modify: `src/fleet/manager.ts`
+**Step 1:** In the review loop, call `client.getMemories(principalId, channel)`.
+**Step 2:** Pass the retrieved memories into the `runLlmReview` call.
+**Step 3:** Commit.
+
+### Task 7: Implement Automatic Memory Extraction
+**Objective:** The agent learns a new convention after a review.
+**Files:**
+- Modify: `src/fleet/manager.ts`
+- Modify: `src/fleet/backends.ts` (add extraction prompt helper)
+**Step 1:** In `backends.ts`, create `buildExtractionPrompt(task, review)` to generate a specifically tailored prompt for identifying new conventions.
+**Step 2:** In `manager.ts`, after `submitReview` succeeds, execute a secondary LLM call using the extraction prompt.
+**Step 3:** Parse the JSON response and call `client.storeMemory()` for each high-confidence finding.
+**Step 4:** Commit.
+
+---
+
+## Phase 3: Dashboard & Management
+
+### Task 8: Add Memory View to Dashboard
+**Objective:** Allow humans to view and edit what the agent is learning.
+**Files:**
+- Modify: `public/dashboard.html` (add sidebar link and view container)
+- Modify: `public/dashboard.js` (implement `loadMemories`, `renderMemoryTable`, and `saveMemory` logic)
+- Modify: `public/dashboard.css` (style the memory list)
+**Step 1:** Create `#view-memory` container.
+**Step 2:** Implement API calls to fetch/delete memories.
+**Step 3:** implement a modal for manually adding project conventions.
+**Step 4:** Commit.
+
+---
+
+## Verification Steps
+1. **Seed:** Manually add a convention: `convention:drizzle:accessors` -> "Use camelCase for DB fields".
+2. **Review:** Submit a task with snake_case fields. Verify the agent flags it and cites the "Known Project Fact".
+3. **Learn:** Submit a task with a new distinct pattern. Verify a new memory entry appears in the DB/Dashboard after the review.
+4. **Prune:** Delete a memory from the dashboard. Verify the agent stops mentioning it in the next review.

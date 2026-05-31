@@ -1,0 +1,85 @@
+# Agent Profile Templates (Blueprints) TDD
+
+> **Goal:** Transform the Agent Factory from a "blank slate" manual setup into a template-driven experience by importing and utilizing role-based blueprints inspired by libraries like `agency-agents`.
+
+## The Vision
+Instead of users guessing what "Instructions" best suit a "Security Reviewer," they select a **Template**. This hydrates the Agent Profile with a proven persona, a set of default scoring dimensions, and recommended skills.
+
+---
+
+## Architecture Decisions
+
+### #1: Template Storage
+**Decision: Static-first, DB-backed.**
+We will start with a static registry of templates in code (for version control and easy updates) but store the actual *instantiated* profiles in the `clv_agent_profiles` table as they are today.
+
+- **Registry:** `src/config/templates.ts` contains the "Golden Blueprints."
+- **Instance:** When a user "applies" a template, a copy is created/updated in the `clv_agent_profiles` table.
+
+### #2: Template Shape
+A template is more than just a prompt. It defines the "Ideal State" for a specific role:
+
+```typescript
+interface AgentTemplate {
+  id: string;           // e.g., "security-auditor"
+  name: string;         // "Security Auditor"
+  description: string; // "Focuses on OWASP top 10, leak prevention, and auth bypasses."
+  defaultInstructions: string; // The system prompt
+  recommendedModel: string;    // e.g., "claude-3-5-sonnet"
+  suggestedSkills: string[];   // ["security-scan", "dependency-audit"]
+  defaultDimensions: string[]; // ["security", "correctness", "risk-level"]
+  category: "technical" | "creative" | "management" | "security";
+}
+```
+
+### #3: The "Hydration" Flow
+1. **Discovery:** User opens the "Create Profille" modal $\rightarrow$ sees a list of templates.
+2. **Selection:** User selects "Architecture Reviewer".
+3. **Hydration:** The UI fills the `Instructions`, `Model`, and `Skills` fields instantly.
+4. **Customization:** The user can still tweak the prompt or add specific project-level instructions.
+5. **Persistence:** The final customized version is saved as an `AgentProfile`.
+
+---
+
+## Implementation Plan
+
+### Phase 1: The Registry & API
+**Objective:** Create the source of truth for templates and expose them to the frontend.
+
+- **Task 1: Define Template Registry**
+  - Create `src/config/templates.ts`.
+  - Implement a collection of 5-10 initial templates (Security, Architecture, UI/UX, Perf, Generalist) based on `agency-agents` personas.
+- **Task 2: Template API Endpoints**
+  - `GET /v1/templates` $\rightarrow$ Returns the list of available blueprints.
+  - `GET /v1/templates/:id` $\rightarrow$ Returns the full detail for a specific template.
+- **Task 3: Integration**
+  - Register routes in `src/server/index.ts`.
+
+### Phase 2: Dashboard Integration (The Gallery)
+**Objective:** Make templates discoverable and usable in the UI.
+
+- **Task 4: Template Selector UI**
+  - Add a "Load Template" dropdown to the `Register Agent` and `Edit Profile` modals.
+  - Implement the "Hydration" logic: when a template is selected, update the `instructions`, `model`, and `skills` inputs in the form.
+- **Task 5: Dimension Sync**
+  - Update the "Task Submission" modal to suggest dimensions based on the selected agent's profile (if the agent was created from a template).
+
+### Phase 3: Advanced Mapping (Agency $\rightarrow$ Conclave)
+**Objective:** Map agency-style "capabilities" to Conclave "skills".
+
+- **Task 6: Capability Mapping Layer**
+  - Create a utility that translates `agency-agent` tool-sets into Conclave `skills` tags.
+  - Ensure that when a template is loaded, the `capabilities` field in `clv_principals` is updated to match the role's needs.
+
+---
+
+## Verification & Acceptance Criteria
+
+- [ ] **API Check:** `curl /v1/templates` returns a valid list of personas.
+- [ ] **UI Check:** Selecting "Security Auditor" in the dashboard automatically populates the instructions and the model.
+- [ ] **End-to-End:** An agent created via the "Architecture" template produces reviews that specifically focus on the `architecture` and `scalability` dimensions.
+- [ ] **Customization:** User can load a template and then manually edit the instructions; the final save persists the *edited* version, not the original template.
+
+## Open Questions
+1. **Do templates live in the DB?** I've proposed static-first. If we want users to share templates, we'll need a `clv_templates` table in Phase 4.
+2. **Model Locks?** Should templates strictly enforce a model, or just "suggest" one? (Recommendation: Suggest, allow override).
