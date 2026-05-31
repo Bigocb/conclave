@@ -88,29 +88,28 @@ export interface FleetStats {
 // ─── LLM Client ─────────────────────────────────────────────
 
 async function callLLM(opts: {
-  url: string;
-  key: string;
-  model: string;
-  systemPrompt: string;
-  userMessage: string;
-}): Promise<string> {
-  // Normalize URL: ensure /v1/chat/completions endpoint
-  let endpoint = opts.url.replace(/\/$/, '');
-  if (endpoint.endsWith('/v1')) {
-    endpoint += '/chat/completions';
-  } else if (endpoint.endsWith('/chat/completions')) {
-    // already full
-  } else if (!endpoint.includes('/chat/completions')) {
-    endpoint += '/v1/chat/completions';
-  }
+    url: string;
+    key: string;
+    model: string;
+    systemPrompt: string;
+    userMessage: string;
+  }): Promise<string> {
+    const isOllamaCloud = opts.url.includes('ollama.com');
+    let endpoint = opts.url.replace(/\/$/, '');
 
-  const resp = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${opts.key}`,
-    },
-    body: JSON.stringify({
+    if (isOllamaCloud) {
+      endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
+    } else {
+      if (endpoint.endsWith('/v1')) {
+        endpoint += '/chat/completions';
+      } else if (endpoint.endsWith('/chat/completions')) {
+        // already full
+      } else if (!endpoint.includes('/chat/completions')) {
+        endpoint += '/v1/chat/completions';
+      }
+    }
+
+    const body = {
       model: opts.model,
       messages: [
         { role: 'system', content: opts.systemPrompt },
@@ -118,17 +117,33 @@ async function callLLM(opts: {
       ],
       temperature: 0.3,
       max_tokens: 2000,
-    }),
-  });
+      stream: false,
+    };
 
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    throw new Error(`LLM API error ${resp.status}: ${body.slice(0, 200)}`);
+    console.log(`[LLM-DEBUG] Requesting review for ${opts.model}`);
+    console.log(`  URL: ${endpoint}`);
+    console.log(`  Key: ${opts.key ? opts.key.slice(0, 4) + '...' + opts.key.slice(-4) : 'NONE'}`);
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${opts.key}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => '');
+      throw new Error(`LLM API error ${resp.status}: ${bodyText.slice(0, 200)}`);
+    }
+
+    const data = await resp.json() as any;
+    if (isOllamaCloud) {
+      return data.message?.content ?? '';
+    }
+    return data.choices?.[0]?.message?.content ?? '';
   }
-
-  const data = await resp.json() as any;
-  return data.choices?.[0]?.message?.content ?? '';
-}
 
 // ─── Parse LLM structured review output ─────────────────────
 
