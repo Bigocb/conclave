@@ -10,16 +10,18 @@ import { AgentService } from '../services/agents.js';
 import { BudgetService } from '../services/budget.js';
 import { ReputationService } from '../services/reputation.js';
 import { OrgService } from '../services/orgs.js';
+import { MemoryService } from '../services/memory.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { CreatePrincipalSchema, UpdatePrincipalSchema, RegisterAgentSchema, UpdateAgentSchema, PatchAgentSchema } from '../schemas/index.js';
 import { authenticate } from '../middleware/auth.js';
 
 export async function principalRoutes(fastify: FastifyInstance) {
-  const principalService = new PrincipalService(fastify.db);
-  const agentService = new AgentService(fastify.db);
-  const budgetService = new BudgetService(fastify.db);
-  const reputationService = new ReputationService(fastify.db);
-  const orgService = new OrgService(fastify.db);
+    const principalService = new PrincipalService(fastify.db);
+    const agentService = new AgentService(fastify.db);
+    const budgetService = new BudgetService(fastify.db);
+    const reputationService = new ReputationService(fastify.db);
+    const orgService = new OrgService(fastify.db);
+    const memoryService = new MemoryService(fastify.db);
 
   // Middleware: All principal routes require valid user session
   fastify.addHook('preHandler', authenticate);
@@ -76,9 +78,74 @@ export async function principalRoutes(fastify: FastifyInstance) {
     if (!principal) {
       return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
     }
-    // Include agents
     const agents = await principalService.getAgents(id);
     return reply.send(success({ ...principal, agents }));
+  });
+
+  // GET /v1/principals/:id/memory — List memories for principal
+  fastify.get('/principals/:id/memory', async (request, reply) => {
+    const { id: principalId } = request.params as any;
+    const { channel, keyPrefix } = request.query as any;
+    
+    const principal = await principalService.getById(principalId);
+    if (!principal) {
+      return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+
+    const memories = await memoryService.getForPrincipal({
+      principalId,
+      channel,
+      keyPrefix,
+    });
+    return reply.send(success(memories));
+  });
+
+  // POST /v1/principals/:id/memory — Create memory entry
+  fastify.post('/principals/:id/memory', async (request, reply) => {
+    const { id: principalId } = request.params as any;
+    const principal = await principalService.getById(principalId);
+    if (!principal) {
+      return reply.status(404).send(error(ERROR_CODES.PRINCIPAL_NOT_FOUND.code, 'Principal not found'));
+    }
+
+    const data = request.body as any;
+    if (!data.key || !data.value) {
+      return reply.status(422).send(error('VALIDATION_ERROR', 'Key and value are required'));
+    }
+
+    const memory = await memoryService.create({
+      principalId,
+      orgId: principal.org_id,
+      channel: data.channel,
+      key: data.key,
+      value: data.value,
+      category: data.category,
+      sourceTaskId: data.sourceTaskId,
+      sourceReviewId: data.sourceReviewId,
+    });
+    return reply.status(201).send(success(memory));
+  });
+
+  // PATCH /v1/principals/:id/memory/:memId — Update memory entry
+  fastify.patch('/principals/:id/memory/:memId', async (request, reply) => {
+    const { id: principalId, memId } = request.params as any;
+    const data = request.body as any;
+    
+    const memory = await memoryService.update(memId, data);
+    if (!memory) {
+      return reply.status(404).send(error('MEMORY_NOT_FOUND', 'Memory entry not found'));
+    }
+    return reply.send(success(memory));
+  });
+
+  // DELETE /v1/principals/:id/memory/:memId — Delete memory entry
+  fastify.delete('/principals/:id/memory/:memId', async (request, reply) => {
+    const { id: principalId, memId } = request.params as any;
+    const memory = await memoryService.delete(memId);
+    if (!memory) {
+      return reply.status(404).send(error('MEMORY_NOT_FOUND', 'Memory entry not found'));
+    }
+    return reply.send(success({ deleted: true, id: memId }));
   });
 
   // PUT /v1/principals/:id — Update principal
