@@ -59,34 +59,34 @@ export const RegisterAgentSchema = z.object({
   principal_id: z.string(),
   name: z.string().min(1).max(200),
   type: z.enum(['llm', 'slim', 'code', 'pipeline']).default('llm'),
-  model: z.string().optional(),
-  provider: z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom', 'opencode']).optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
-  llm_url: z.string().optional(),
+  model: z.string().nullable().optional().transform(v => v || undefined),
+  provider: z.preprocess(v => (!v || v === '' || v === null) ? undefined : v === 'ollama-cloud' ? 'ollama_cloud' : v, z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom', 'opencode']).optional()),
+  llm_url: z.string().nullable().optional().transform(v => v || undefined),
   api_key: z.string().optional(),
-  command: z.string().max(2000).optional(),         // shell command for type=code
-  instructions: z.string().max(4000).optional(),
-  skills: z.array(z.string()).optional(),
+  command: z.string().max(2000).nullable().optional().transform(v => v || undefined),
+  instructions: z.string().max(4000).nullable().optional().transform(v => v || undefined),
+  skills: z.array(z.string()).nullable().optional().transform(v => v ?? undefined),
 });
 
 export const UpdateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.enum(['llm', 'slim', 'code', 'pipeline']).optional(),
-  model: z.string().optional(),
-  provider: z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom', 'opencode']).optional(),
-  llm_url: z.string().optional(),
-  command: z.string().max(2000).optional(),
-  instructions: z.string().max(4000).optional(),
-  skills: z.array(z.string()).optional(),
+  model: z.string().nullable().optional().transform(v => v ?? undefined),
+  provider: z.preprocess(v => (!v || v === '' || v === null) ? undefined : v === 'ollama-cloud' ? 'ollama_cloud' : v, z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom', 'opencode']).optional()),
+  llm_url: z.string().nullable().optional().transform(v => v ?? undefined),
+  command: z.string().max(2000).nullable().optional().transform(v => v ?? undefined),
+  instructions: z.string().max(4000).nullable().optional().transform(v => v ?? undefined),
+  skills: z.array(z.string()).nullable().optional().transform(v => v ?? undefined),
 });
 
 export const PatchAgentSchema = z.object({
   type: z.enum(['llm', 'slim', 'code', 'pipeline']).optional(),
-  model: z.string().optional(),
-  provider: z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional(),
-  llm_url: z.string().optional(),
-  instructions: z.string().max(4000).optional(),
-  skills: z.array(z.string()).optional(),
-  command: z.string().max(2000).optional(),
+  model: z.string().nullable().optional().transform(v => v ?? undefined),
+  provider: z.preprocess(v => (!v || v === '' || v === null) ? undefined : v === 'ollama-cloud' ? 'ollama_cloud' : v, z.enum(['openai', 'openrouter', 'ollama', 'ollama_cloud', 'anthropic', 'together', 'fireworks', 'groq', 'vllm', 'litellm', 'custom']).optional()),
+  llm_url: z.string().nullable().optional().transform(v => v ?? undefined),
+  instructions: z.string().max(4000).nullable().optional().transform(v => v ?? undefined),
+  skills: z.array(z.string()).nullable().optional().transform(v => v ?? undefined),
+  command: z.string().max(2000).nullable().optional().transform(v => v ?? undefined),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for partial update',
 });

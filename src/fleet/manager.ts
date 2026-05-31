@@ -272,16 +272,20 @@ export class FleetManager extends EventEmitter {
         // Create new agent only if needed
         const suffix = reviewer.replicas > 1 ? `_${i + 1}` : '';
         try {
-          const resp = await regClient.registerAgentUnderPrincipal(principalId, {
+          // Strip undefined/null/empty values before sending to avoid 422 validation errors
+          const agentData: Record<string, any> = {
             name: `${reviewer.name} #${i + 1}`,
             type: reviewer.type || 'llm',
-            model: reviewer.model,
-            provider: reviewer.provider,
-            llm_url: reviewer.llm_url,
-            command: reviewer.command,
-            instructions: reviewer.instructions,
-            skills: reviewer.skills,
-          });
+            model: reviewer.model || undefined,
+            provider: reviewer.provider || undefined,
+            llm_url: reviewer.llm_url || undefined,
+            command: reviewer.command || undefined,
+            instructions: reviewer.instructions || undefined,
+            skills: reviewer.skills?.length ? reviewer.skills : undefined,
+          };
+          // Remove undefined entries
+          Object.keys(agentData).forEach(k => agentData[k] === undefined && delete agentData[k]);
+          const resp = await regClient.registerAgentUnderPrincipal(principalId, agentData as any);
           const data = resp.data as any;
           const registeredAgentId = data.agent_id ?? data.id ?? `agt_${principalId.replace('prn_', '')}`;
           agents.push({ agentId: registeredAgentId, token: data.token ?? '', index: i });
