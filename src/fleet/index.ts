@@ -21,7 +21,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { parseFleetConfig, summarizeFleetConfig } from './config.js';
+import { parseFleetConfig, summarizeFleetConfig, BUILTIN_PROVIDERS } from './config.js';
 import { FleetManager } from './manager.js';
 import type { FleetConfig, ReviewerConfig } from './config.js';
 
@@ -99,6 +99,21 @@ async function fetchFleetConfigFromApi(serverUrl: string, orgId: string, token: 
     try { providers = JSON.parse(configData.providers); } catch { /* ignore */ }
   } else if (configData.providers && typeof configData.providers === 'object') {
     providers = configData.providers;
+  }
+
+  // Resolve provider shortcuts to actual llm_url for each reviewer
+  // (YAML path does this in parseFleetConfig, API path must do it here too)
+  const allProviders = { ...BUILTIN_PROVIDERS, ...(providers ?? {}) };
+  for (const reviewer of reviewers) {
+    if (!reviewer.llm_url && reviewer.provider) {
+      const resolved = allProviders[reviewer.provider];
+      if (resolved) {
+        reviewer.llm_url = resolved;
+        console.log(`  Resolved provider "${reviewer.provider}" → ${resolved} for reviewer "${reviewer.name}"`);
+      } else {
+        console.warn(`  ⚠ Reviewer "${reviewer.name}": unknown provider "${reviewer.provider}". Available: ${Object.keys(allProviders).join(', ')}`);
+      }
+    }
   }
 
   return {
