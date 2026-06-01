@@ -87,26 +87,40 @@ export interface FleetStats {
 
 // ─── LLM Client ─────────────────────────────────────────────
 
+import { getProviderConfig } from './providers.js';
+
 async function callLLM(opts: {
     url: string;
     key: string;
     model: string;
     systemPrompt: string;
     userMessage: string;
+    provider?: string;
   }): Promise<string> {
-    const isOllamaCloud = opts.url.includes('ollama.com');
-    const endpoint = opts.url.replace(/\/$/, '');
+    const config = getProviderConfig(opts.provider || 'openai');
+    const endpoint = (opts.url || config.defaultUrl).replace(/\/$/, '');
 
-    const body = {
-      model: opts.model,
-      messages: [
-        { role: 'system', content: opts.systemPrompt },
-        { role: 'user', content: opts.userMessage },
-      ],
-      temperature: 0.3,
-      max_tokens: 2000,
-      stream: false,
-    };
+    const payload = config.adaptPayload 
+      ? config.adaptPayload({
+          model: opts.model,
+          messages: [
+            { role: 'system', content: opts.systemPrompt },
+            { role: 'user', content: opts.userMessage },
+          ],
+          temperature: 0.3,
+          max_tokens: 2000,
+          stream: false,
+        })
+      : {
+          model: opts.model,
+          messages: [
+            { role: 'system', content: opts.systemPrompt },
+            { role: 'user', content: opts.userMessage },
+          ],
+          temperature: 0.3,
+          max_tokens: 2000,
+          stream: false,
+        };
 
     console.log(`[LLM-DEBUG] Requesting review for ${opts.model}`);
     console.log(`  URL: ${endpoint}`);
@@ -118,7 +132,7 @@ async function callLLM(opts: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${opts.key}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
     if (!resp.ok) {
@@ -127,10 +141,7 @@ async function callLLM(opts: {
     }
 
     const data = await resp.json() as any;
-    if (isOllamaCloud) {
-      return data.message?.content ?? '';
-    }
-    return data.choices?.[0]?.message?.content ?? '';
+    return config.parseResponse(data) ?? '';
   }
 
 // ─── Parse LLM structured review output ─────────────────────
