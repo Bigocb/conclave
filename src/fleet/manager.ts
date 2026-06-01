@@ -87,7 +87,7 @@ export interface FleetStats {
 
 // ─── LLM Client ─────────────────────────────────────────────
 
-import { getProviderConfig } from './providers.js';
+import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
 
 async function callLLM(opts: {
     url: string;
@@ -97,8 +97,9 @@ async function callLLM(opts: {
     userMessage: string;
     provider?: string;
   }): Promise<string> {
-    const config = getProviderConfig(opts.provider || 'openai');
-    const endpoint = (opts.url || config.defaultUrl).replace(/\/$/, '');
+    const provider = opts.provider || 'openai';
+    const config = getProviderConfig(provider);
+    const endpoint = resolveLlmUrl(provider, opts.url).replace(/\/$/, '');
 
     const payload = config.adaptPayload 
       ? config.adaptPayload({
@@ -130,7 +131,7 @@ async function callLLM(opts: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.key}`,
+        ...buildAuthHeaders(opts.provider, opts.key),
       },
       body: JSON.stringify(payload),
     });
@@ -182,6 +183,7 @@ export class FleetManager extends EventEmitter {
   private apiClients: Map<string, ConclaveApiClient> = new Map();
   private startTime: number = 0;
   private running: boolean = false;
+  private _syncTimer?: ReturnType<typeof setInterval>;
 
   constructor(config: FleetConfig) {
     super();
@@ -449,6 +451,9 @@ export class FleetManager extends EventEmitter {
 
     this.emit('started');
     console.log('\n✅ Fleet running\n');
+
+    // ─── Periodic config re-sync (every 5 min) ──────────────────
+    this._syncTimer = setInterval(() => this.syncReviewerConfig(), 5 * 60 * 1000);
   }
 
   async stop(): Promise<void> {
@@ -464,8 +469,47 @@ export class FleetManager extends EventEmitter {
       }
     }
 
+    // Clear sync timer
+    if (this._syncTimer) {
+      clearInterval(this._syncTimer);
+      this._syncTimer = undefined;
+    }
+
     this.emit('stopped');
     console.log('\n🛑 Fleet stopped');
+  }
+
+  // ─── Config Re-sync ─────────────────────────────────────
+
+  /** Re-fetch reviewer config from API and update running processes */
+  async syncReviewerConfig(): Promise<void> {
+    const { server, org_id, token } = this.config;
+    if (!server || !org_id) return;
+
+    try {
+      const resp = await fetch(
+        `${server}/v1/fleet/reviewers?orgId=${encodeURIComponent(org_id)}`,
+        { headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+      );
+      if (!resp.ok) return;
+      const envelope: any = await resp.json();
+      const reviewers: any[] = envelope?.data?.reviewers ?? envelope?.reviewers ?? [];
+
+      for (const r of reviewers) {
+        const name = r.name;
+        const proc = Array.from(this.processes.values()).find(p => p.reviewerName === name);
+        if (!proc) continue;
+
+        // Update mutable config fields on the running process
+        if (r.model) proc.model = r.model;
+        if (r.llmUrl || r.llm_url) proc.llmUrl = r.llmUrl || r.llm_url;
+        if (r.llmKey || r.llm_key) proc.llmKey = r.llmKey || r.llm_key;
+        if (r.provider) proc.type = r.provider; // type field holds provider
+        console.log(`  🔄 Synced config for ${name}`);
+      }
+    } catch (err: any) {
+      console.warn(`  ⚠ Config sync failed: ${err.message}`);
+    }
   }
 
   // ─── Polling Loop ────────────────────────────────────────

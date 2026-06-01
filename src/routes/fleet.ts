@@ -53,7 +53,18 @@ export async function fleetRoutes(fastify: FastifyInstance) {
     const { orgId } = request.query as any;
     if (!orgId) return reply.code(400).send(error('VALIDATION_ERROR', 'orgId is required'));
     const reviewers = await (fastify as any).db.query.fleetReviewers.findMany({ where: eq(fleetReviewers.orgId, orgId) });
-    reply.send(success({ reviewers, total: reviewers.length }));
+
+    // Decrypt vault-stored keys before returning
+    const decrypted = await Promise.all(reviewers.map(async (r: any) => {
+      if (r.llmKey && !r.llmKey.startsWith('sk-') && !r.llmKey.startsWith('key_')) {
+        // llmKey is a vault reference — decrypt it
+        const raw = await vault.getKey(orgId, r.llmKey);
+        return { ...r, llmKey: raw ?? r.llmKey };
+      }
+      return r;
+    }));
+
+    reply.send(success({ reviewers: decrypted, total: decrypted.length }));
   });
 
   /**
@@ -146,6 +157,23 @@ export async function fleetRoutes(fastify: FastifyInstance) {
     const result = await (fastify as any).db.delete(fleetReviewers).where(eq(fleetReviewers.id, id)).returning();
     if (result.length === 0) return reply.code(404).send(error('NOT_FOUND', 'Reviewer blueprint not found'));
     reply.send(success({ id, status: 'deleted' }));
+  });
+
+  /**
+   * POST /v1/fleet/reload
+   * Signal the fleet worker to re-fetch reviewer config from DB.
+   * The fleet worker polls this endpoint periodically.
+   */
+  fastify.post('/fleet/reload', async (request, reply) => {
+    const { orgId } = (request.body || request.query) as any;
+    if (!orgId) return reply.code(400).send(error('VALIDATION_ERROR', 'orgId is required'));
+    // Mark reload requested — the fleet worker's next poll will pick it up
+    const result = await (fastify as any).db.update(fleetConfig)
+      .set({ scope: 'reload_requested', updatedAt: new Date().toISOString() })
+      .where(eq(fleetConfig.orgId, orgId))
+      .returning();
+    if (result.length === 0) return reply.code(404).send(error('NOT_FOUND', 'Fleet config not found'));
+    reply.send(success({ orgId, status: 'reload_requested' }));
   });
 
   /**

@@ -47,7 +47,7 @@ export interface ReviewInput {
 
 // ─── LLM Backend (existing behavior) ────────────────────────────
 
-import { getProviderConfig } from './providers.js';
+import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
 
 // ─── LLM Backend (Corrected to use Provider Registry) ──────────────────────
     
@@ -64,7 +64,7 @@ export async function runLlmReview(
   // Resolve Provider Configuration
   const provider = agent.provider || 'openai';
   const config = getProviderConfig(provider);
-  const endpoint = (llmUrl || config.defaultUrl).replace(/\/$/, '');
+  const endpoint = resolveLlmUrl(provider, llmUrl).replace(/\/$/, '');
 
   const payload = config.adaptPayload 
     ? config.adaptPayload({
@@ -104,7 +104,7 @@ export async function runLlmReview(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
+        ...buildAuthHeaders(provider, llmKey || ''),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
