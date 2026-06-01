@@ -34,7 +34,7 @@ export interface WorkerConfig {
 
 const DEFAULT_CONFIG: WorkerConfig = {
   databaseUrl: '',
-  llmUrl: 'https://www.ollama.com/v1',
+  llmUrl: 'https://ollama.com/api/chat',
   llmKey: '',
   model: 'deepseek-v4-flash',
   mode: 'auto',

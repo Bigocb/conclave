@@ -5,7 +5,7 @@ scope: public
 token: clv_fef0dbe67ce2406793dd3deff19fbab7
 
 providers:
-  ollama_cloud: https://www.ollama.com/v1
+  ollama_cloud: https://ollama.com/api/chat
 
 reviewers:
   - name: "Code Reviewer"

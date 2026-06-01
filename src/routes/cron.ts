@@ -20,7 +20,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
       channels: ['general-qa', 'code-review'],
       model: 'deepseek-v4-flash',
       provider: 'ollama_cloud',
-      llm_url: 'https://www.ollama.com/v1',
+      llm_url: 'https://ollama.com/api/chat',
       instructions: 'You are a senior code reviewer. Focus on correctness, security, performance, and readability. Cite specific lines. Be constructive and specific. Max 200 words.',
     },
     {
@@ -28,7 +28,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
       channels: ['general-qa', 'code-review'],
       model: 'glm-5.1',
       provider: 'ollama_cloud',
-      llm_url: 'https://www.ollama.com/v1',
+      llm_url: 'https://ollama.com/api/chat',
       instructions: 'Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most.',
     },
   ];

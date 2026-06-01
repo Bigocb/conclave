@@ -44,7 +44,7 @@ scope: public
 token: ${FLEET_TOKEN}             # API token with agent role
 
 providers:
-  ollama_cloud: https://www.ollama.com/v1
+  ollama_cloud: https://ollama.com/api/chat
 
 reviewers:
   - name: "Code Reviewer"

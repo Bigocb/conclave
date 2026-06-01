@@ -43,7 +43,7 @@ export const BUILTIN_PROVIDERS: Record<string, string> = {
   openai:    'https://api.openai.com/v1',
   openrouter:'https://openrouter.ai/api/v1',
   ollama:    'http://localhost:11434/v1',
-  ollama_cloud: 'https://www.ollama.com/v1',
+  ollama_cloud: 'https://ollama.com/api/chat',
   anthropic: 'https://api.anthropic.com/v1',    // needs proxy for /chat/completions
   together:  'https://api.together.xyz/v1',
   fireworks: 'https://api.fireworks.ai/inference/v1',

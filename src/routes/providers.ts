@@ -19,7 +19,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     // For now, also expose env-configured keys
     const envProviders: Record<string, string> = {};
     if (process.env.OPENAI_API_KEY) envProviders.openai = 'https://api.openai.com/v1';
-    if (process.env.OLLAMA_KEY) envProviders.ollama_cloud = 'https://www.ollama.com/v1';
+    if (process.env.OLLAMA_KEY) envProviders.ollama_cloud = 'https://ollama.com/api/chat';
     if (process.env.ANTHROPIC_API_KEY) envProviders.anthropic = 'https://api.anthropic.com/v1';
     if (process.env.OPENROUTER_API_KEY) envProviders.openrouter = 'https://openrouter.ai/api/v1';
 

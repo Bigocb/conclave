@@ -258,7 +258,7 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
         VALUES (${devPrnId}, ${devOrgId}, 'Developer', '${JSON.stringify(['admin', 'general-reviewer'])}', 'active', ${now}, ${now}) 
         ON CONFLICT DO NOTHING`;
       await client`INSERT INTO clv_agents (id, principal_id, org_id, name, type, model, provider, llm_url, token, status, created_at, updated_at) 
-        VALUES (${devAgtId}, ${devPrnId}, ${devOrgId}, 'Dev Agent', 'llm', 'glm-5.1', 'ollama_cloud', 'https://www.ollama.com/v1', ${devToken}, 'active', ${now}, ${now}) 
+        VALUES (${devAgtId}, ${devPrnId}, ${devOrgId}, 'Dev Agent', 'llm', 'glm-5.1', 'ollama_cloud', 'https://ollama.com/api/chat', ${devToken}, 'active', ${now}, ${now}) 
         ON CONFLICT DO NOTHING`;
       await client`INSERT INTO clv_attention_budgets (principal_id, earned, spent, earn_rate, last_earn_at) 
         VALUES (${devPrnId}, 100, 0, 5, ${now}) 
