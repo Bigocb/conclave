@@ -380,6 +380,27 @@ export class FleetManager extends EventEmitter {
       }
 
       // 5. Create process entry
+      // FETCH ACTUAL CONFIG FROM DB: Override YAML with DB values if they exist
+      let finalModel = reviewer.model;
+      let finalUrl = reviewer.llm_url;
+      let finalKey = reviewer.llm_key;
+
+      try {
+        const agentData = await tempClient.getAgent(agents[0]?.agentId);
+        const data = agentData.data as any;
+        if (data) {
+          finalModel = data.model || finalModel;
+          finalUrl = data.llm_url || finalUrl;
+          // If we have an agent token, we can use it as the LLM key for certain providers
+          // or we still rely on the reviewer.llm_key for the actual API key
+          if (data.token && !finalKey) {
+            finalKey = data.token;
+          }
+        }
+      } catch (err: any) {
+        console.warn(`  ⚠ Could not sync DB config for ${reviewer.name}: ${err.message}`);
+      }
+
       this.processes.set(principalId, {
         reviewerName: reviewer.name,
         principalId,
@@ -393,9 +414,9 @@ export class FleetManager extends EventEmitter {
         interval: reviewer.interval ?? 30,
         maxConcurrent: reviewer.max_concurrent ?? 1,
         prompt,
-        model: reviewer.model,
-        llmUrl: reviewer.llm_url,
-        llmKey: reviewer.llm_key,
+        model: finalModel,
+        llmUrl: finalUrl,
+        llmKey: finalKey,
         instructions: reviewer.instructions,
         skills: reviewer.skills,
         running: false,
