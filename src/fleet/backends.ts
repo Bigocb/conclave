@@ -21,6 +21,7 @@ export type AgentRecord = {
   skills?: string[] | null;
   command?: string | null;
   type?: string | null;
+  provider?: string | null;
 };
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -46,6 +47,10 @@ export interface ReviewInput {
 
 // ─── LLM Backend (existing behavior) ────────────────────────────
 
+import { getProviderConfig } from './providers.js';
+
+// ─── LLM Backend (Corrected to use Provider Registry) ──────────────────────
+    
 export async function runLlmReview(
   agent: AgentRecord,
   input: ReviewInput,
@@ -56,29 +61,40 @@ export async function runLlmReview(
   const systemPrompt = buildLlmSystemPrompt(input);
   const userPrompt = input.output || input.task_description || 'No output provided';
 
-  const isOllamaCloud = llmUrl.includes('ollama.com');
-  let endpoint = llmUrl.replace(/\/$/, '');
-  
-  if (isOllamaCloud) {
-    endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
-  } else {
-    if (endpoint.endsWith('/v1')) {
-      endpoint += '/chat/completions';
-    } else if (!endpoint.includes('/chat/completions')) {
-      endpoint += '/v1/chat/completions';
-    }
-  }
+  // Resolve Provider Configuration
+  const provider = agent.provider || 'openai';
+  const config = getProviderConfig(provider);
+  const endpoint = (llmUrl || config.defaultUrl).replace(/\/$/, '');
 
-  const body = {
-    model: agent.model || 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt.slice(0, 12000) },
-    ],
-    temperature: 0.3,
-    max_tokens: 1500,
-    stream: false,
-  };
+  const payload = config.adaptPayload 
+    ? config.adaptPayload({
+        model: agent.model || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt.slice(0, 12000) },
+        ],
+        temperature: 0.3,
+        max_tokens: 1500,
+        stream: false,
+      })
+    : {
+        model: agent.model || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt.slice(0, 12000) },
+        ],
+        temperature: 0.3,
+        max_tokens: 1500,
+        stream: false,
+      };
+
+  // FULL DEBUGGING: See exactly what is sent
+  console.log(`[LLM-DEBUG] Backend Review Start`);
+  console.log(`  Agent: ${agent.name}`);
+  console.log(`  Provider: ${provider}`);
+  console.log(`  URL: ${endpoint}`);
+  console.log(`  Model: ${agent.model || 'gpt-4o-mini'}`);
+  console.log(`  Key: ${llmKey ? llmKey.slice(0, 4) + '...' + llmKey.slice(-4) : 'NONE'}`);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -90,7 +106,7 @@ export async function runLlmReview(
         'Content-Type': 'application/json',
         ...(llmKey ? { Authorization: `Bearer ${llmKey}` } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
@@ -100,9 +116,7 @@ export async function runLlmReview(
     }
 
     const json: any = await res.json();
-    const content = isOllamaCloud 
-      ? (json.message?.content || '') 
-      : (json.choices?.[0]?.message?.content || '');
+    const content = config.parseResponse(json) || '';
       
     console.log(`[LLM] Raw response for ${agent.name} (${content.length} chars):`, content.slice(0, 500));
     return parseLlmReviewResponse(content, input.dimensions);
