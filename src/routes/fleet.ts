@@ -79,6 +79,9 @@ export async function fleetRoutes(fastify: FastifyInstance) {
     if (llmKey) {
       await vault.upsertKey(orgId, `${provider || 'fleet-reviewer'}_${name}`, llmKey);
       encryptedKey = `${provider || 'fleet-reviewer'}_${name}`;
+    } else if (provider) {
+      // Fallback: map the reviewer to the organization's existing key for this provider
+      encryptedKey = `org_${provider}`;
     }
 
     const id = `rev_blueprint_${crypto.randomUUID()}`;
