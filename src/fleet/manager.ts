@@ -95,19 +95,7 @@ async function callLLM(opts: {
     userMessage: string;
   }): Promise<string> {
     const isOllamaCloud = opts.url.includes('ollama.com');
-    let endpoint = opts.url.replace(/\/$/, '');
-
-    if (isOllamaCloud) {
-      endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
-    } else {
-      if (endpoint.endsWith('/v1')) {
-        endpoint += '/chat/completions';
-      } else if (endpoint.endsWith('/chat/completions')) {
-        // already full
-      } else if (!endpoint.includes('/chat/completions')) {
-        endpoint += '/v1/chat/completions';
-      }
-    }
+    const endpoint = opts.url.replace(/\/$/, '');
 
     const body = {
       model: opts.model,
