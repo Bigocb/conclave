@@ -170,6 +170,8 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(orgRoutes, { prefix: '/v1' });
   await fastify.register(providerRoutes, { prefix: '/v1' });
   await fastify.register(pulseRoutes, { prefix: '/v1' });
+  // Bare /pulse route for EventSource clients (browsers can't set custom headers)
+  await fastify.register(pulseRoutes, { prefix: '' });
 
   // Fleet routes (only when fleet manager is provided)
     await fastify.register(fleetRoutes, { prefix: '/v1' });

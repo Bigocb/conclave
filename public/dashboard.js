@@ -30,7 +30,12 @@ function initPulse() {
         return;
     }
 
-    const daemonUrl = 'https://conclave-bp4o.onrender.com';
+    // SSE requires persistent connections — must connect to Render (not Vercel serverless)
+    // If we're on Vercel, use the Render API URL for SSE; if on Render, use same origin
+    const renderUrl = 'https://conclave-bp4o.onrender.com';
+    const daemonUrl = window.location.hostname === 'conclave-roan.vercel.app' 
+      ? renderUrl 
+      : window.location.origin;
     const eventSource = new EventSource(`${daemonUrl}/pulse?token=${STATE.token}&orgId=${STATE.orgId}`);
 
     eventSource.onopen = () => {
