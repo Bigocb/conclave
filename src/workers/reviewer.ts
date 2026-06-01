@@ -13,6 +13,7 @@
  */
 
 import postgres from 'postgres';
+import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -409,10 +410,18 @@ export class ReviewerWorker {
     console.log('🛑 Worker stopped');
   }
 
-  // ─── PG LISTEN ────────────────────────────────────────────
-
-  private async startListening(): Promise<void> {
-    await this.sql.listen('new_task', (payload: string) => {
+  private async decryptVaultValue(encryptedData: string): Promise<string> {
+    const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
+    const IV_LENGTH = 16;
+    const [ivHex, encryptedHex] = encryptedData.split(':');
+    if (!ivHex || !encryptedHex) return encryptedData;
+    const iv = Buffer.from(ivHex, 'hex');
+    const encryptedText = Buffer.from(encryptedHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  }
       if (payload) {
         console.log(`\n📡 Received notification for task: ${payload}`);
         this.processNextTask().catch(err => {
@@ -521,7 +530,28 @@ export class ReviewerWorker {
 
     // Determine LLM config — agent-specific or fallback to worker defaults
     const llmUrl = agent.llm_url || this.config.llmUrl;
-    const llmKey = this.config.llmKey; // API key is worker-level, not per-agent
+    let llmKey = this.config.llmKey;
+
+    // If the agent has a key and it's a vault reference, resolve it.
+    // Note: In the current worker, we use the agent.llmKey if it exists, otherwise fallback to worker key.
+    // We need to check if the agent record actually has an llm_key field.
+    if (agent.llm_key) {
+      // Since we are in the worker (separate process), we need a way to resolve the key.
+      // The worker currently doesn't have a VaultService instance. 
+      // We'll need to resolve the key via a SQL query to the vault table since we have db access.
+      if (agent.llm_key.startsWith('org_') || agent.llm_key.includes('_')) {
+         const vaultRes = await this.sql`SELECT encrypted_value FROM clv_org_vault WHERE org_id = ${agent.org_id} AND provider = ${agent.llm_key}`;
+         if (vaultRes && vaultRes.length > 0) {
+           // The worker needs the decryption logic. Since it's a standalone script, 
+           // we must ensure it can decrypt. We'll use the same master key.
+           const encryptedValue = vaultRes[0].encrypted_value;
+           // I'll implement a simple decryption helper inside the worker's scope.
+           llmKey = this.decryptVaultValue(encryptedValue);
+         }
+      } else {
+         llmKey = agent.llm_key;
+      }
+    }
     const model = agent.model || this.config.model;
     const systemPrompt = agent.instructions || this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
 
