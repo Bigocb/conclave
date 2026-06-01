@@ -21,9 +21,26 @@ import {
 } from './config.js';
 import { runLlmReview, runSlimReview, runCodeReview, runPipelineReview, type ReviewInput, type ReviewOutput } from './backends.js';
 import { MemoryService } from '../services/index.js';
+import { VaultService } from '../services/vault.js';
 import { eq, and } from 'drizzle-orm';
 import { fleetReviewers } from '../db/schema.js';
 import { db } from '../db/index.js';
+
+const vault = new VaultService();
+
+/** Resolve a vault reference (org_{provider}) to a decrypted API key */
+async function resolveVaultKey(key: string, orgId: string): Promise<string> {
+  if (key.startsWith('org_')) {
+    const providerName = key.replace(/^org_/, '');
+    const decrypted = await vault.getKey(orgId, providerName);
+    if (decrypted) {
+      console.log(`  🔑 Resolved vault key '${key}' → decrypted key for '${providerName}'`);
+      return decrypted;
+    }
+    console.warn(`  ⚠️  Vault has no key for '${providerName}' in org '${orgId}' — using raw value`);
+  }
+  return key;
+}
 
 
 export interface PendingReview {
@@ -654,6 +671,9 @@ export class FleetManager extends EventEmitter {
         skills: proc.skills,
       };
 
+      // Resolve vault reference before calling LLM
+      const resolvedKey = await resolveVaultKey(proc.llmKey, this.config.org_id);
+
       // 2. Dispatch to the right backend based on type
       let draft: ReviewOutput;
       const reviewerType = proc.type || 'llm';
@@ -662,7 +682,7 @@ export class FleetManager extends EventEmitter {
         if (!proc.command) throw new Error('Code reviewer has no command configured');
         draft = await runCodeReview(agentRecord, reviewInput, proc.command);
       } else if (reviewerType === 'slim') {
-        draft = await runSlimReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+        draft = await runSlimReview(agentRecord, reviewInput, proc.llmUrl, resolvedKey);
       } else if (reviewerType === 'pipeline') {
         if (!proc.steps || proc.steps.length === 0) throw new Error('Pipeline reviewer has no steps');
         draft = await runPipelineReview(
@@ -673,16 +693,17 @@ export class FleetManager extends EventEmitter {
             // Find the step's process
             const stepProc = Array.from(this.processes.values()).find(p => p.reviewerName === stepName);
             if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
+            const stepResolvedKey = await resolveVaultKey(stepProc.llmKey, this.config.org_id);
             const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
             const stepType = stepProc.type || 'llm';
             if (stepType === 'code') return runCodeReview(stepAgent, input, stepProc.command!);
-            if (stepType === 'slim') return runSlimReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
-            return runLlmReview(stepAgent, input, stepProc.llmUrl, stepProc.llmKey);
+            if (stepType === 'slim') return runSlimReview(stepAgent, input, stepProc.llmUrl, stepResolvedKey);
+            return runLlmReview(stepAgent, input, stepProc.llmUrl, stepResolvedKey);
           },
         );
       } else {
         // Default: full LLM review
-        draft = await runLlmReview(agentRecord, reviewInput, proc.llmUrl, proc.llmKey);
+        draft = await runLlmReview(agentRecord, reviewInput, proc.llmUrl, resolvedKey);
       }
 
       if (!draft || draft.weighted_overall === undefined) {
