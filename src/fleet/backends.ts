@@ -52,18 +52,12 @@ export async function runLlmReview(
   llmUrl: string,
   llmKey?: string,
   timeoutMs = 60000,
-export async function runLlmReview(
-  agent: AgentRecord,
-  input: ReviewInput,
-  llmUrl: string,
-  llmKey?: string,
-  timeoutMs = 60000,
 ): Promise<ReviewOutput> {
   const systemPrompt = buildLlmSystemPrompt(input);
   const userPrompt = input.output || input.task_description || 'No output provided';
 
   const isOllamaCloud = llmUrl.includes('ollama.com');
-  let endpoint = llmUrl.replace(/\\/$/, '');
+  let endpoint = llmUrl.replace(/\/$/, '');
   
   if (isOllamaCloud) {
     endpoint = endpoint.endsWith('/api/chat') ? endpoint : `${endpoint}/api/chat`;
