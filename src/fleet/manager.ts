@@ -582,7 +582,9 @@ export class FleetManager extends EventEmitter {
 
       // Build a minimal agent record for the backend
       const agentRecord: any = {
+        name: proc.reviewerName,
         model: proc.model,
+        provider: 'ollama_cloud', // Standardizing to the working provider
         instructions: proc.instructions,
         skills: proc.skills,
       };
