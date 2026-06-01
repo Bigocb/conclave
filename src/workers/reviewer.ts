@@ -71,6 +71,7 @@ interface AgentRow {
   name: string;
   model: string | null;
   provider: string | null;
+  llm_key: string | null;
   llm_url: string | null;
   instructions: string | null;
   skills: string | null;
@@ -274,7 +275,7 @@ export class ReviewerWorker {
     if (Date.now() - this.lastCacheRefresh < this.cacheTTL) return;
 
     // Load all active agents
-    const agents = await this.sql`SELECT id, principal_id, org_id, name, model, provider, llm_url, instructions, skills, type, status FROM clv_agents WHERE status = 'active'`;
+    const agents = await this.sql`SELECT id, principal_id, org_id, name, model, provider, llm_key, llm_url, instructions, skills, type, status FROM clv_agents WHERE status = 'active'`;
     this.agentCache.clear();
     for (const a of agents) {
       this.agentCache.set((a as any).id, a as any);
@@ -412,7 +413,6 @@ export class ReviewerWorker {
 
   private async decryptVaultValue(encryptedData: string): Promise<string> {
     const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
-    const IV_LENGTH = 16;
     const [ivHex, encryptedHex] = encryptedData.split(':');
     if (!ivHex || !encryptedHex) return encryptedData;
     const iv = Buffer.from(ivHex, 'hex');
@@ -422,6 +422,11 @@ export class ReviewerWorker {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
   }
+
+  // ─── PG LISTEN ────────────────────────────────────────────
+
+  private async startListening(): Promise<void> {
+    await this.sql.listen('new_task', (payload: string) => {
       if (payload) {
         console.log(`\n📡 Received notification for task: ${payload}`);
         this.processNextTask().catch(err => {
@@ -532,24 +537,20 @@ export class ReviewerWorker {
     const llmUrl = agent.llm_url || this.config.llmUrl;
     let llmKey = this.config.llmKey;
 
-    // If the agent has a key and it's a vault reference, resolve it.
-    // Note: In the current worker, we use the agent.llmKey if it exists, otherwise fallback to worker key.
-    // We need to check if the agent record actually has an llm_key field.
+    // Resolve the LLM key: agent-specific vault reference → org default → worker fallback
     if (agent.llm_key) {
-      // Since we are in the worker (separate process), we need a way to resolve the key.
-      // The worker currently doesn't have a VaultService instance. 
-      // We'll need to resolve the key via a SQL query to the vault table since we have db access.
-      if (agent.llm_key.startsWith('org_') || agent.llm_key.includes('_')) {
-         const vaultRes = await this.sql`SELECT encrypted_value FROM clv_org_vault WHERE org_id = ${agent.org_id} AND provider = ${agent.llm_key}`;
-         if (vaultRes && vaultRes.length > 0) {
-           // The worker needs the decryption logic. Since it's a standalone script, 
-           // we must ensure it can decrypt. We'll use the same master key.
-           const encryptedValue = vaultRes[0].encrypted_value;
-           // I'll implement a simple decryption helper inside the worker's scope.
-           llmKey = this.decryptVaultValue(encryptedValue);
-         }
+      if (agent.llm_key.startsWith('org_')) {
+        // org_{provider} convention: look up the provider's key in the org vault
+        const providerName = agent.llm_key.replace(/^org_/, '');
+        const vaultRes = await this.sql`SELECT encrypted_value FROM clv_org_vault WHERE org_id = ${agent.org_id} AND provider = ${providerName}`;
+        if (vaultRes && vaultRes.length > 0) {
+          llmKey = await this.decryptVaultValue(vaultRes[0].encrypted_value);
+        } else {
+          console.warn(`  ⚠️  No vault entry for provider '${providerName}' in org '${agent.org_id}' — falling back to worker key`);
+        }
       } else {
-         llmKey = agent.llm_key;
+        // Direct key value
+        llmKey = agent.llm_key;
       }
     }
     const model = agent.model || this.config.model;
