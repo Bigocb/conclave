@@ -21,24 +21,77 @@ import {
 } from './config.js';
 import { runLlmReview, runSlimReview, runCodeReview, runPipelineReview, type ReviewInput, type ReviewOutput } from './backends.js';
 import { MemoryService } from '../services/index.js';
-import { VaultService } from '../services/vault.js';
 import { eq, and } from 'drizzle-orm';
 import { fleetReviewers } from '../db/schema.js';
 import { db } from '../db/index.js';
+import crypto from 'crypto';
 
-const vault = new VaultService();
+// ─── Vault Key Resolution ──────────────────────────────────
 
-/** Resolve a vault reference (org_{provider}) to a decrypted API key */
+/**
+ * Decrypt a vault-encrypted value using AES-256-CBC.
+ * Used by resolveVaultKey when direct DB access is available.
+ */
+function decryptVaultValue(encryptedData: string): string {
+  const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
+  const [ivHex, encryptedHex] = encryptedData.split(':');
+  if (!ivHex || !encryptedHex) return encryptedData;
+  const iv = Buffer.from(ivHex, 'hex');
+  const encryptedText = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  let decrypted = decipher.update(encryptedText);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString();
+}
+
+/**
+ * Resolve a vault reference (org_{provider}) to a decrypted API key.
+ * Uses direct postgres query + AES decryption — no Drizzle dependency needed.
+ */
 async function resolveVaultKey(key: string, orgId: string): Promise<string> {
-  if (key.startsWith('org_')) {
-    const providerName = key.replace(/^org_/, '');
-    const decrypted = await vault.getKey(orgId, providerName);
-    if (decrypted) {
-      console.log(`  🔑 Resolved vault key '${key}' → decrypted key for '${providerName}'`);
-      return decrypted;
+  if (!key || !key.startsWith('org_')) return key;
+
+  const providerName = key.replace(/^org_/, '');
+  console.log(`  🔑 Resolving vault key '${key}' for provider '${providerName}' in org '${orgId}'`);
+
+  // Try direct DB query using the Drizzle db instance (available when running in API server context)
+  try {
+    if (db) {
+      const result = await (db as any).query?.orgVault?.findFirst?.({
+        where: (v: any, { and, eq }: any) => and(eq(v.orgId, orgId), eq(v.provider, providerName)),
+      });
+      if (result?.encryptedValue) {
+        const decrypted = decryptVaultValue(result.encryptedValue);
+        console.log(`  🔑 Resolved vault key '${key}' → decrypted key for '${providerName}'`);
+        return decrypted;
+      }
     }
-    console.warn(`  ⚠️  Vault has no key for '${providerName}' in org '${orgId}' — using raw value`);
+  } catch (err: any) {
+    console.warn(`  ⚠️  Drizzle vault lookup failed: ${err.message}, trying raw SQL...`);
   }
+
+  // Fallback: raw postgres query (works in worker context without Drizzle)
+  try {
+    const { default: postgres } = await import('postgres');
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      const sql = postgres(databaseUrl, { ssl: databaseUrl.includes('localhost') ? false : 'require', max: 1 });
+      try {
+        const rows = await sql`SELECT encrypted_value FROM clv_org_vault WHERE org_id = ${orgId} AND provider = ${providerName}`;
+        if (rows.length > 0) {
+          const decrypted = decryptVaultValue(rows[0].encrypted_value);
+          console.log(`  🔑 Resolved vault key '${key}' → decrypted key for '${providerName}' (via raw SQL)`);
+          return decrypted;
+        }
+      } finally {
+        await sql.end();
+      }
+    }
+  } catch (err: any) {
+    console.warn(`  ⚠️  Raw SQL vault lookup failed: ${err.message}`);
+  }
+
+  console.warn(`  ⚠️  Vault has no key for '${providerName}' in org '${orgId}' — using raw value`);
   return key;
 }
 
