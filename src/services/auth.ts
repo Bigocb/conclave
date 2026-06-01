@@ -23,7 +23,7 @@ export class AuthService {
       console.error('[AUTH_SECRET_ERROR] CONCLAVE_JWT_SECRET is missing in production!');
       throw new Error('CRITICAL: CONCLAVE_JWT_SECRET is not defined in production environment');
     }
-    const finalSecret = secret || 'conclave-dev-secret';
+    const finalSecret = secret || 'conclave-dev-secret-change-in-production';
     
     // Log a hash of the secret to verify consistency across serverless functions
     // We use a simple slice/hash to avoid leaking the full secret in logs while still detecting mismatches
