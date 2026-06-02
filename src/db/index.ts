@@ -201,6 +201,29 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       reasoning TEXT,
       created_at TEXT NOT NULL
     )`;
+    // Blackboard: opinion discussion graph
+    await client`CREATE TABLE IF NOT EXISTS clv_blackboard_nodes (
+      id TEXT PRIMARY KEY,
+      opinion_id TEXT NOT NULL REFERENCES clv_opinions(id),
+      agent_id TEXT NOT NULL REFERENCES clv_agents(id),
+      principal_id TEXT NOT NULL REFERENCES clv_principals(id),
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_bb_nodes_opinion ON clv_blackboard_nodes(opinion_id)`;
+    await client`CREATE TABLE IF NOT EXISTS clv_blackboard_edges (
+      id TEXT PRIMARY KEY,
+      opinion_id TEXT NOT NULL REFERENCES clv_opinions(id),
+      source_node_id TEXT NOT NULL REFERENCES clv_blackboard_nodes(id),
+      target_node_id TEXT NOT NULL REFERENCES clv_blackboard_nodes(id),
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_bb_edges_opinion ON clv_blackboard_edges(opinion_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_bb_edges_source ON clv_blackboard_edges(source_node_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_bb_edges_target ON clv_blackboard_edges(target_node_id)`;
     await client`CREATE TABLE IF NOT EXISTS clv_org_vault (
       id TEXT PRIMARY KEY,
       org_id TEXT NOT NULL,
@@ -239,6 +262,13 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`ALTER TABLE clv_opinion_responses ADD COLUMN IF NOT EXISTS respondent_id TEXT`;
   } catch (migErr: any) {
     console.error('[initDb] opinion_responses migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_opinions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open'`;
+    await client`ALTER TABLE clv_opinions ADD COLUMN IF NOT EXISTS topology TEXT NOT NULL DEFAULT 'democratic'`;
+    console.log('[initDb] opinion status/topology columns ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] opinion columns migration failed:', migErr.message);
   }
 
   try {

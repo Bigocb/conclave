@@ -193,3 +193,7 @@ export type AskOpinionInput = z.infer<typeof AskOpinionSchema>;
 export type SubmitOpinionResponseInput = z.infer<typeof SubmitOpinionResponseSchema>;
 export type CreateChannelInput = z.infer<typeof CreateChannelSchema>;
 export type SpotCheckInput = z.infer<typeof SpotCheckSchema>;
+
+// ─── ACP (Agent-Clue Protocol) ────────────────────────────────────
+export { CreateNodeSchema, GraphQuerySchema, NodeKind, EdgeKind, NodeStatus, OpinionStatus, TopologyKind } from './acp.js';
+export type { CreateNodeInput, GraphQueryInput, NodeContent, ProposalContent, CritiqueContent, SynthesisContent, ConsensusContent } from './acp.js';
