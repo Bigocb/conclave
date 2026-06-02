@@ -755,9 +755,18 @@ export class OpinionRouter {
           const rev = reviewers[0];
           // Use reviewer config if available, and resolve vault reference
           if (rev.llm_key) {
-            llmKey = await resolveVaultKey(this.sql, rev.llm_key, agent.org_id);
+            try {
+              llmKey = await resolveVaultKey(this.sql, rev.llm_key, agent.org_id);
+            } catch (keyErr: any) {
+              console.warn(`  ⚠ Key resolution failed: ${keyErr.message}, trying direct use`);
+              // If resolution fails, try using as raw key (might already be decrypted)
+              llmKey = rev.llm_key;
+            }
           }
         }
+        
+        // Debug: log what key we're using (masked)
+        console.log(`  🔑 Using key: ${llmKey ? llmKey.slice(0,8) + '...' + llmKey.slice(-4) : 'NONE'}`);
 
         console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
 
