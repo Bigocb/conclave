@@ -5,15 +5,6 @@ import { db } from '../db/index.js';
 import { users, organizationMembers } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
-// Known secrets to try during verification (for cross-deployment compatibility)
-// When a token is signed by a different deployment (Vercel vs Render), we try
-// all known secrets to verify it. New tokens are always signed with the primary secret.
-const FALLBACK_SECRETS = [
-  'conclave-dev-secret-change-in-production',
-  'conclave-dev-secret',
-  'conclave_jwt_secret_2024_secure',
-];
-
 export class AuthService {
   // We now use the shared 'db' instance from ../db/index.js instead of constructor injection
   // to allow static-like access across the app.
@@ -42,15 +33,6 @@ export class AuthService {
     return finalSecret;
   }
 
-  // Get all secrets to try during verification (primary + fallbacks)
-  private getVerificationSecrets(): string[] {
-    const primary = this.getSecret();
-    // Deduplicate: if primary matches a fallback, don't try it twice
-    const all = [primary, ...FALLBACK_SECRETS.filter(s => s !== primary)];
-    const seen: Record<string, boolean> = {};
-    return all.filter(s => { if (seen[s]) return false; seen[s] = true; return true; });
-  }
-
   async generateToken(userId: string, orgId?: string): Promise<string> {
     const payload = {
       sub: userId,
@@ -61,21 +43,11 @@ export class AuthService {
   }
 
   async verifyToken(token: string) {
-    // Try the primary secret first, then fallback secrets for cross-deployment compatibility
-    const secrets = this.getVerificationSecrets();
-    for (const secret of secrets) {
-      try {
-        const decoded = jwt.verify(token, secret) as { sub: string; orgId?: string };
-        if (secret !== this.getSecret()) {
-          console.log(`[AUTH] Token verified with fallback secret (hash: ${crypto.createHash('sha256').update(secret).digest('hex').slice(0, 8)}). Consider re-authenticating.`);
-        }
-        return decoded;
-      } catch {
-        // Try next secret
-        continue;
-      }
+    try {
+      return jwt.verify(token, this.getSecret()) as { sub: string; orgId?: string };
+    } catch (e) {
+      return null;
     }
-    return null;
   }
 
   async getUserWithDefaultOrg(userId: string) {
