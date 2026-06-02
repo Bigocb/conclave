@@ -9,6 +9,9 @@ import { BlackboardService } from '../services/blackboard.js';
 import { BudgetService, BUDGET } from '../services/budget.js';
 import { AgentService } from '../services/agents.js';
 import { ChannelService } from '../services/channels.js';
+import * as schema from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
+import { pulseHub } from '../services/pulse.js';
 import { success, error, ERROR_CODES } from '../utils/response.js';
 import { randomUUID } from 'crypto';
 
@@ -45,9 +48,9 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
 
     const id = `opn_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
-    // Spend budget
-    const spent = await budgetSvc.spend(principalId, BUDGET.ASK_OPINION, 'ask_opinion', id);
-    if (!spent) {
+    // Initial budget spend for asking
+    const initialSpent = await budgetSvc.spend(principalId, BUDGET.ASK_OPINION, 'ask_opinion', id);
+    if (!initialSpent) {
       const balance = await budgetSvc.getByPrincipal(principalId);
       return reply.code(402).send(error(ERROR_CODES.INSUFFICIENT_BUDGET.code, 'Insufficient budget', {
         current_budget: balance?.available ?? 0,
@@ -104,6 +107,7 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     const opinions = await opinionSvc.list({
       channel: query.channel,
       principalId: query.principal_id,
+      status: query.status,
     });
     reply.send(success({ opinions, total: opinions.length }));
   });
@@ -193,6 +197,57 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     }
 
     reply.code(201).send(success(node));
+
+    // ─── Budget hooks ────────────────────────────────────────
+    // ProposalNode costs -3 (already spent at opinion creation)
+    // First CritiqueNode earns +2 per critic
+    // SynthesisNode, follow-up CritiqueNode, ConsensusNode cost/earn nothing
+    try {
+      if (data.kind === 'critique') {
+        // Check if this is the first critique from this principal on this opinion
+        const existingCritiques = await db.select({ id: schema.blackboardNodes.id })
+          .from(schema.blackboardNodes)
+          .where(and(
+            eq(schema.blackboardNodes.opinionId, opinionId),
+            eq(schema.blackboardNodes.kind, 'critique'),
+            eq(schema.blackboardNodes.principalId, principalId),
+          )).limit(2);
+        // Only earn +2 for first critique per principal
+        if (existingCritiques.length <= 1) {
+          await budgetSvc.earn(principalId, BUDGET.ANSWER_OPINION, 'critique_node', nodeId);
+        }
+      }
+    } catch (budgetErr: any) {
+      console.warn(`[opinions] Budget hook failed (non-fatal): ${budgetErr.message}`);
+    }
+
+    // ─── Pulse SSE events ────────────────────────────────────
+    try {
+      const orgId = agent?.org_id ?? 'org_dev';
+      const statusRow = await db.select({ status: schema.opinions.status, closeTag: schema.opinions.closeTag })
+        .from(schema.opinions).where(eq(schema.opinions.id, opinionId)).limit(1);
+      const currentStatus = (statusRow as any[])?.[0]?.status ?? 'open';
+      const currentCloseTag = (statusRow as any[])?.[0]?.closeTag ?? undefined;
+
+      // Opinion status changed event (if status differs from what it was)
+      pulseHub.broadcastToOrg(orgId, {
+        type: 'OPINION_STATUS_CHANGED',
+        payload: { opinion_id: opinionId, status: currentStatus, close_tag: currentCloseTag },
+      });
+
+      // Node added event
+      pulseHub.broadcastToOrg(orgId, {
+        type: 'OPINION_NODE_ADDED',
+        payload: {
+          opinion_id: opinionId,
+          node_id: nodeId,
+          payload_type: data.kind,
+          author_role: data.kind === 'proposal' ? 'proposer' : data.kind === 'critique' ? 'critic' : data.kind === 'synthesis' ? 'synthesizer' : 'voter',
+        },
+      });
+    } catch (pulseErr: any) {
+      console.warn(`[opinions] Pulse broadcast failed (non-fatal): ${pulseErr.message}`);
+    }
   });
 
   // GET /v1/opinions/:opinionId/graph

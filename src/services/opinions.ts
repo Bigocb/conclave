@@ -3,7 +3,7 @@
  * CRUD operations for opinions and responses
  */
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 
@@ -47,10 +47,18 @@ export class OpinionService {
     return this.formatOpinion(rows[0]);
   }
 
-  async list(filters: { channel?: string; principalId?: string } = {}) {
+  async list(filters: { channel?: string; principalId?: string; status?: string } = {}) {
     const conditions = [];
     if (filters.channel) conditions.push(eq(schema.opinions.channel, filters.channel));
     if (filters.principalId) conditions.push(eq(schema.opinions.principalId, filters.principalId));
+    if (filters.status) {
+      const statuses = filters.status.split(',').map(s => s.trim());
+      if (statuses.length === 1) {
+        conditions.push(eq(schema.opinions.status, statuses[0]));
+      } else if (statuses.length > 1) {
+        conditions.push(sql`${schema.opinions.status} IN (${sql.join(statuses.map(s => sql`${s}`), sql`, `)})`);
+      }
+    }
 
     const rows = conditions.length > 0
       ? await this.db.select().from(schema.opinions).where(and(...conditions)).orderBy(desc(schema.opinions.createdAt)).limit(50)
@@ -96,21 +104,22 @@ export class OpinionService {
     return rows.map(r => this.formatResponse(r));
   }
 
-  private formatOpinion(row: typeof schema.opinions.$inferSelect) {
+private formatOpinion(row: typeof schema.opinions.$inferSelect) {
+    const r = row as any;
     return {
-      id: row.id,
-      agent_id: row.agentId,
-      principal_id: row.principalId,
-      question: row.question,
-      context: row.context,
-      channel: row.channel,
-      requested_opinions: row.requestedOpinions,
-      deadline: row.deadline,
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-      status: row.status ?? 'open',
-      topology: row.topology ?? 'democratic',
-      budget_spent: row.budgetSpent,
-      created_at: row.createdAt,
+      id: r.id,
+      agent_id: r.agentId,
+      principal_id: r.principalId,
+      question: r.question,
+      context: r.context,
+      channel: r.channel,
+      requested_opinions: r.requestedOpinions,
+      deadline: r.deadline,
+      status: r.status,
+      close_tag: r.closeTag ?? null,
+      metadata: r.metadata ? JSON.parse(r.metadata) : {},
+      budget_spent: r.budgetSpent,
+      created_at: r.createdAt,
     };
   }
 
