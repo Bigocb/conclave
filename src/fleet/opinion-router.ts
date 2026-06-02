@@ -819,10 +819,9 @@ export class OpinionRouter {
     const critiquePromises = selected.map(async (sub) => {
       try {
         // Find an eligible agent for this principal
-        // Note: fleet_reviewers has no agent_id column, so we use agent's own LLM config
+        // Note: fleet_reviewers and agents tables don't have llm_key columns
         const agents = await this.sql<CriticAgent[]>`
-          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token,
-                 a.llm_key
+          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
           FROM clv_agents a
           WHERE a.principal_id = ${sub.principal_id}
             AND a.status = 'active'
