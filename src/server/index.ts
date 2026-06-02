@@ -77,7 +77,12 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   fastify.decorate('pgClient', pgClient);
 
   // CORS
-  await fastify.register(cors, { origin: true });
+  await fastify.register(cors, {
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Org-Id', 'X-Agent-Id'],
+    credentials: true
+  });
 
   // Rate limiting (skip in local mode for development)
   if (fullConfig.mode !== 'local') {
