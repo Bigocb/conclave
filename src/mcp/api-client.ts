@@ -146,6 +146,17 @@ export class ConclaveApiClient {
     return this.request('GET', `/agents/${id}`);
   }
 
+  /**
+   * Resolve vault key for an agent
+   * @param agentId - The agent ID to resolve key for
+   * @param fallbackToProvider - If true, fallback to provider-level key if agent-specific key not found
+   */
+  async resolveAgentKey(agentId: string, fallbackToProvider = false) {
+    return this.request('POST', `/agents/${agentId}/resolve-key`, { 
+      fallback_to_provider: fallbackToProvider 
+    });
+  }
+
   // ─── Tasks ─────────────────────────────────────────
 
   async submitTask(data: {
