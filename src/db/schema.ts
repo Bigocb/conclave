@@ -159,7 +159,8 @@ export const opinions = pgTable('clv_opinions', {
   requestedOpinions: integer('requested_opinions').notNull().default(3),
   deadline: text('deadline'),
   metadata: text('metadata'),                    // JSON
-  status: text('status').notNull().default('open'), // open | consensus_reached | closed
+  status: text('status').notNull().default('open'), // open | synthesizing | voting | closed
+  closeTag: text('close_tag'),                      // consensus_reached | consensus_not_reached | expired
   topology: text('topology').notNull().default('democratic'), // democratic (future: ranked, single_transferable)
   budgetSpent: integer('budget_spent').notNull().default(3),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
