@@ -578,6 +578,16 @@ export class OpinionRouter {
     // Start polling
     this.startPolling();
 
+    // Start a minimal HTTP server so Render detects the port and marks deploy as live
+    const http = await import('http');
+    const port = parseInt(process.env.PORT || '10000', 10);
+    http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', uptime: Math.floor((Date.now() - this.startTime) / 1000), routed: this.totalRouted }));
+    }).listen(port, () => {
+      console.log(`  🩺 Health check listening on port ${port}`);
+    });
+
     // Status display
     const statusInterval = setInterval(() => {
       if (!this.running) return;
