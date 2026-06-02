@@ -68,6 +68,33 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       budgetSpent: BUDGET.ASK_OPINION,
     });
 
+    // Auto-create ProposalNode on the Blackboard
+    try {
+      const proposalNodeId = `nd_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
+      await bbSvc.createNode({
+        id: proposalNodeId,
+        opinionId: id,
+        agentId,
+        principalId,
+        kind: 'proposal',
+        payload: { question: data.question, context: data.context },
+      });
+    } catch (bbErr: any) {
+      console.warn(`[opinions] ProposalNode creation failed (non-fatal): ${bbErr.message}`);
+    }
+
+    // Notify opinion router
+    try {
+      const pgClient = (fastify as any).pgClient;
+      if (pgClient && typeof pgClient.notify === 'function') {
+        await pgClient.notify('new_opinion', id);
+      } else if (pgClient) {
+        await pgClient.query(`SELECT pg_notify('new_opinion', $1)`, [id]);
+      }
+    } catch (notifyErr: any) {
+      console.warn(`[opinions] pg_notify failed (non-fatal): ${notifyErr.message}`);
+    }
+
     reply.code(201).send(success(opinion));
   });
 
