@@ -32,6 +32,7 @@ import { randomUUID, createDecipheriv } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
+import { ConclaveApiClient } from '../mcp/api-client.js';
 
 // For backwards compatibility in case other code uses crypto.createDecipheriv
 const crypto = { createDecipheriv };
@@ -852,31 +853,26 @@ export class OpinionRouter {
 
         const agent = agents[0];
         
-        // Get model and LLM URL from agent
-        const model = agent.model || this.config.model;
+        // 1. Use API Client to fetch the agent's secrets (handles vault decryption automatically)
+        const agentClient = new ConclaveApiClient({
+          serverUrl: serverUrl,
+          token: token,
+        });
+        const agentData = await agentClient.getAgent(agent.id);
+        const decodedAgent = agentData.data as any;
         
-        // Normalize URL and resolve key
-        let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
+        // 2. Use decrypted key/model/url if provided by API server, otherwise use agent's raw values or config
+        const model = decodedAgent.model || agent.model || this.config.model;
+        const llmUrl = normalizeLlmUrl(decodedAgent.llm_url || agent.llm_url || this.config.llmUrl);
         
-        // Resolve the agent's LLM key (vault reference, encrypted, or raw)
-        // We use the agent's token as the base for resolution (it may be 'org_provider' or an encrypted key)
-        let llmKey = this.config.llmKey;
-        if (agent.token) {
-          llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.token);
-        }
+        // The API server returns the decrypted secret in the 'token' field if requested
+        let llmKey = decodedAgent.token || this.config.llmKey;
         
-        // Fallback to config key if resolution returned empty
-        if (!llmKey) {
-          llmKey = this.config.llmKey;
-        }
-
         // Debug: log what key we're using (masked)
-        console.log(`  🔑 Using key: ${llmKey ? llmKey.slice(0,8) + '...' + llmKey.slice(-4) : 'NONE'}`);
-
-        console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
-
-        // Call LLM
-        const result = await callOpinionCritiqueLLM(model, systemPrompt, llmUrl, llmKey);
+        const maskedKey = llmKey.length > 8 
+          ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
+          : (llmKey ? `Length ${llmKey.length}` : 'NONE');
+        console.log(`  🔑 Resolved LLM Key: ${maskedKey}`);\n        console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);\n        \n        // Call LLM\n        const result = await callOpinionCritiqueLLM(model, systemPrompt, llmUrl, llmKey);
 
         if (!result) {
           console.warn(`  ⚠ LLM returned no parseable result for ${agent.id}`);
