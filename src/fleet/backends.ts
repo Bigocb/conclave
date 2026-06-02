@@ -95,6 +95,12 @@ export async function runLlmReview(
   console.log(`  URL: ${endpoint}`);
   console.log(`  Model: ${agent.model || 'gpt-4o-mini'}`);
   console.log(`  Key: ${llmKey ? llmKey.slice(0, 4) + '...' + llmKey.slice(-4) : 'NONE'}`);
+  console.log(`[DBG-payload] FULL system_prompt (first 3000 chars):`, systemPrompt.slice(0, 3000));
+  console.log(`[DBG-payload] system_prompt length: ${systemPrompt.length}`);
+  console.log(`[DBG-payload] Contains instructions: ${systemPrompt.includes('## Your Reviewer Instructions')}`);
+  console.log(`[DBG-payload] Full payload model: ${payload.model}`);
+  console.log(`[DBG-payload] messages[0] role: ${payload.messages[0].role} content_length: ${payload.messages[0].content.length}`);
+  console.log(`[DBG-payload] messages[1] role: ${payload.messages[1].role} content_length: ${payload.messages[1].content.length}`);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -312,6 +318,9 @@ Do NOT change dimension names or add new ones. If a dimension is missing from yo
 
   if (input.instructions) {
     prompt += '\n\n## Your Reviewer Instructions\n\n' + input.instructions + '\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.';
+    console.log(`[DBG-instructions] Agent instructions FOUND and injected: ${JSON.stringify(input.instructions)}`);
+  } else {
+    console.log(`[DBG-instructions] No agent instructions — using default prompt only`);
   }
 
   if (input.skills && input.skills.length > 0) {

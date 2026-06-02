@@ -495,6 +495,7 @@ export class FleetManager extends EventEmitter {
         activeReviews: 0,
         reviewedTaskIds: new Set(),
       });
+      console.log(`[DBG-provision] ${reviewer.name} → instructions=${JSON.stringify(reviewer.instructions)} skills=${JSON.stringify(reviewer.skills)} model=${finalModel} llmUrl=${finalUrl}`);
 
       this.totalReviewsCompleted.set(principalId, 0);
     }
@@ -714,6 +715,7 @@ export class FleetManager extends EventEmitter {
         instructions: proc.instructions,
         skills: proc.skills,
       };
+      console.log(`[DBG-reviewTask] reviewerName=${proc.reviewerName} proc.instructions=${JSON.stringify(proc.instructions)} proc.skills=${JSON.stringify(proc.skills)}`);
 
       // Build a minimal agent record for the backend
       const agentRecord: any = {
@@ -723,6 +725,7 @@ export class FleetManager extends EventEmitter {
         instructions: proc.instructions,
         skills: proc.skills,
       };
+      console.log(`[DBG-agentRecord] name=${proc.reviewerName} instructions=${JSON.stringify(proc.instructions)} skills=${JSON.stringify(proc.skills)}`);
 
       // Resolve vault reference before calling LLM
       const resolvedKey = await resolveVaultKey(proc.llmKey, this.config.org_id);

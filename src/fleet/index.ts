@@ -176,6 +176,10 @@ async function main() {
       console.error(`❌ Config error: ${err.message}`);
       process.exit(1);
     }
+    console.log(`[DBG-fleet-mode] YAML mode (${configPath})`);
+    for (const r of config.reviewers) {
+      console.log(`[DBG-fleet-config] reviewer=${r.name} instructions=${JSON.stringify(r.instructions)} llm_url=${r.llm_url} model=${r.model}`);
+    }
   } else {
     // API mode (default)
     const serverUrl = process.env.SERVER_URL || 'https://conclave-roan.vercel.app';
@@ -192,6 +196,10 @@ async function main() {
 
     try {
       config = await fetchFleetConfigFromApi(serverUrl, orgId, token);
+      console.log(`[DBG-fleet-mode] API mode — fetched from ${serverUrl}`);
+      for (const r of config.reviewers) {
+        console.log(`[DBG-fleet-config] reviewer=${r.name} instructions=${JSON.stringify(r.instructions)} llm_url=${r.llm_url} model=${r.model}`);
+      }
     } catch (err: any) {
       console.error(`❌ Failed to fetch fleet config from API: ${err.message}`);
       console.error('   Falling back to local fleet.yaml...');
