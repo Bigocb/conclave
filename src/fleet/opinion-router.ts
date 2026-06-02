@@ -854,9 +854,10 @@ export class OpinionRouter {
         const agent = agents[0];
         
         // 1. Use API Client to fetch the agent's secrets (handles vault decryption automatically)
+        //    Use the agent's own token for auth so the API resolves to the right org
         const agentClient = new ConclaveApiClient({
           serverUrl: serverUrl,
-          token: token,
+          token: agent.token || token,
         });
         const agentData = await agentClient.getAgent(agent.id);
         const decodedAgent = agentData.data as any;
