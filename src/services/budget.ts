@@ -71,8 +71,27 @@ export class BudgetService {
   }
 
   async spend(principalId: string, amount: number, action: string, relatedId?: string): Promise<boolean> {
-    const budget = await this.getByPrincipal(principalId);
-    if (!budget || budget.available < amount) return false;
+    let budget = await this.getByPrincipal(principalId);
+    // Auto-create a budget row with seed if it doesn't exist
+    if (!budget) {
+      await this.db.insert(schema.attentionBudgets).values({
+        principalId,
+        earned: BUDGET.SEED,
+        spent: 0,
+        earnRate: BUDGET.DAILY_PASSIVE,
+        lastEarnAt: new Date().toISOString(),
+      });
+      await this.recordHistory(principalId, 'budget_seed', BUDGET.SEED);
+      budget = {
+        principal_id: principalId,
+        earned: BUDGET.SEED,
+        spent: 0,
+        available: BUDGET.SEED,
+        earn_rate: BUDGET.DAILY_PASSIVE,
+        last_earn_at: new Date().toISOString(),
+      };
+    }
+    if (budget.available < amount) return false;
 
     await this.db.update(schema.attentionBudgets)
       .set({ spent: budget.spent + amount })
@@ -83,8 +102,26 @@ export class BudgetService {
   }
 
   async earn(principalId: string, amount: number, action: string, relatedId?: string) {
-    const budget = await this.getByPrincipal(principalId);
-    if (!budget) return;
+    let budget = await this.getByPrincipal(principalId);
+    // Auto-create a budget row with seed if it doesn't exist
+    if (!budget) {
+      await this.db.insert(schema.attentionBudgets).values({
+        principalId,
+        earned: BUDGET.SEED,
+        spent: 0,
+        earnRate: BUDGET.DAILY_PASSIVE,
+        lastEarnAt: new Date().toISOString(),
+      });
+      await this.recordHistory(principalId, 'budget_seed', BUDGET.SEED);
+      budget = {
+        principal_id: principalId,
+        earned: BUDGET.SEED,
+        spent: 0,
+        available: BUDGET.SEED,
+        earn_rate: BUDGET.DAILY_PASSIVE,
+        last_earn_at: new Date().toISOString(),
+      };
+    }
 
     await this.db.update(schema.attentionBudgets)
       .set({ earned: budget.earned + amount })
