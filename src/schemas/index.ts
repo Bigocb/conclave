@@ -137,8 +137,9 @@ export const AskOpinionSchema = z.object({
   question: z.string().min(10).max(5000),
   context: z.string().max(10000).optional(),
   channel: z.string().default('general-qa'),
-  requested_opinions: z.number().int().min(1).max(10).default(3),
+  requested_critics: z.number().int().min(1).max(10).default(3),
   deadline: z.string().datetime().optional(),
+  principal_id: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
