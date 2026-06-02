@@ -119,6 +119,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
   // GET /v1/agents/:id — Get agent profile
   fastify.get('/agents/:id', async (request, reply) => {
     const { id } = request.params as any;
+    const includeKey = (request.query as any)?.include_key === 'true';
     const agent = await agentService.getById(id);
     if (!agent) {
       return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
@@ -134,10 +135,26 @@ export async function agentRoutes(fastify: FastifyInstance) {
     const principalService = new PrincipalService(fastify.db);
     const principal = await principalService.getById(agent.principal_id);
 
-    return reply.send(success({
+    // Optionally resolve vault key for this agent
+    let vaultKey: string | null = null;
+    if (includeKey && agent.provider) {
+      const vault = new VaultService(fastify.db);
+      // Try agent-specific key first, then provider key
+      vaultKey = await vault.getSecret(`agent:${agent.id}:key`) 
+        || await vault.getSecret(agent.provider);
+    }
+
+    const response: any = {
       ...agent,
       principal: principal ? { id: principal.id, name: principal.name, roles: principal.roles } : null,
-    }));
+    };
+    
+    // Only include the key if explicitly requested
+    if (includeKey && vaultKey) {
+      response.vault_key = vaultKey;
+    }
+
+    return reply.send(success(response));
   });
 
   // PUT /v1/agents/:id — Update agent (full replacement)
