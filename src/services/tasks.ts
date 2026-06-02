@@ -180,7 +180,7 @@ export class TaskService {
       .from(schema.reviews)
       .leftJoin(schema.agents, eq(schema.reviews.reviewerId, schema.agents.id))
       .where(eq(schema.reviews.taskId, taskId));
-    return rows.map(r => this.formatReview(r.reviews, (r.agents as any)?.name ?? undefined));
+    return rows.map(r => this.formatReview(r.clv_reviews, (r.clv_agents as any)?.name ?? undefined));
   }
 
   async getReviewCountForTask(taskId: string): Promise<number> {
