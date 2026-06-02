@@ -146,6 +146,34 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       metadata: data.metadata as Record<string, unknown> | undefined,
     });
 
+    // Also create a SynthesisNode for the worker to detect (unified graph model)
+    const { BlackboardService } = await import('../services/blackboard.js');
+    const bbSvc = new BlackboardService(fastify.db);
+    const { v7: uuidv7 } = await import('uuid');
+    await bbSvc.createNode({
+      id: `nd_${uuidv7().replace(/-/g, '').slice(0, 24)}`,
+      opinionId,
+      agentId: respondentId,
+      principalId,
+      kind: 'synthesis',
+      payload: {
+        response: data.response,
+        confidence: data.confidence,
+        reasoning: data.reasoning,
+        references: data.references,
+      },
+    });
+
+    // Notify worker (in case it's listening)
+    try {
+      const pgClient = (fastify as any).pg;
+      if (pgClient) {
+        await pgClient.query(`SELECT pg_notify('opinion_node_submitted', $1)`, [opinionId]);
+      }
+    } catch (notifyErr: any) {
+      console.warn(`[opinions] pg_notify failed (non-fatal): ${notifyErr.message}`);
+    }
+
     // Earn budget for answering
     await budgetSvc.earn(principalId, BUDGET.ANSWER_OPINION, 'answer_opinion', responseId);
 
