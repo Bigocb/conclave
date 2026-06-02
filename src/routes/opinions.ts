@@ -198,6 +198,12 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       return reply.code(422).send(error('VALIDATION_ERROR', 'Invalid input', parsed.error.flatten()));
     }
     const data = parsed.data;
+
+    // Only allow synthesis when opinion is in synthesizing status
+    if (data.kind === 'synthesis' && opinion.status !== 'synthesizing') {
+      return reply.code(409).send(error('NOT_SYNTHESIZABLE', 'Synthesis can only be submitted when all critiques are received'));
+    }
+
     const agentId = (request as any).agentId ?? 'agt_dev';
     const agent = await agentSvc.getById(agentId);
     const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
