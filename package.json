@@ -14,6 +14,7 @@
     "build": "tsc --noEmitOnError false",
     "start": "node dist/main.js",
     "daemon": "tsx src/reviewer-daemon.ts",
+    "worker:opinion": "tsx src/fleet/opinion-router.ts",
     "worker:reviewer": "tsx src/workers/reviewer.ts",
     "test": "vitest run",
     "test:watch": "vitest",
