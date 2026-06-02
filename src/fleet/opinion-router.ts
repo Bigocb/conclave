@@ -42,7 +42,8 @@ import crypto from 'crypto';
  */
 function decryptVaultValue(encryptedData: string): string {
   const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
-  const [ivHex, encryptedHex] = encryptedData.split(':');
+  // Format is ivHex.encryptedHex (separated by DOT, not colon!)
+  const [ivHex, encryptedHex] = encryptedData.split('.');
   if (!ivHex || !encryptedHex) return encryptedData;
   const iv = Buffer.from(ivHex, 'hex');
   const encryptedText = Buffer.from(encryptedHex, 'hex');
@@ -82,13 +83,13 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
       const vaultEntry = vaultRows[0];
       const encryptedValue = vaultEntry.key_value;
 
-      // Check if it's already a raw key (doesn't look encrypted)
-      if (!encryptedValue.includes(':')) {
+      // Check if it's already a raw key (doesn't look encrypted - no dot separator)
+      if (!encryptedValue.includes('.')) {
         console.log(`  🔑 Vault key resolved (raw) for ${providerName}`);
         return encryptedValue;
       }
 
-      // Decrypt the vault value
+      // Decrypt the vault value (format: iv.ciphertext)
       const decrypted = decryptVaultValue(encryptedValue);
       console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
       return decrypted;
