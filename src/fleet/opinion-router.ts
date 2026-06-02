@@ -32,7 +32,6 @@ import { randomUUID, createDecipheriv } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
-import { ConclaveApiClient } from '../mcp/api-client.js';
 
 // For backwards compatibility in case other code uses crypto.createDecipheriv
 const crypto = { createDecipheriv };
@@ -853,21 +852,26 @@ export class OpinionRouter {
 
         const agent = agents[0];
         
-        // 1. Use API Client to fetch the agent's secrets (handles vault decryption automatically)
-        //    Use the agent's own token for auth so the API resolves to the right org
-        const agentClient = new ConclaveApiClient({
-          serverUrl: serverUrl,
-          token: agent.token || token,
-        });
-        const agentData = await agentClient.getAgent(agent.id);
-        const decodedAgent = agentData.data as any;
+        // 1. Get model and LLM URL from agent (or fallback to config)
+        const model = agent.model || this.config.model;
+        const llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
         
-        // 2. Use decrypted key/model/url if provided by API server, otherwise use agent's raw values or config
-        const model = decodedAgent.model || agent.model || this.config.model;
-        const llmUrl = normalizeLlmUrl(decodedAgent.llm_url || agent.llm_url || this.config.llmUrl);
+        // 2. Resolve the agent's LLM key using its provider
+        //    Look up org_<provider> in the vault to get the actual API key
+        let llmKey = this.config.llmKey;
+        if (agent.provider) {
+          const vaultRef = `org_${agent.provider}`;
+          console.log(`  🔑 Looking up vault key '${vaultRef}' for agent ${agent.id} (provider: ${agent.provider})`);
+          const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
+          if (resolvedKey && resolvedKey !== vaultRef) {
+            llmKey = resolvedKey;
+          }
+        }
         
-        // The API server returns the decrypted secret in the 'token' field if requested
-        let llmKey = decodedAgent.token || this.config.llmKey;
+        // Fallback to config key if resolution returned empty
+        if (!llmKey) {
+          llmKey = this.config.llmKey;
+        }
         
         // Debug: log what key we're using (masked)
         const maskedKey = llmKey.length > 8 
@@ -1077,10 +1081,14 @@ export class OpinionRouter {
       
       // Normalize URL and resolve key
       let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
-      // Note: agents table has no llm_key column; fall back to config key
+      // Resolve the agent's LLM key using its provider
       let llmKey = this.config.llmKey;
-      if (agent.llm_key) {
-        llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key);
+      if (agent.provider) {
+        const vaultRef = `org_${agent.provider}`;
+        const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
+        if (resolvedKey && resolvedKey !== vaultRef) {
+          llmKey = resolvedKey;
+        }
       }
       if (!llmKey) {
         llmKey = this.config.llmKey;
