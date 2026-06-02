@@ -53,47 +53,67 @@ function decryptVaultValue(encryptedData: string): string {
 }
 
 /**
- * Resolve a vault reference (org_{provider}) to a decrypted API key.
+ * Resolve a vault reference (org_{provider}) OR decrypt an encrypted key.
  * Uses direct postgres query + AES decryption — no Drizzle dependency needed.
  */
 async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<string> {
-  if (!key || !key.startsWith('org_')) return key;
+  if (!key) return key;
 
-  const providerName = key.replace(/^org_/, '');
-  console.log(`  🔑 Resolving vault key '${key}' for provider '${providerName}' in org '${orgId}'`);
+  // Check if it's a vault reference (org_{provider})
+  if (key.startsWith('org_')) {
+    const providerName = key.replace(/^org_/, '');
+    console.log(`  🔑 Resolving vault key '${key}' for provider '${providerName}' in org '${orgId}'`);
 
-  try {
-    // Query the vault table directly
-    const vaultRows = await sql<any[]>`
-      SELECT provider, key_value
-      FROM clv_org_vault
-      WHERE org_id = ${orgId}
-        AND provider = ${providerName}
-      LIMIT 1
-    `;
+    try {
+      // Query the vault table directly
+      const vaultRows = await sql<any[]>`
+        SELECT provider, key_value
+        FROM clv_org_vault
+        WHERE org_id = ${orgId}
+          AND provider = ${providerName}
+        LIMIT 1
+      `;
 
-    if (vaultRows.length === 0) {
-      console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using fallback`);
+      if (vaultRows.length === 0) {
+        console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using fallback`);
+        return key;
+      }
+
+      const vaultEntry = vaultRows[0];
+      const encryptedValue = vaultEntry.key_value;
+
+      // Check if it's already a raw key (doesn't look encrypted)
+      if (!encryptedValue.includes(':')) {
+        console.log(`  🔑 Vault key resolved (raw) for ${providerName}`);
+        return encryptedValue;
+      }
+
+      // Decrypt the vault value
+      const decrypted = decryptVaultValue(encryptedValue);
+      console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
+      return decrypted;
+    } catch (err: any) {
+      console.warn(`  ⚠ Vault key resolution failed for '${key}': ${err.message}`);
       return key;
     }
-
-    const vaultEntry = vaultRows[0];
-    const encryptedValue = vaultEntry.key_value;
-
-    // Check if it's already a raw key (doesn't look encrypted)
-    if (!encryptedValue.includes(':')) {
-      console.log(`  🔑 Vault key resolved (raw) for ${providerName}`);
-      return encryptedValue;
-    }
-
-    // Decrypt the vault value
-    const decrypted = decryptVaultValue(encryptedValue);
-    console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
-    return decrypted;
-  } catch (err: any) {
-    console.warn(`  ⚠ Vault key resolution failed for '${key}': ${err.message}`);
-    return key; // Return original, let it fail downstream
   }
+
+  // Check if it's an already-encrypted key (has dot separator like "iv.ciphertext")
+  // These are keys stored directly in fleet_reviewers.llm_key, already encrypted
+  if (key.includes('.') && !key.startsWith('sk-')) {
+    console.log(`  🔑 Attempting to decrypt stored key (format: iv.ciphertext)`);
+    try {
+      const decrypted = decryptVaultValue(key);
+      console.log(`  🔑 Key decrypted successfully`);
+      return decrypted;
+    } catch (err: any) {
+      console.warn(`  ⚠ Key decryption failed: ${err.message}, using as-is`);
+      return key;
+    }
+  }
+
+  // Raw key, return as-is
+  return key;
 }
 
 // ─── Types ──────────────────────────────────────────────────────
