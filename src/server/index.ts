@@ -119,6 +119,10 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   // In cloud mode, X-Agent-Id header is used by MCP clients and API keys
   fastify.addHook('preHandler', async (request, reply) => {
     const headerAgentId = request.headers['x-agent-id'] as string | undefined;
+    const authHeader = request.headers.authorization;
+    const tokenFromHeader = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+    
+    console.log(`[Auth] mode=${fullConfig.mode} url=${request.url} token=${tokenFromHeader?.slice(0,10)}... headerAgentId=${headerAgentId}`);
 
     if (fullConfig.mode === 'local') {
       (request as any).agentId = headerAgentId || 'agt_dev';
