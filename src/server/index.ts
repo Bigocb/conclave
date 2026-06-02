@@ -10,6 +10,8 @@ import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import websocket from '@fastify/websocket';
 import { initDb, type ConclaveDb } from '../db/index.js';
+import { agents } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 import { principalRoutes } from '../routes/principals.js';
 import { agentRoutes } from '../routes/agents.js';
@@ -137,7 +139,29 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
       (request as any).principalId = payload.principalId;
       (request as any).adminId = payload.adminId;
     } catch {
-      // No valid JWT — fall back to X-Agent-Id header or anonymous
+      // No valid JWT — try clv_ agent token lookup
+      const authHeader = request.headers.authorization;
+      const tokenFromHeader = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+      const maybeClvToken = tokenFromHeader?.startsWith('clv_') ? tokenFromHeader : undefined;
+
+      if (maybeClvToken) {
+        try {
+          const agent = await db.query.agents.findFirst({
+            where: eq(agents.token, maybeClvToken),
+          });
+          if (agent) {
+            (request as any).agentId = agent.id;
+            (request as any).principalId = agent.principalId;
+            (request as any).orgId = agent.orgId;
+            (request as any).user = { id: agent.principalId };
+            return;
+          }
+        } catch {
+          // DB lookup failed — fall through to anonymous
+        }
+      }
+
+      // Fall back to X-Agent-Id header or anonymous
       (request as any).agentId = headerAgentId || 'agt_anon';
       (request as any).principalId = headerAgentId ? undefined : 'prn_anon';
     }
