@@ -872,7 +872,11 @@ export class OpinionRouter {
         const maskedKey = llmKey.length > 8 
           ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
           : (llmKey ? `Length ${llmKey.length}` : 'NONE');
-        console.log(`  🔑 Resolved LLM Key: ${maskedKey}`);\n        console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);\n        \n        // Call LLM\n        const result = await callOpinionCritiqueLLM(model, systemPrompt, llmUrl, llmKey);
+        console.log(`  🔑 Resolved LLM Key: ${maskedKey}`);
+        console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
+
+        // Call LLM
+        const result = await callOpinionCritiqueLLM(model, systemPrompt, llmUrl, llmKey);
 
         if (!result) {
           console.warn(`  ⚠ LLM returned no parseable result for ${agent.id}`);
