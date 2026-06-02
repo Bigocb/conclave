@@ -55,6 +55,10 @@ TypeScript backend (Fastify + Drizzle ORM + postgres.js) + fleet worker daemon +
 ├── examples/                # Usage examples
 ├── public/                  # Static assets
 ├── references/              # Reference materials
+├── .agents/                 # Agent skills (mattpocock/skills, see skills-lock.json)
+├── .work-issue/             # Work-issue skill operator config
+├── skills-lock.json         # Matt Pocock skills manifest lockfile
+├── opencode.json            # OpenCode skill config
 └── scripts/                 # Build / dev helper scripts
 ```
 

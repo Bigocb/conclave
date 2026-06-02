@@ -1,0 +1,42 @@
+# Example local config for agents/skills/work-issue.
+# Copy to .work-issue/operator-config.yaml and edit for your runtime.
+# This file is a template. Do not put real secrets here.
+
+dispatch:
+  # Required.
+  # Allowed:
+  # - manual_sessions
+  # - in_session_subagents
+  # - background_sessions
+  # - non_interactive_batch
+  # - external_service
+  mode: manual_sessions
+
+  # Required. Allowed: 1, 2, or 3.
+  # Default recommendation: 2.
+  max_concurrency: 2
+
+  # Required.
+  # Set true only if the selected runtime can choose the worker model from this config.
+  supports_model_selection: false
+
+  # Required.
+  # This is a runtime contract. The coordinator must follow it exactly unless it is
+  # unsafe, contradictory, missing required details, or impossible in the current environment.
+  instructions: |
+    Create one worktree and prompt file per issue.
+    Ask the operator to launch one worker session per worktree using their chosen runtime.
+    The operator must paste the generated worker prompt verbatim.
+    Each worker must write .work-issue-worker-report.md in its assigned worktree.
+
+# Required only when dispatch.supports_model_selection is true.
+# models:
+#   worker: "<runtime-specific model name or alias>"
+
+permissions:
+  # If true, the coordinator may push accepted worker branches and open PRs
+  # after coordinator review passes.
+  coordinator_may_open_prs: true
+
+  # Default false. Set true only if the operator explicitly delegates merge authority.
+  coordinator_may_merge: false
