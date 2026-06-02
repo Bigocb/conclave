@@ -176,8 +176,11 @@ export class TaskService {
   }
 
   async getReviewsForTask(taskId: string) {
-    const rows = await this.db.select().from(schema.reviews).where(eq(schema.reviews.taskId, taskId));
-    return rows.map(r => this.formatReview(r));
+    const rows = await this.db.select()
+      .from(schema.reviews)
+      .leftJoin(schema.agents, eq(schema.reviews.reviewerId, schema.agents.id))
+      .where(eq(schema.reviews.taskId, taskId));
+    return rows.map(r => this.formatReview(r.reviews, (r.agents as any)?.name ?? undefined));
   }
 
   async getReviewCountForTask(taskId: string): Promise<number> {
@@ -251,11 +254,12 @@ export class TaskService {
     };
   }
 
-  private formatReview(row: typeof schema.reviews.$inferSelect) {
+  private formatReview(row: typeof schema.reviews.$inferSelect, reviewerName?: string) {
     return {
       id: row.id,
       task_id: row.taskId,
       reviewer_id: row.reviewerId,
+      reviewer_name: reviewerName || null,
       principal_id: row.principalId,
       scores: JSON.parse(row.scores),
       weighted_overall: row.weightedOverall,
