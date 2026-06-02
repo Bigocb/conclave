@@ -242,7 +242,7 @@ interface CriticAgent {
   provider: string | null;
   llm_url: string | null;
   token: string | null;
-  llm_key: string | null;  // From fleet_reviewers table
+  llm_key?: string | null;  // Optional — not present in agents table, may come from fleet_reviewers join
 }
 
 interface BlackboardNode {
@@ -843,7 +843,11 @@ export class OpinionRouter {
         let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
         
         // Resolve the agent's LLM key (vault reference, encrypted, or raw)
-        let llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key || this.config.llmKey);
+        // Note: agents table has no llm_key column; fall back to config key
+        let llmKey = this.config.llmKey;
+        if (agent.llm_key) {
+          llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key);
+        }
         
         // Fallback to config key if resolution returned empty
         if (!llmKey) {
@@ -1033,12 +1037,10 @@ export class OpinionRouter {
         break;
       }
 
-      // Find critic's agent with fleet_reviewers for LLM key
+      // Find critic's agent
       const agents = await this.sql<CriticAgent[]>`
-        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token,
-               COALESCE(fr.llm_key, a.token) as llm_key
+        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
         FROM clv_agents a
-        LEFT JOIN clv_fleet_reviewers fr ON fr.agent_id = a.id
         WHERE a.principal_id = ${cp.principal_id}
           AND a.status = 'active'
         ORDER BY a.created_at ASC
@@ -1058,7 +1060,11 @@ export class OpinionRouter {
       
       // Normalize URL and resolve key
       let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
-      let llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key || this.config.llmKey);
+      // Note: agents table has no llm_key column; fall back to config key
+      let llmKey = this.config.llmKey;
+      if (agent.llm_key) {
+        llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key);
+      }
       if (!llmKey) {
         llmKey = this.config.llmKey;
       }
