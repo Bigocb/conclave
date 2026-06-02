@@ -99,10 +99,10 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
     }
   }
 
-  // Check if it's an already-encrypted key (has dot separator like "iv.ciphertext")
-  // These are keys stored directly in fleet_reviewers.llm_key, already encrypted
-  if (key.includes('.') && !key.startsWith('sk-')) {
-    console.log(`  🔑 Attempting to decrypt stored key (format: iv.ciphertext)`);
+  // Check if it's an already-encrypted key (has colon separator like "ivHex:encryptedHex")
+  // Vault-encrypted keys use COLON separator. Dot-separated keys are raw Ollama Cloud keys (keyId.secret).
+  if (key.includes(':') && !key.startsWith('sk-')) {
+    console.log(`  🔑 Attempting to decrypt stored key (vault format: iv:ciphertext)`);
     try {
       const decrypted = decryptVaultValue(key);
       console.log(`  🔑 Key decrypted successfully`);
@@ -113,7 +113,9 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
     }
   }
 
-  // Raw key, return as-is
+  // Dot-separated keys like "a25be730...39DL" are raw Ollama Cloud API keys (keyId.secret format)
+  // Just use them directly — no decryption needed
+  console.log(`  🔑 Key appears to be raw API key format, using as-is`);
   return key;
 }
 
