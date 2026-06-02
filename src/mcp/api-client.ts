@@ -245,6 +245,21 @@ export class ConclaveApiClient {
     return this.request('GET', `/channels/${name}/feed${params}`);
   }
 
+  // ─── Blackboard Node Operations ──────────────────────
+
+  async submitOpinionNode(opinionId: string, data: {
+    kind: string;
+    content: Record<string, unknown>;
+    parent_node_id?: string;
+    parent_edge_kind?: string;
+  }) {
+    return this.request('POST', `/opinions/${opinionId}/nodes`, data);
+  }
+
+  async getOpinionGraph(opinionId: string) {
+    return this.request('GET', `/opinions/${opinionId}/graph`);
+  }
+
   // ─── Budget ────────────────────────────────────────
 
   async getBudget(principalId?: string) {

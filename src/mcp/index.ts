@@ -343,8 +343,102 @@ server.tool(
           `**Responses requested:** ${opinion.requested_opinions ?? params.requested_opinions ?? 3}`,
           `**Budget spent:** ${opinion.budget_spent ?? 3}`,
           ``,
-          `Check back with \`get_opinion\` using ID \`${opinion.id}\` to see responses.`,
+          `Check the thread graph with \`get_opinion_graph\` using ID \`${opinion.id}\` to see ProposalNode + critiques.`,
+          `Submit new nodes (Synthesis, Consensus) with \`submit_opinion_node\`.`,
         ].join('\n'),
+      }],
+    };
+  }
+);
+
+// ─── Tool: submit_opinion_node ────────────────────────────
+
+server.tool(
+  'submit_opinion_node',
+  'Submit a node (Synthesis, Consensus, or other type) to an opinion thread on the Blackboard. Use this to post your SynthesisNode after receiving critiques, or to submit a ConsensusNode during voting. Requires an opinion ID from ask_opinion or get_opinion_graph.',
+  {
+    opinion_id: z.string().describe('ID of the opinion to add a node to (opn_...)'),
+    kind: z.enum(['proposal', 'critique', 'synthesis', 'consensus']).describe('Type of node to create'),
+    content: z.record(z.unknown()).describe('Node content payload — schema varies by kind'),
+    parent_node_id: z.string().optional().describe('Parent node ID to link this node to (creates an edge)'),
+    parent_edge_kind: z.enum(['critiques', 'addresses', 'votes_on', 'follow_up']).optional().describe('Edge kind when linking to parent node'),
+  },
+  async (params) => {
+    const result = await client.submitOpinionNode(params.opinion_id, {
+      kind: params.kind,
+      content: params.content,
+      parent_node_id: params.parent_node_id,
+      parent_edge_kind: params.parent_edge_kind,
+    });
+
+    const node = result.data;
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          `✅ Node created on opinion ${params.opinion_id}`,
+          ``,
+          `**Node ID:** ${node.id}`,
+          `**Kind:** ${node.kind ?? params.kind}`,
+          `**Status:** ${node.status ?? 'active'}`,
+          params.parent_node_id ? `**Linked to:** ${params.parent_node_id} (${params.parent_edge_kind})` : '',
+          ``,
+          `View the full thread graph with \`get_opinion_graph\` using ID \`${params.opinion_id}\`.`,
+        ].filter(Boolean).join('\n'),
+      }],
+    };
+  }
+);
+
+// ─── Tool: get_opinion_graph ──────────────────────────────
+
+server.tool(
+  'get_opinion_graph',
+  'Get the full node+edge graph for an opinion thread. Returns all Blackboard nodes (Proposal, Critique, Synthesis, Consensus) with their relationships. Use this to trace how a decision was reached or to find nodes to reference in submit_opinion_node.',
+  {
+    opinion_id: z.string().describe('ID of the opinion to get the graph for (opn_...)'),
+  },
+  async (params) => {
+    const result = await client.getOpinionGraph(params.opinion_id);
+    const graph = result.data;
+
+    const nodes = graph?.nodes ?? [];
+    const edges = graph?.edges ?? [];
+
+    if (nodes.length === 0) {
+      return {
+        content: [{ type: 'text' as const, text: `No nodes found for opinion ${params.opinion_id}. The thread may not have started yet.` }],
+      };
+    }
+
+    const lines = [
+      `📋 **Opinion ${params.opinion_id} — Thread Graph**`,
+      `**Nodes:** ${nodes.length} | **Edges:** ${edges.length}`,
+      ``,
+      `**Nodes:**`,
+    ];
+
+    for (const n of nodes) {
+      const payload = typeof n.payload === 'object' ? n.payload : {};
+      const summary = payload.question ?? payload.concerns?.slice(0, 1).join(', ') ?? payload.response ?? payload.recommendation ?? '(no details)';
+      lines.push(`  • **${n.kind}** ${n.id} — ${String(summary).slice(0, 100)}`);
+    }
+
+    if (edges.length > 0) {
+      lines.push(``);
+      lines.push(`**Edges:**`);
+      for (const e of edges) {
+        lines.push(`  • ${e.source_node_id} —[${e.kind}]→ ${e.target_node_id}`);
+      }
+    }
+
+    lines.push(``);
+    lines.push(`Use \`submit_opinion_node\` to add a SynthesisNode or ConsensusNode to this thread.`);
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: lines.join('\n'),
       }],
     };
   }
