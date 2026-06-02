@@ -184,7 +184,7 @@ export class TaskService {
         schema.agents,
         eq(schema.agents.id, schema.reviews.reviewerId)
       );
-    return rows.map(r => this.formatReview(r.clv_reviews, r.clv_agents));
+    return rows.map(r => this.formatReview(r.clv_reviews, r.clv_agents ?? undefined));
   }
 
   async getReviewCountForTask(taskId: string): Promise<number> {
