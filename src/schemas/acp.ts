@@ -16,7 +16,7 @@ export type EdgeKind = z.infer<typeof EdgeKind>;
 export const NodeStatus = z.enum(['active', 'superseded', 'withdrawn']);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
-export const OpinionStatus = z.enum(['open', 'consensus_reached', 'closed']);
+export const OpinionStatus = z.enum(['open', 'synthesizing', 'voting', 'closed']);
 export type OpinionStatus = z.infer<typeof OpinionStatus>;
 
 export const TopologyKind = z.enum(['democratic']);

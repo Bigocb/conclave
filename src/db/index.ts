@@ -266,7 +266,8 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
   try {
     await client`ALTER TABLE clv_opinions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open'`;
     await client`ALTER TABLE clv_opinions ADD COLUMN IF NOT EXISTS topology TEXT NOT NULL DEFAULT 'democratic'`;
-    console.log('[initDb] opinion status/topology columns ensured');
+    await client`ALTER TABLE clv_opinions ADD COLUMN IF NOT EXISTS close_tag TEXT`;
+    console.log('[initDb] opinion status/topology/close_tag columns ensured');
   } catch (migErr: any) {
     console.error('[initDb] opinion columns migration failed:', migErr.message);
   }
