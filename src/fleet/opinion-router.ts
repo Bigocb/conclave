@@ -746,7 +746,6 @@ export class OpinionRouter {
           SELECT model, llm_url, llm_key, provider
           FROM clv_fleet_reviewers
           WHERE org_id = ${agent.org_id}
-            AND status = 'active'
           LIMIT 1
         `;
         
