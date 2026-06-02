@@ -859,7 +859,7 @@ export class OpinionRouter {
         let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
         
         // Resolve the agent's LLM key (vault reference, encrypted, or raw)
-        // Note: agents table has no llm_key column; fall back to config key
+        // We use the agent's token as the base for resolution (it may be 'org_provider' or an encrypted key)
         let llmKey = this.config.llmKey;
         if (agent.token) {
           llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.token);
