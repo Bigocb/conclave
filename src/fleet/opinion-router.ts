@@ -32,6 +32,69 @@ import { randomUUID } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
+import crypto from 'crypto';
+
+// ─── Vault Key Resolution ──────────────────────────────────
+
+/**
+ * Decrypt a vault-encrypted value using AES-256-CBC.
+ * Used by resolveVaultKey when direct DB access is available.
+ */
+function decryptVaultValue(encryptedData: string): string {
+  const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
+  const [ivHex, encryptedHex] = encryptedData.split(':');
+  if (!ivHex || !encryptedHex) return encryptedData;
+  const iv = Buffer.from(ivHex, 'hex');
+  const encryptedText = Buffer.from(encryptedHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  let decrypted = decipher.update(encryptedText);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString();
+}
+
+/**
+ * Resolve a vault reference (org_{provider}) to a decrypted API key.
+ * Uses direct postgres query + AES decryption — no Drizzle dependency needed.
+ */
+async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<string> {
+  if (!key || !key.startsWith('org_')) return key;
+
+  const providerName = key.replace(/^org_/, '');
+  console.log(`  🔑 Resolving vault key '${key}' for provider '${providerName}' in org '${orgId}'`);
+
+  try {
+    // Query the vault table directly
+    const vaultRows = await sql<any[]>`
+      SELECT provider, key_value
+      FROM clv_org_vault
+      WHERE org_id = ${orgId}
+        AND provider = ${providerName}
+      LIMIT 1
+    `;
+
+    if (vaultRows.length === 0) {
+      console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using fallback`);
+      return key;
+    }
+
+    const vaultEntry = vaultRows[0];
+    const encryptedValue = vaultEntry.key_value;
+
+    // Check if it's already a raw key (doesn't look encrypted)
+    if (!encryptedValue.includes(':')) {
+      console.log(`  🔑 Vault key resolved (raw) for ${providerName}`);
+      return encryptedValue;
+    }
+
+    // Decrypt the vault value
+    const decrypted = decryptVaultValue(encryptedValue);
+    console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
+    return decrypted;
+  } catch (err: any) {
+    console.warn(`  ⚠ Vault key resolution failed for '${key}': ${err.message}`);
+    return key; // Return original, let it fail downstream
+  }
+}
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -652,9 +715,29 @@ export class OpinionRouter {
         }
 
         const agent = agents[0];
+        
+        // Get model and LLM URL from agent
         const model = agent.model || this.config.model;
         const llmUrl = agent.llm_url || this.config.llmUrl;
-        const llmKey = this.config.llmKey;
+        
+        // Get LLM key from fleet reviewer config (not from the empty config!)
+        // Query the fleet reviewers table to find the reviewer's configured key
+        const reviewers = await this.sql<any[]>`
+          SELECT model, llm_url, llm_key, provider
+          FROM clv_fleet_reviewers
+          WHERE org_id = ${agent.org_id}
+            AND status = 'active'
+          LIMIT 1
+        `;
+        
+        let llmKey = this.config.llmKey; // fallback to config
+        if (reviewers.length > 0) {
+          const rev = reviewers[0];
+          // Use reviewer config if available, and resolve vault reference
+          if (rev.llm_key) {
+            llmKey = await resolveVaultKey(this.sql, rev.llm_key, agent.org_id);
+          }
+        }
 
         console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
 
