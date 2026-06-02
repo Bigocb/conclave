@@ -861,8 +861,8 @@ export class OpinionRouter {
         // Resolve the agent's LLM key (vault reference, encrypted, or raw)
         // Note: agents table has no llm_key column; fall back to config key
         let llmKey = this.config.llmKey;
-        if (agent.llm_key) {
-          llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key);
+        if (agent.token) {
+          llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.token);
         }
         
         // Fallback to config key if resolution returned empty
