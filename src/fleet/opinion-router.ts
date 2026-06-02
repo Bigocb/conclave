@@ -818,12 +818,12 @@ export class OpinionRouter {
 
     const critiquePromises = selected.map(async (sub) => {
       try {
-        // Find an eligible agent for this principal, join with fleet_reviewers for LLM key
+        // Find an eligible agent for this principal
+        // Note: fleet_reviewers has no agent_id column, so we use agent's own LLM config
         const agents = await this.sql<CriticAgent[]>`
           SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token,
-                 COALESCE(fr.llm_key, a.token) as llm_key
+                 a.llm_key
           FROM clv_agents a
-          LEFT JOIN clv_fleet_reviewers fr ON fr.agent_id = a.id
           WHERE a.principal_id = ${sub.principal_id}
             AND a.status = 'active'
           ORDER BY a.created_at ASC
