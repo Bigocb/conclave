@@ -3,8 +3,9 @@
  */
 
 import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
-import { AskOpinionSchema, SubmitOpinionResponseSchema } from '../schemas/index.js';
+import { AskOpinionSchema, SubmitOpinionResponseSchema, CreateNodeSchema, GraphQuerySchema } from '../schemas/index.js';
 import { OpinionService } from '../services/opinions.js';
+import { BlackboardService } from '../services/blackboard.js';
 import { BudgetService, BUDGET } from '../services/budget.js';
 import { AgentService } from '../services/agents.js';
 import { ChannelService } from '../services/channels.js';
@@ -17,6 +18,7 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
   const budgetSvc = new BudgetService(db);
   const agentSvc = new AgentService(db);
   const channelSvc = new ChannelService(db);
+  const bbSvc = new BlackboardService(db);
 
   // POST /v1/opinions
   fastify.post('/opinions', async (request, reply) => {
@@ -117,6 +119,66 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     await budgetSvc.earn(principalId, BUDGET.ANSWER_OPINION, 'answer_opinion', responseId);
 
     reply.code(201).send(success(resp));
+  });
+
+  // ─── Blackboard Routes ──────────────────────────────────
+
+  // POST /v1/opinions/:opinionId/nodes
+  fastify.post('/opinions/:opinionId/nodes', async (request, reply) => {
+    const { opinionId } = request.params as { opinionId: string };
+
+    // Verify opinion exists
+    const opinion = await opinionSvc.getById(opinionId);
+    if (!opinion) return reply.code(404).send(error('OPINION_NOT_FOUND', 'Opinion not found'));
+    if (opinion.status === 'closed' || opinion.status === 'consensus_reached') {
+      return reply.code(409).send(error('OPINION_CLOSED', 'Opinion is already closed or consensus reached'));
+    }
+
+    const parsed = CreateNodeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(422).send(error('VALIDATION_ERROR', 'Invalid input', parsed.error.flatten()));
+    }
+    const data = parsed.data;
+    const agentId = (request as any).agentId ?? 'agt_dev';
+    const agent = await agentSvc.getById(agentId);
+    const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
+
+    const nodeId = `nd_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
+    const node = await bbSvc.createNode({
+      id: nodeId,
+      opinionId,
+      agentId,
+      principalId,
+      kind: data.kind,
+      payload: data.content,
+    });
+
+    // If there's a parent edge, link it
+    if (data.parent_node_id && data.parent_edge_kind) {
+      const edgeId = `e_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
+      await bbSvc.createEdge({
+        id: edgeId,
+        opinionId,
+        sourceNodeId: data.parent_node_id,
+        targetNodeId: nodeId,
+        kind: data.parent_edge_kind,
+      });
+    }
+
+    reply.code(201).send(success(node));
+  });
+
+  // GET /v1/opinions/:opinionId/graph
+  fastify.get('/opinions/:opinionId/graph', async (request, reply) => {
+    const { opinionId } = request.params as { opinionId: string };
+
+    const opinion = await opinionSvc.getById(opinionId);
+    if (!opinion) return reply.code(404).send(error('OPINION_NOT_FOUND', 'Opinion not found'));
+
+    const graph = await bbSvc.getGraph(opinionId);
+    const consensus = await bbSvc.checkConsensus(opinionId);
+
+    reply.send(success({ ...graph, consensus }));
   });
 
   done();

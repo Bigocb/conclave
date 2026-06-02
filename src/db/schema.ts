@@ -159,11 +159,42 @@ export const opinions = pgTable('clv_opinions', {
   requestedOpinions: integer('requested_opinions').notNull().default(3),
   deadline: text('deadline'),
   metadata: text('metadata'),                    // JSON
+  status: text('status').notNull().default('open'), // open | consensus_reached | closed
+  topology: text('topology').notNull().default('democratic'), // democratic (future: ranked, single_transferable)
   budgetSpent: integer('budget_spent').notNull().default(3),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
-// ─── Opinion Responses ──────────────────────────────────────
+// ─── Blackboard Nodes (opinion discussion graph) ────────────
+// Payload columns store the kind-specific content as JSON
+export const blackboardNodes = pgTable('clv_blackboard_nodes', {
+  id: text('id').primaryKey(),                 // nd_<uuidv7>
+  opinionId: text('opinion_id').notNull().references(() => opinions.id),
+  agentId: text('agent_id').notNull().references(() => agents.id),
+  principalId: text('principal_id').notNull().references(() => principals.id),
+  kind: text('kind').notNull(),                // proposal | critique | synthesis | consensus
+  status: text('status').notNull().default('active'), // active | superseded | withdrawn
+  payload: text('payload').notNull(),           // JSON — kind-specific content
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  opinionIdx: index('idx_bb_nodes_opinion').on(table.opinionId),
+}));
+
+// ─── Blackboard Edges (graph relationships between nodes) ────
+export const blackboardEdges = pgTable('clv_blackboard_edges', {
+  id: text('id').primaryKey(),                 // e_<uuidv7>
+  opinionId: text('opinion_id').notNull().references(() => opinions.id),
+  sourceNodeId: text('source_node_id').notNull().references(() => blackboardNodes.id),
+  targetNodeId: text('target_node_id').notNull().references(() => blackboardNodes.id),
+  kind: text('kind').notNull(),                // critiques | addresses | votes_on | follow_up
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => ({
+  sourceIdx: index('idx_bb_edges_source').on(table.sourceNodeId),
+  targetIdx: index('idx_bb_edges_target').on(table.targetNodeId),
+  opEdgeIdx: index('idx_bb_edges_opinion').on(table.opinionId),
+}));
+
+// ─── Opinion Responses (original flat model — kept for backward compat) ──
 export const opinionResponses = pgTable('clv_opinion_responses', {
   id: text('id').primaryKey(),                   // rsp_<uuidv7>
   opinionId: text('opinion_id').notNull().references(() => opinions.id),

@@ -33,6 +33,8 @@ export class OpinionService {
       requestedOpinions: data.requestedOpinions ?? 3,
       deadline: data.deadline ?? null,
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+      status: 'open',
+      topology: 'democratic',
       budgetSpent: data.budgetSpent ?? 3,
       createdAt: now,
     });
@@ -105,6 +107,8 @@ export class OpinionService {
       requested_opinions: row.requestedOpinions,
       deadline: row.deadline,
       metadata: row.metadata ? JSON.parse(row.metadata) : {},
+      status: row.status ?? 'open',
+      topology: row.topology ?? 'democratic',
       budget_spent: row.budgetSpent,
       created_at: row.createdAt,
     };

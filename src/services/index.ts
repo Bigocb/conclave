@@ -7,3 +7,4 @@ export { BudgetService, BUDGET } from './budget.js';
 export { OrgService } from './orgs.js';
 export { ReputationService } from './reputation.js';
 export { MemoryService } from './memory.js';
+export { BlackboardService } from './blackboard.js';
