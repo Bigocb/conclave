@@ -681,10 +681,17 @@ export class OpinionRouter {
       // If closed, ignore
       if (opinion.status === 'closed') return;
 
-      // If in synthesizing, trigger vote round
+      // If in synthesizing, trigger discussion round (not immediate vote)
+      // Critics should respond to the synthesis before voting
       if (opinion.status === 'synthesizing') {
-        console.log(`  🗳️ Opinion ${opinionId} in synthesizing — triggering vote round`);
-        await this.triggerVoteRound(opinionId);
+        console.log(`  💬 Opinion ${opinionId} in synthesizing — triggering discussion round`);
+        
+        // Check if this is a new synthesis or already responded
+        // If new synthesis -> trigger critics to respond (follow-up round)
+        // If already responded -> trigger vote round
+        
+        // For now: trigger follow-up critiques from original critics
+        await this.triggerDiscussionRound(opinionId);
         return;
       }
 
@@ -970,6 +977,149 @@ export class OpinionRouter {
         await this.triggerVoteRound(opinion.id);
       }
     }
+  }
+
+  // ─── Trigger Discussion Round ────────────────────────────
+  // Called when synthesis is submitted - triggers critics to respond
+
+  private async triggerDiscussionRound(opinionId: string): Promise<void> {
+    // Get existing critique nodes and their critics
+    const critiqueNodes = await this.sql`
+      SELECT n.id, n.agent_id, n.principal_id, a.name as agent_name, a.model, a.provider, a.llm_url, a.token, a.org_id
+      FROM clv_blackboard_nodes n
+      LEFT JOIN clv_agents a ON a.id = n.agent_id
+      WHERE n.opinion_id = ${opinionId} AND n.kind = 'critique'
+    `;
+
+    if (critiqueNodes.length === 0) {
+      console.log(`  ⚠ Opinion ${opinionId}: no critique nodes found — going to vote`);
+      await this.triggerVoteRound(opinionId);
+      return;
+    }
+
+    // Get the synthesis node
+    const synthNodes = await this.sql`
+      SELECT id, payload, agent_id
+      FROM clv_blackboard_nodes
+      WHERE opinion_id = ${opinionId} AND kind = 'synthesis'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    if (synthNodes.length === 0) {
+      console.log(`  ⚠ Opinion ${opinionId}: no synthesis node found`);
+      return;
+    }
+
+    const synthesis = synthNodes[0];
+    const synthesisContent = typeof synthesis.payload === 'string' 
+      ? JSON.parse(synthesis.payload) 
+      : (synthesis.payload || {});
+
+    const serverUrl = this.config.serverUrl;
+    const token = this.config.token;
+
+    // Get the opinion for context
+    const opinions = await this.sql`
+      SELECT question, context, channel FROM clv_opinions WHERE id = ${opinionId}
+    `;
+    if (opinions.length === 0) return;
+    const opinion = opinions[0];
+
+    console.log(`  💬 Triggering discussion round for ${critiqueNodes.length} critics`);
+
+    // Ask each critic to respond to the synthesis
+    for (const critic of critiqueNodes) {
+      // Get critique for context
+      const critiqueResult = await this.sql`
+        SELECT payload FROM clv_blackboard_nodes WHERE id = ${critic.id}
+      `;
+      const critiquePayload = critiqueResult[0]?.payload 
+        ? (typeof critiqueResult[0].payload === 'string' ? JSON.parse(critiqueResult[0].payload) : critiqueResult[0].payload) 
+        : {};
+
+      // Build follow-up critique prompt
+      const prompt = `You submitted a critique for this question:
+
+"${opinion.question}"
+
+Your original critique:
+- Concerns: ${critiquePayload.concerns?.join(', ') || 'None'}
+- Suggestions: ${critiquePayload.suggestions?.join(', ') || 'None'}
+- Confidence: ${critiquePayload.confidence}/10
+
+The asker has now provided a synthesis:
+
+"${synthesisContent.text || synthesisContent.response || synthesisContent.recommendation || 'No synthesis text'}"
+
+Your task: Review this synthesis and either:
+1. APPROVE it if it addresses your concerns
+2. RESPOND with follow-up concerns if it doesn't
+
+Respond in JSON format:
+\`\`\`json
+{
+  "approved": true/false,
+  "reasoning": "Your reasoning...",
+  "remaining_concerns": ["concern1", "concern2"] // only if not approved
+}
+\`\`\``;
+
+      // Get LLM key for this critic
+      let llmKey = this.config.llmKey;
+      if (critic.provider) {
+        const vaultRef = `org_${critic.provider}`;
+        const resolved = await resolveVaultKey(this.sql, vaultRef, critic.org_id);
+        if (resolved && resolved !== vaultRef) llmKey = resolved;
+      }
+      if (!llmKey) llmKey = this.config.llmKey;
+
+      const model = critic.model || this.config.model;
+      const llmUrl = normalizeLlmUrl(critic.llm_url || this.config.llmUrl);
+
+      try {
+        const result = await callOpinionCritiqueLLM(model, prompt, llmUrl, llmKey);
+        
+        if (!result) {
+          console.log(`  ⚠ Critic ${critic.agent_name || critic.agent_id} failed to respond — skipping`);
+          continue;
+        }
+
+        // Create follow-up critique node
+        const followBody = JSON.stringify({
+          kind: 'critique',
+          content: {
+            concerns: result.concerns,
+            suggestions: result.suggestions,
+            confidence: result.confidence,
+            is_follow_up: true,
+            addresses_synthesis: result.confidence >= 5,
+          },
+          parent_node_id: synthesis.id,
+          parent_edge_kind: 'addresses',
+        });
+
+        const authToken = critic.token || token;
+        const followResp = await fetch(`${serverUrl}/v1/opinions/${opinionId}/nodes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: followBody,
+        });
+
+        if (followResp.ok) {
+          console.log(`  💬 Follow-up critique from ${critic.agent_name || critic.agent_id}: approved=${result.confidence >= 5}`);
+        }
+      } catch (err: any) {
+        console.warn(`  ⚠ Discussion round error for ${critic.agent_name || critic.agent_id}: ${err.message}`);
+      }
+    }
+
+    // After discussion, trigger vote round
+    console.log(`  🗳️ Discussion complete — going to vote`);
+    await this.triggerVoteRound(opinionId);
   }
 
   // ─── Trigger Vote Round ──────────────────────────────
