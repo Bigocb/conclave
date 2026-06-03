@@ -39,7 +39,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
       memories = await db.select()
         .from(principalMemory)
         .where(eq(principalMemory.principalId, principalId));
-      memories = memories.filter(m => m.category === category);
+      memories = memories.filter((m: typeof principalMemory.$inferSelect) => m.category === category);
     } else {
       memories = await memorySvc.getByPrincipal(principalId);
     }
