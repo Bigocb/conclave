@@ -7,6 +7,10 @@ import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import { MemoryService } from '../services/memory.js';
 import { success, error } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
+import { eq } from 'drizzle-orm';
+import { principalMemory } from '../db/schema.js';
+
+const VALID_CATEGORIES = ['convention', 'preference', 'fact', 'general'] as const;
 
 export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
   const db = (fastify as any).db;
@@ -22,7 +26,24 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
       return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
     }
 
-    const memories = await memorySvc.getByPrincipal(principalId);
+    const { category } = request.query as { category?: string };
+
+    // Validate category if provided
+    if (category && !VALID_CATEGORIES.includes(category as any)) {
+      return reply.code(400).send(error('VALIDATION_ERROR', `Invalid category. Must be one of: ${VALID_CATEGORIES.join(', ')}`));
+    }
+
+    // Filter by category if provided, otherwise return all
+    let memories;
+    if (category) {
+      memories = await db.select()
+        .from(principalMemory)
+        .where(eq(principalMemory.principalId, principalId));
+      memories = memories.filter(m => m.category === category);
+    } else {
+      memories = await memorySvc.getByPrincipal(principalId);
+    }
+
     return reply.send(success({ memories }));
   });
 
