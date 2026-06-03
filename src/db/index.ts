@@ -262,6 +262,14 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
   } catch (migErr: any) {
     console.error('[initDb] owner_id migration failed:', migErr.message);
   }
+
+  // Memory TTL/decay migration
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
+    console.log('[initDb] expires_at column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] expires_at migration failed:', migErr.message);
+  }
   try {
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;

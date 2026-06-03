@@ -1,5 +1,5 @@
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, like, ilike, or, isNull, lt, gt, sql } from 'drizzle-orm';
 import { principalMemory } from '../db/schema.js';
 import * as crypto from 'crypto';
 
