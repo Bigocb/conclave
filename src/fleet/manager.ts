@@ -254,10 +254,13 @@ export class FleetManager extends EventEmitter {
   private startTime: number = 0;
   private running: boolean = false;
   private _syncTimer?: ReturnType<typeof setInterval>;
+  private memoryService: MemoryService;
 
   constructor(config: FleetConfig) {
     super();
     this.config = config;
+    // Use default parameter like other services to avoid type issues
+    this.memoryService = new MemoryService(db as any);
   }
 
   // ─── Pulse Relay ───────────────────────────────────────────
@@ -706,6 +709,22 @@ export class FleetManager extends EventEmitter {
     try {
       // 1. Build input for any backend type
       const taskId = task.id ?? task.task_id;
+      
+      // Fetch memories for the task's principal (the submitter) to inject into the review prompt
+      let memories: string[] = [];
+      const principalId = task.principalId;
+      if (principalId) {
+        try {
+          const memoryEntries = await this.memoryService.getByPrincipal(principalId);
+          memories = memoryEntries.map(m => m.value);
+          if (memories.length > 0) {
+            console.log(`[DBG-reviewTask] Loaded ${memories.length} memories for principal ${principalId}`);
+          }
+        } catch (memErr) {
+          console.warn(`[DBG-reviewTask] Failed to load memories for principal ${principalId}:`, memErr);
+        }
+      }
+
       const reviewInput: ReviewInput = {
         task_id: taskId,
         task_description: task.description,
@@ -714,6 +733,7 @@ export class FleetManager extends EventEmitter {
         channel,
         instructions: proc.instructions,
         skills: proc.skills,
+        memories,
       };
       console.log(`[DBG-reviewTask] reviewerName=${proc.reviewerName} proc.instructions=${JSON.stringify(proc.instructions)} proc.skills=${JSON.stringify(proc.skills)}`);
 
