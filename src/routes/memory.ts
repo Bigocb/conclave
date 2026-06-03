@@ -103,5 +103,30 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     return reply.send(success({ deleted: true }));
   });
 
+  // POST /v1/memory/search — Search memories (Issue #77)
+  fastify.post('/search', async (request: any, reply) => {
+    const body = request.body as { query: string; limit?: number };
+    const { query, limit } = body;
+
+    if (!query || query.trim().length < 2) {
+      return reply.code(422).send(error('VALIDATION_ERROR', 'query must be at least 2 characters'));
+    }
+
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    const results = await memorySvc.search(principalId, query, limit || 20);
+    return reply.send(success({ memories: results, count: results.length }));
+  });
+
+  // POST /v1/memory/cleanup — Cleanup expired memories (Issue #78)
+  fastify.post('/cleanup', async (_request: any, reply) => {
+    // No auth required - this is a system maintenance endpoint
+    const deletedCount = await memorySvc.cleanupExpired();
+    return reply.send(success({ deleted: deletedCount }));
+  });
+
   done();
 };

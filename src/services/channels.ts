@@ -32,6 +32,10 @@ export class ChannelService {
       createdByOrg: data.createdByOrg ?? null,
       createdAt: new Date().toISOString(),
     });
+
+    // Auto-subscribe the Fleet Manager (prn_dev / default principal) to ensure visibility
+    await this.subscribe('prn_dev', id);
+
     return this.getByName(data.name);
   }
 

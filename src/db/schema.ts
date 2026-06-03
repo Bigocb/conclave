@@ -296,8 +296,10 @@ export const principalMemory = pgTable('clv_principal_memory', {
   key: text('key').notNull(),               // namespace:category:detail
   value: text('value').notNull(),           // The durable fact
   category: text('category').default('general'), // convention | preference | fact
+  expiresAt: text('expires_at'),              // TTL - null means never expires
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   prinKeyIdx: index('idx_mem_prin_key').on(table.principalId, table.key),
   prinIdx: index('idx_mem_prin').on(table.principalId),
+  expiresIdx: index('idx_mem_expires').on(table.expiresAt),
 }));
