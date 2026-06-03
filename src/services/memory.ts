@@ -52,7 +52,7 @@ export class MemoryService {
       return { ...existing, value: data.value, expiresAt: data.expiresAt ?? existing.expiresAt, updatedAt: new Date().toISOString() };
     }
 
-    const id = `mem_${crypto.randomUUID().replace(/-/g own, '').slice(0, 24)}`;
+    const id = `mem_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
     await this.db.insert(principalMemory).values({
       id,
       principalId: data.principalId,
