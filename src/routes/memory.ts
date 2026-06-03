@@ -103,5 +103,59 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     return reply.send(success({ deleted: true }));
   });
 
+  // GET /v1/memory/search — Search memories (text/pattern search using ILIKE)
+  // Note: This is pattern matching (ILIKE), NOT semantic search (vector embeddings).
+  // For true semantic search, integrate pgvector embeddings.
+  fastify.get('/search', async (request: any, reply) => {
+    const { q, category, limit, includeExpired } = request.query as { 
+      q?: string; 
+      category?: string; 
+      limit?: string;
+      includeExpired?: string;
+    };
+
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    // Validate category if provided
+    if (category && !VALID_CATEGORIES.includes(category as any)) {
+      return reply.code(400).send(error('VALIDATION_ERROR', `Invalid category. Must be one of: ${VALID_CATEGORIES.join(', ')}`));
+    }
+
+    const results = await memorySvc.search(principalId, q || '', {
+      category,
+      limit: limit ? parseInt(limit, 10) : 20,
+      includeExpired: includeExpired === 'true',
+    });
+
+    return reply.send(success({ memories: results, count: results.length }));
+  });
+
+  // POST /v1/memory/cleanup — Cleanup expired memories (admin or self)
+  fastify.post('/cleanup', async (request: any, reply) => {
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    // This cleanup is for all principals - removes expired memories system-wide
+    const deletedCount = await memorySvc.cleanupExpired();
+
+    return reply.send(success({ deletedCount }));
+  });
+
+  // GET /v1/memory/stats — Get memory statistics
+  fastify.get('/stats', async (request: any, reply) => {
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    const stats = await memorySvc.getStats(principalId);
+    return reply.send(success({ stats }));
+  });
+
   done();
 };
