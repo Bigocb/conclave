@@ -19,6 +19,9 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
   // Protect all memory routes with authentication
   fastify.addHook('preHandler', authenticate);
 
+  // IMPORTANT: Route order matters! More specific routes must come BEFORE parameterized routes.
+  // Otherwise /:key matches /search, /stats, etc. before they are ever reached.
+
   // GET /v1/memory — List all memories for authenticated principal
   fastify.get('/', async (request: any, reply) => {
     const principalId = request.principalId;
@@ -47,7 +50,58 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     return reply.send(success({ memories }));
   });
 
-  // GET /v1/memory/:key — Get single memory entry
+  // GET /v1/memory/search — Search memories (text/pattern search using ILIKE)
+  // Note: This is pattern matching (ILIKE), NOT semantic search (vector embeddings).
+  fastify.get('/search', async (request: any, reply) => {
+    const { q, category, limit, includeExpired } = request.query as { 
+      q?: string; 
+      category?: string; 
+      limit?: string;
+      includeExpired?: string;
+    };
+
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    // Validate category if provided
+    if (category && !VALID_CATEGORIES.includes(category as any)) {
+      return reply.code(400).send(error('VALIDATION_ERROR', `Invalid category. Must be one of: ${VALID_CATEGORIES.join(', ')}`));
+    }
+
+    const results = await memorySvc.search(principalId, q || '', {
+      category,
+      limit: limit ? parseInt(limit, 10) : 20,
+      includeExpired: includeExpired === 'true',
+    });
+
+    return reply.send(success({ memories: results, count: results.length }));
+  });
+
+  // GET /v1/memory/stats — Get memory statistics
+  fastify.get('/stats', async (request: any, reply) => {
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    const stats = await memorySvc.getStats(principalId);
+    return reply.send(success({ stats }));
+  });
+
+  // POST /v1/memory/cleanup — Cleanup expired memories
+  fastify.post('/cleanup', async (request: any, reply) => {
+    const principalId = request.principalId;
+    if (!principalId) {
+      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
+    }
+
+    const deletedCount = await memorySvc.cleanupExpired();
+    return reply.send(success({ deletedCount }));
+  });
+
+  // GET /v1/memory/:key — Get single memory entry (must be AFTER /search, /stats, /cleanup)
   fastify.get('/:key', async (request: any, reply) => {
     const { key } = request.params as { key: string };
     const principalId = request.principalId;
@@ -101,60 +155,6 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     }
 
     return reply.send(success({ deleted: true }));
-  });
-
-  // GET /v1/memory/search — Search memories (text/pattern search using ILIKE)
-  // Note: This is pattern matching (ILIKE), NOT semantic search (vector embeddings).
-  // For true semantic search, integrate pgvector embeddings.
-  fastify.get('/search', async (request: any, reply) => {
-    const { q, category, limit, includeExpired } = request.query as { 
-      q?: string; 
-      category?: string; 
-      limit?: string;
-      includeExpired?: string;
-    };
-
-    const principalId = request.principalId;
-    if (!principalId) {
-      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
-    }
-
-    // Validate category if provided
-    if (category && !VALID_CATEGORIES.includes(category as any)) {
-      return reply.code(400).send(error('VALIDATION_ERROR', `Invalid category. Must be one of: ${VALID_CATEGORIES.join(', ')}`));
-    }
-
-    const results = await memorySvc.search(principalId, q || '', {
-      category,
-      limit: limit ? parseInt(limit, 10) : 20,
-      includeExpired: includeExpired === 'true',
-    });
-
-    return reply.send(success({ memories: results, count: results.length }));
-  });
-
-  // POST /v1/memory/cleanup — Cleanup expired memories (admin or self)
-  fastify.post('/cleanup', async (request: any, reply) => {
-    const principalId = request.principalId;
-    if (!principalId) {
-      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
-    }
-
-    // This cleanup is for all principals - removes expired memories system-wide
-    const deletedCount = await memorySvc.cleanupExpired();
-
-    return reply.send(success({ deletedCount }));
-  });
-
-  // GET /v1/memory/stats — Get memory statistics
-  fastify.get('/stats', async (request: any, reply) => {
-    const principalId = request.principalId;
-    if (!principalId) {
-      return reply.code(401).send(error('UNAUTHORIZED', 'No principal ID in request'));
-    }
-
-    const stats = await memorySvc.getStats(principalId);
-    return reply.send(success({ stats }));
   });
 
   done();
