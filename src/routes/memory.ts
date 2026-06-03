@@ -103,7 +103,9 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     return reply.send(success({ deleted: true }));
   });
 
-  // GET /v1/memory/search — Search memories (semantic/pattern search)
+  // GET /v1/memory/search — Search memories (text/pattern search using ILIKE)
+  // Note: This is pattern matching (ILIKE), NOT semantic search (vector embeddings).
+  // For true semantic search, integrate pgvector embeddings.
   fastify.get('/search', async (request: any, reply) => {
     const { q, category, limit, includeExpired } = request.query as { 
       q?: string; 

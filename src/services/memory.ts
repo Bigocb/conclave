@@ -85,6 +85,8 @@ export class MemoryService {
   /**
    * Search memories using ILIKE pattern matching
    * Uses simple text search - matches against key, value, and category
+   * Note: ILIKE is NOT semantic search - it's substring/pattern matching.
+   * Special chars % and _ are escaped to prevent wildcard injection.
    */
   async search(principalId: string, query: string, options?: {
     category?: string;
@@ -93,12 +95,15 @@ export class MemoryService {
   }) {
     const { category, limit = 20, includeExpired = false } = options || {};
     
+    // Escape special LIKE characters: % and _ are wildcards
+    const escapedQuery = query ? query.replace(/[%_]/g, '\\$&') : '';
+    
     // Build conditions
     const conditions: any[] = [eq(principalMemory.principalId, principalId)];
     
-    // Add search pattern (ILIKE)
-    if (query) {
-      const pattern = `%${query}%`;
+    // Add search pattern (ILIKE) with escaped query
+    if (escapedQuery) {
+      const pattern = `%${escapedQuery}%`;
       conditions.push(
         or(
           ilike(principalMemory.key, pattern),
