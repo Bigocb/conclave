@@ -808,12 +808,14 @@ export class OpinionRouter {
       return;
     }
 
-    // 3. Find eligible critics — other principals subscribed to the opinion's channel
+    // 3. Find eligible critics — only principals subscribed to the channel who ALSO have at least one active agent
     const subscribers = await this.sql<ChannelSubRow[]>`
-      SELECT cs.principal_id
+      SELECT DISTINCT cs.principal_id
       FROM clv_channel_subscriptions cs
       JOIN clv_channels ch ON ch.id = cs.channel_id
+      JOIN clv_agents a ON a.principal_id = cs.principal_id
       WHERE ch.name = ${opinion.channel}
+      AND a.status = 'active'
       AND cs.principal_id != ${opinion.principal_id}
     `;
 
