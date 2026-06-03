@@ -165,7 +165,8 @@ export class MemoryService {
     
     const byCategory: Record<string, number> = {};
     for (const mem of all) {
-      byCategory[mem.category] = (byCategory[mem.category] || 0) + 1;
+      const cat = mem.category || 'general';
+      byCategory[cat] = (byCategory[cat] || 0) + 1;
     }
     
     return {
