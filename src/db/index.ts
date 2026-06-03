@@ -233,6 +233,19 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       updated_at TIMESTAMP DEFAULT NOW(),
       UNIQUE (org_id, provider)
     )`;
+    await client`CREATE TABLE IF NOT EXISTS clv_principal_memory (
+      id TEXT PRIMARY KEY,
+      principal_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      category TEXT DEFAULT 'general',
+      embedding JSONB,
+      ttl INTEGER,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_principal_id ON clv_principal_memory(principal_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_key ON clv_principal_memory(key)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_category ON clv_principal_memory(category)`;
     console.log('[initDb] Schema push complete');
   } catch (err: any) {
     if (err.code === '42P07' || err.message?.includes('already exists')) {
