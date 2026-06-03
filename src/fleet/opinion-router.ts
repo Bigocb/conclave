@@ -934,9 +934,9 @@ export class OpinionRouter {
       console.log(`  ✅ Opinion ${opinion.id}: ${succeeded}/${count} critiques received — ready for synthesis`);
       await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinion.id}`;
     } else if (succeeded > 0) {
-      // Some critics responded — still useful, move to synthesis
-      console.log(`  ⚠ Opinion ${opinion.id}: ${succeeded}/${count} critiques received (partial) — ready for synthesis`);
-      await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinion.id}`;
+      // Some critics responded — keep as open, waiting for remaining
+      console.log(`  ⏳ Opinion ${opinion.id}: ${succeeded}/${count} critiques received — waiting for remaining`);
+      // Keep status as 'open' — don't move to synthesizing until all are in
     } else {
       // All critics failed — put back
       console.log(`  ❌ Opinion ${opinion.id}: all critics failed`);
