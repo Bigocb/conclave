@@ -1,6 +1,6 @@
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
-import { principalMemory } from '../db/schema.js';
+import { eq, and, inArray } from 'drizzle-orm';
+import { principalMemory, principals } from '../db/schema.js';
 import * as crypto from 'crypto';
 
 export interface MemoryEntry {
@@ -19,6 +19,21 @@ export class MemoryService {
   async getByPrincipal(principalId: string) {
     return await this.db.select().from(principalMemory)
       .where(eq(principalMemory.principalId, principalId));
+  }
+
+  /**
+   * Fetch memories across ALL principals in an org.
+   * Used when a user JWT (usr_) wants to see memories from all their principals,
+   * including those written by MCP agents under sibling principals.
+   */
+  async getByOrg(orgId: string) {
+    const orgPrincipals = await this.db.select({ id: principals.id })
+      .from(principals)
+      .where(eq(principals.orgId, orgId));
+    if (orgPrincipals.length === 0) return [];
+    const principalIds = orgPrincipals.map(p => p.id);
+    return await this.db.select().from(principalMemory)
+      .where(inArray(principalMemory.principalId, principalIds));
   }
 
   async getByKey(principalId: string, key: string) {
