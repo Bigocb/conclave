@@ -69,6 +69,77 @@ describe('MemoryService', () => {
       expect(mockDb.insert).toHaveBeenCalled();
     });
 
+    it('should store new context fields (source_task_id, source_principal_id, confidence, ttl_days)', async () => {
+      const emptyResults = createQueryBuilder([]);
+      mockDb.select.mockReturnValue({
+        from: vi.fn(() => emptyResults),
+      });
+
+      memoryService = new MemoryService(mockDb);
+
+      const result = await memoryService.upsert({
+        principalId: 'prn_reviewer',
+        key: 'convention:async-await',
+        value: 'Use async/await consistently',
+        category: 'style',
+        sourceTaskId: 'tsk_abc123',
+        sourcePrincipalId: 'prn_reviewer',
+        confidence: 0.9,
+        ttlDays: 30,
+      });
+
+      expect(result.sourceTaskId).toBe('tsk_abc123');
+      expect(result.sourcePrincipalId).toBe('prn_reviewer');
+      expect(result.confidence).toBe(0.9);
+      expect(result.ttlDays).toBe(30);
+
+      // Verify insert was called with the new fields
+      expect(mockDb.insert).toHaveBeenCalled();
+    });
+
+    it('should preserve new context fields when updating an existing entry', async () => {
+      const existingEntry = {
+        id: 'mem_existing123',
+        principalId: 'prn_reviewer',
+        key: 'convention:async-await',
+        value: 'Use async/await consistently',
+        category: 'style',
+        sourceTaskId: 'tsk_abc123',
+        sourcePrincipalId: 'prn_reviewer',
+        confidence: 0.9,
+        ttlDays: 30,
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      };
+
+      const existingResults = createQueryBuilder([existingEntry]);
+      mockDb.select.mockReturnValue({
+        from: vi.fn(() => existingResults),
+      });
+      mockDb.update.mockReturnValue({
+        set: vi.fn(() => ({
+          where: vi.fn(() => Promise.resolve()),
+        })),
+      });
+
+      memoryService = new MemoryService(mockDb);
+
+      const result = await memoryService.upsert({
+        principalId: 'prn_reviewer',
+        key: 'convention:async-await',
+        value: 'Use async/await consistently everywhere',
+      });
+
+      // Value was updated
+      expect(result.value).toBe('Use async/await consistently everywhere');
+      // Context fields preserved from existing entry
+      expect(result.sourceTaskId).toBe('tsk_abc123');
+      expect(result.sourcePrincipalId).toBe('prn_reviewer');
+      expect(result.confidence).toBe(0.9);
+      expect(result.ttlDays).toBe(30);
+
+      expect(mockDb.update).toHaveBeenCalled();
+    });
+
     it('should update an existing memory entry when it already exists', async () => {
       const existingEntry = {
         id: 'mem_existing123',
@@ -143,6 +214,41 @@ describe('MemoryService', () => {
 
       expect(result).toEqual(entries);
       expect(mockDb.select).toHaveBeenCalled();
+    });
+
+    it('should return new context fields in getByPrincipal results', async () => {
+      const entries = [
+        {
+          id: 'mem_1',
+          principalId: 'prn_reviewer',
+          key: 'convention:async-await',
+          value: 'Use async/await consistently',
+          category: 'style',
+          sourceTaskId: 'tsk_abc123',
+          sourcePrincipalId: 'prn_reviewer',
+          confidence: 0.9,
+          ttlDays: 30,
+          updatedAt: '2024-01-01',
+        },
+      ];
+
+      const mockFrom = vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve(entries)),
+      }));
+
+      mockDb.select.mockReturnValue({
+        from: mockFrom,
+      });
+
+      memoryService = new MemoryService(mockDb);
+
+      const result = await memoryService.getByPrincipal('prn_reviewer');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].sourceTaskId).toBe('tsk_abc123');
+      expect(result[0].sourcePrincipalId).toBe('prn_reviewer');
+      expect(result[0].confidence).toBe(0.9);
+      expect(result[0].ttlDays).toBe(30);
     });
   });
 
