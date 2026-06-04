@@ -716,9 +716,34 @@ export class FleetManager extends EventEmitter {
       if (principalId) {
         try {
           const memoryEntries = await this.memoryService.getByPrincipal(principalId);
-          memories = memoryEntries.map(m => m.value);
+          
+          // Build structured convention block from high-confidence conventions
+          const conventions = memoryEntries
+            .filter(m => m.confidence !== null && m.confidence >= 0.6 && m.category !== 'fact')
+            .map(m => {
+              const sourceInfo = m.sourceTaskId
+                ? `\n  Evidence: "${m.value.slice(0, 200)}"\n  Source: task ${m.sourceTaskId}`
+                : `\n  Evidence: "${m.value.slice(0, 200)}"`;
+              return `- ${m.value} (confidence: ${m.confidence}, category: ${m.category})${sourceInfo}`;
+            });
+
+          if (conventions.length > 0) {
+            memories = [
+              '## Known Conventions (from past reviews)',
+              '',
+              'The following conventions were established in previous reviews. Follow them unless you have a strong reason to deviate.',
+              '',
+              ...conventions,
+              '',
+              '---',
+            ];
+          } else {
+            // Fallback: show raw memory values (backward compat with old-style memories)
+            memories = memoryEntries.map(m => m.value);
+          }
+
           if (memories.length > 0) {
-            console.log(`[DBG-reviewTask] Loaded ${memories.length} memories for principal ${principalId}`);
+            console.log(`[DBG-reviewTask] Loaded ${memoryEntries.length} memories (${conventions.length} conventions) for principal ${principalId}`);
           }
         } catch (memErr) {
           console.warn(`[DBG-reviewTask] Failed to load memories for principal ${principalId}:`, memErr);
