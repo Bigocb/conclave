@@ -172,7 +172,9 @@ export class TaskService {
 
     // Issue #76: Auto-write memory facts from review activity
     // Extracts patterns, conventions, and preferences from review feedback
-    await this.writeMemoryFromReview(data);
+    // Write to BOTH the submitter (who receives feedback) AND the reviewer (who gave it)
+    const submitterPrincipalId = task?.principal_id;
+    await this.writeMemoryFromReview(data, submitterPrincipalId);
 
     return this.getReviewById(data.id);
   }
@@ -250,8 +252,8 @@ export class TaskService {
     suggestions?: string[];
     approved?: boolean;
     scores: Record<string, number>;
-    principalId: string;
-  }): Promise<void> {
+    principalId: string;  // reviewer's principal
+  }, submitterPrincipalId?: string): Promise<void> {
     try {
       const facts: Array<{ key: string; value: string; category: string }> = [];
 
@@ -307,17 +309,25 @@ export class TaskService {
         });
       }
 
-      // Write facts to memory
+      // Write facts to memory for the reviewer (existing behavior)
+      const targets = [data.principalId];
+      // Also write to the submitter — they're the one who needs to learn from feedback
+      if (submitterPrincipalId && submitterPrincipalId !== data.principalId) {
+        targets.push(submitterPrincipalId);
+      }
+
       if (facts.length > 0) {
-        for (const fact of facts) {
-          await this.memorySvc.upsert({
-            principalId: data.principalId,
-            key: fact.key,
-            value: fact.value,
-            category: fact.category,
-          });
+        for (const targetPrincipalId of targets) {
+          for (const fact of facts) {
+            await this.memorySvc.upsert({
+              principalId: targetPrincipalId,
+              key: fact.key,
+              value: fact.value,
+              category: fact.category,
+            });
+          }
         }
-        console.log(`  📝 Wrote ${facts.length} memory facts for principal ${data.principalId}`);
+        console.log(`  📝 Wrote ${facts.length * targets.length} memory facts (${targets.length} principals) from review`);
       }
     } catch (err) {
       // Non-blocking — log but don't fail the review
