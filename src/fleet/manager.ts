@@ -263,106 +263,6 @@ export class FleetManager extends EventEmitter {
     this.memoryService = new MemoryService(db as any);
   }
 
-  // ─── Memory Auto-Write (Issue #76) ──────────────────────────
-
-  /**
-   * Extract memory-worthy facts from a completed review.
-   * This analyzes review feedback to identify patterns, conventions, and preferences.
-   */
-  private extractMemoryFacts(review: {
-    comment?: string;
-    suggestions?: string[];
-    approved: boolean;
-    scores?: Record<string, number>;
-  }): Array<{ key: string; value: string; category: string }> {
-    const facts: Array<{ key: string; value: string; category: string }> = [];
-
-    // Track approval rate as a fact
-    facts.push({
-      key: 'review:last:approved',
-      value: review.approved ? 'true' : 'false',
-      category: 'fact',
-    });
-
-    // Extract high/low scores as patterns
-    if (review.scores) {
-      for (const [dimension, score] of Object.entries(review.scores)) {
-        if (score >= 8) {
-          facts.push({
-            key: `review:score:${dimension}:high`,
-            value: String(score),
-            category: 'convention',
-          });
-        } else if (score <= 4) {
-          facts.push({
-            key: `review:score:${dimension}:low`,
-            value: String(score),
-            category: 'convention',
-          });
-        }
-      }
-    }
-
-    // Extract patterns from comment (simple keyword extraction)
-    if (review.comment) {
-      const lowerComment = review.comment.toLowerCase();
-      
-      // Common convention/pattern keywords to look for
-      const conventionKeywords = [
-        'naming', 'convention', 'pattern', 'style', 'format',
-        'documentation', 'comment', 'type', 'interface', 'schema',
-        'error handling', 'validation', 'testing', 'test',
-      ];
-      
-      for (const keyword of conventionKeywords) {
-        if (lowerComment.includes(keyword)) {
-          facts.push({
-            key: `review:topic:${keyword.replace(/\s+/g, '-')}`,
-            value: review.comment.slice(0, 200),
-            category: 'convention',
-          });
-        }
-      }
-    }
-
-    // Track suggestions count
-    if (review.suggestions && review.suggestions.length > 0) {
-      facts.push({
-        key: 'review:suggestions:count',
-        value: String(review.suggestions.length),
-        category: 'fact',
-      });
-    }
-
-    return facts;
-  }
-
-  /**
-   * Write extracted memory facts to the principal's memory.
-   * Non-blocking - failures are logged but don't throw.
-   */
-  private async writeMemoryFacts(
-    principalId: string,
-    facts: Array<{ key: string; value: string; category: string }>
-  ): Promise<void> {
-    if (facts.length === 0) return;
-
-    try {
-      for (const fact of facts) {
-        await this.memoryService.upsert({
-          principalId,
-          key: fact.key,
-          value: fact.value,
-          category: fact.category,
-        });
-      }
-      console.log(`  📝 Wrote ${facts.length} memory facts for principal ${principalId}`);
-    } catch (err) {
-      // Non-blocking - log but don't fail the review
-      console.warn(`  ⚠️ Failed to write memory facts: ${err}`);
-    }
-  }
-
   // ─── Pulse Relay ───────────────────────────────────────────
 
   private async broadcastPulse(type: string, payload: any): Promise<void> {
@@ -962,11 +862,6 @@ export class FleetManager extends EventEmitter {
         this.incrementCompleted(principalId);
         console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed task ${taskId} (overall: ${draft.weighted_overall})`);
         this.broadcastPulse('FLEET_REVIEW_SUBMITTED', { taskId, reviewerName: proc.reviewerName, mode: 'auto' });
-        
-        // Issue #76: Auto-write memory facts after review completion
-        const facts = this.extractMemoryFacts(reviewPayload);
-        await this.writeMemoryFacts(principalId, facts);
-        
         this.emit('review_completed', { principalId, taskId, mode: 'auto' });
 
       } else if (proc.mode === 'human') {
@@ -990,11 +885,6 @@ export class FleetManager extends EventEmitter {
           await client.submitReview(task.id, reviewPayload);
           this.incrementCompleted(principalId);
           console.log(`  ✅ ${proc.reviewerName}: Auto-reviewed (confidence ${draft.reviewer_confidence} ≥ ${proc.confidenceThreshold}) task ${task.id}`);
-          
-          // Issue #76: Auto-write memory facts after review completion
-          const facts = this.extractMemoryFacts(reviewPayload);
-          await this.writeMemoryFacts(principalId, facts);
-          
           this.emit('review_completed', { principalId, taskId: task.id, mode: 'hybrid_auto' });
         } else {
           const pending: PendingReview = {
@@ -1042,10 +932,6 @@ export class FleetManager extends EventEmitter {
 
     this.pendingApprovals.splice(idx, 1);
     this.incrementCompleted(pending.principalId);
-
-    // Issue #76: Auto-write memory facts after human approval
-    const facts = this.extractMemoryFacts(final);
-    await this.writeMemoryFacts(pending.principalId, facts);
 
     console.log(`  ✅ Approved: ${pending.reviewerName} review of task ${pending.taskId}`);
     this.emit('review_approved', { pendingId, taskId: pending.taskId });
