@@ -7,9 +7,13 @@ import { eq, and, desc, inArray, ne } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 import { BUDGET } from '../services/budget.js';
+import { MemoryService } from '../services/memory.js';
 
 export class TaskService {
-  constructor(private db: ConclaveDb, private budgetService?: any) {}
+  private memorySvc: MemoryService;
+  constructor(private db: ConclaveDb, private budgetService?: any) {
+    this.memorySvc = new MemoryService(db as any);
+  }
 
   async create(data: {
     id: string;
@@ -166,6 +170,10 @@ export class TaskService {
       }
     }
 
+    // Issue #76: Auto-write memory facts from review activity
+    // Extracts patterns, conventions, and preferences from review feedback
+    await this.writeMemoryFromReview(data);
+
     return this.getReviewById(data.id);
   }
 
@@ -231,6 +239,90 @@ export class TaskService {
     await this.db.update(schema.reviews)
       .set({ helpful: helpful ? 1 : 0 })
       .where(eq(schema.reviews.id, reviewId));
+  }
+
+  /**
+   * Issue #76: Extract and write memory facts from a submitted review.
+   * Non-blocking — failures are logged but don't fail the review submission.
+   */
+  private async writeMemoryFromReview(data: {
+    comment: string;
+    suggestions?: string[];
+    approved?: boolean;
+    scores: Record<string, number>;
+    principalId: string;
+  }): Promise<void> {
+    try {
+      const facts: Array<{ key: string; value: string; category: string }> = [];
+
+      // Track approval rate as a fact
+      facts.push({
+        key: 'review:last:approved',
+        value: data.approved ? 'true' : 'false',
+        category: 'fact',
+      });
+
+      // Extract high/low scores as patterns
+      for (const [dimension, score] of Object.entries(data.scores)) {
+        if (score >= 8) {
+          facts.push({
+            key: `review:score:${dimension}:high`,
+            value: String(score),
+            category: 'convention',
+          });
+        } else if (score <= 4) {
+          facts.push({
+            key: `review:score:${dimension}:low`,
+            value: String(score),
+            category: 'convention',
+          });
+        }
+      }
+
+      // Extract patterns from comment (keyword extraction)
+      if (data.comment) {
+        const lowerComment = data.comment.toLowerCase();
+        const conventionKeywords = [
+          'naming', 'convention', 'pattern', 'style', 'format',
+          'documentation', 'comment', 'type', 'interface', 'schema',
+          'error handling', 'validation', 'testing', 'test',
+        ];
+        for (const keyword of conventionKeywords) {
+          if (lowerComment.includes(keyword)) {
+            facts.push({
+              key: `review:topic:${keyword.replace(/\s+/g, '-')}`,
+              value: data.comment.slice(0, 200),
+              category: 'convention',
+            });
+          }
+        }
+      }
+
+      // Track suggestions count
+      if (data.suggestions && data.suggestions.length > 0) {
+        facts.push({
+          key: 'review:suggestions:count',
+          value: String(data.suggestions.length),
+          category: 'fact',
+        });
+      }
+
+      // Write facts to memory
+      if (facts.length > 0) {
+        for (const fact of facts) {
+          await this.memorySvc.upsert({
+            principalId: data.principalId,
+            key: fact.key,
+            value: fact.value,
+            category: fact.category,
+          });
+        }
+        console.log(`  📝 Wrote ${facts.length} memory facts for principal ${data.principalId}`);
+      }
+    } catch (err) {
+      // Non-blocking — log but don't fail the review
+      console.warn(`  ⚠️ Failed to write memory facts from review: ${err}`);
+    }
   }
 
   private formatTask(row: typeof schema.tasks.$inferSelect) {
