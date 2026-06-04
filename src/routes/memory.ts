@@ -3,7 +3,7 @@
  * Exposes MemoryService via REST API for CRUD operations on principal memory.
  */
 
-import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { MemoryService } from '../services/memory.js';
 import { success, error } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
@@ -12,7 +12,7 @@ import { principalMemory } from '../db/schema.js';
 
 const VALID_CATEGORIES = ['convention', 'preference', 'fact', 'general'] as const;
 
-export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opts, done) => {
+export async function memoryRoutes(fastify: FastifyInstance) {
   const db = (fastify as any).db;
   const memorySvc = new MemoryService(db);
 
@@ -92,6 +92,4 @@ export const memoryRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _o
     const deletedCount = await memorySvc.cleanupExpired();
     return reply.send(success({ deleted: deletedCount }));
   });
-
-  done();
-};
+}
