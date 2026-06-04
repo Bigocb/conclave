@@ -22,9 +22,31 @@ export async function memoryRoutes(fastify: FastifyInstance) {
   // GET /v1/memory — List all memories
   // User JWT (usr_): shows memories across ALL principals in the org
   // Agent token (clv_): shows memories for that agent's principal only
+  // ?grouped=true: returns memories grouped by category (for UI)
   fastify.get('/memory', async (request: any, reply) => {
     const isUser = request.user?.id?.startsWith('usr_');
+    const { category, grouped } = request.query as { category?: string; grouped?: string };
 
+    // Handle grouped view
+    if (grouped === 'true') {
+      let groupedMemories;
+      if (isUser && request.orgId) {
+        groupedMemories = await memorySvc.getGroupedByOrg(request.orgId);
+      } else if (request.principalId) {
+        groupedMemories = await memorySvc.getGroupedByPrincipal(request.principalId);
+      } else {
+        return reply.code(401).send(error('UNAUTHORIZED', 'No principal or org context'));
+      }
+
+      // Filter by category if specified
+      if (category && groupedMemories[category]) {
+        groupedMemories = { [category]: groupedMemories[category] };
+      }
+
+      return reply.send(success({ grouped: groupedMemories }));
+    }
+
+    // Flat list (default behavior)
     let memories;
     if (isUser && request.orgId) {
       memories = await memorySvc.getByOrg(request.orgId);
@@ -33,8 +55,6 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     } else {
       return reply.code(401).send(error('UNAUTHORIZED', 'No principal or org context'));
     }
-
-    const { category } = request.query as { category?: string };
 
     // Validate category if provided
     if (category && !VALID_CATEGORIES.includes(category as any)) {

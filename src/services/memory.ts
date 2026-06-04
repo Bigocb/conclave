@@ -169,4 +169,36 @@ export class MemoryService {
     });
     return { total, categories };
   }
+
+  /**
+   * Group memories by category, returning a record keyed by category name.
+   * Each entry includes convention text, confidence, source task, and updated_at.
+   */
+  async getGroupedByPrincipal(principalId: string): Promise<Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>>> {
+    const memories = await this.getByPrincipal(principalId);
+    return this.groupMemories(memories);
+  }
+
+  /**
+   * Group memories across all principals in an org by category.
+   */
+  async getGroupedByOrg(orgId: string): Promise<Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>>> {
+    const memories = await this.getByOrg(orgId);
+    return this.groupMemories(memories);
+  }
+
+  private groupMemories(memories: any[]): Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>> {
+    const grouped: Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>> = {};
+    for (const m of memories) {
+      const cat = m.category || 'general';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({
+        convention: m.value,
+        confidence: m.confidence,
+        source_task: m.sourceTaskId ?? null,
+        updated_at: m.updatedAt,
+      });
+    }
+    return grouped;
+  }
 }
