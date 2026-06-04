@@ -9,6 +9,10 @@ export interface MemoryEntry {
   key: string;
   value: string;
   category: string | null;
+  sourceTaskId: string | null;
+  sourcePrincipalId: string | null;
+  confidence: number | null;
+  ttlDays: number | null;
   expiresAt: string | null;
   updatedAt: string;
 }
@@ -50,6 +54,10 @@ export class MemoryService {
     key: string;
     value: string;
     category?: string;
+    sourceTaskId?: string;
+    sourcePrincipalId?: string;
+    confidence?: number;
+    ttlDays?: number;
     expiresAt?: string | null;
   }) {
     const existing = await this.getByKey(data.principalId, data.key);
@@ -59,12 +67,26 @@ export class MemoryService {
         .set({
           value: data.value,
           category: data.category ?? existing.category,
+          sourceTaskId: data.sourceTaskId !== undefined ? data.sourceTaskId : existing.sourceTaskId,
+          sourcePrincipalId: data.sourcePrincipalId !== undefined ? data.sourcePrincipalId : existing.sourcePrincipalId,
+          confidence: data.confidence !== undefined ? data.confidence : existing.confidence,
+          ttlDays: data.ttlDays !== undefined ? data.ttlDays : existing.ttlDays,
           expiresAt: data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(principalMemory.id, existing.id));
       
-      return { ...existing, value: data.value, expiresAt: data.expiresAt ?? existing.expiresAt, updatedAt: new Date().toISOString() };
+      return {
+        ...existing,
+        value: data.value,
+        category: data.category ?? existing.category,
+        sourceTaskId: data.sourceTaskId !== undefined ? data.sourceTaskId : existing.sourceTaskId,
+        sourcePrincipalId: data.sourcePrincipalId !== undefined ? data.sourcePrincipalId : existing.sourcePrincipalId,
+        confidence: data.confidence !== undefined ? data.confidence : existing.confidence,
+        ttlDays: data.ttlDays !== undefined ? data.ttlDays : existing.ttlDays,
+        expiresAt: data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt,
+        updatedAt: new Date().toISOString(),
+      };
     }
 
     const id = `mem_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
@@ -74,6 +96,10 @@ export class MemoryService {
       key: data.key,
       value: data.value,
       category: data.category ?? 'general',
+      sourceTaskId: data.sourceTaskId ?? null,
+      sourcePrincipalId: data.sourcePrincipalId ?? null,
+      confidence: data.confidence ?? null,
+      ttlDays: data.ttlDays ?? null,
       expiresAt: data.expiresAt ?? null,
     });
 
@@ -83,6 +109,10 @@ export class MemoryService {
       key: data.key,
       value: data.value,
       category: data.category ?? 'general',
+      sourceTaskId: data.sourceTaskId ?? null,
+      sourcePrincipalId: data.sourcePrincipalId ?? null,
+      confidence: data.confidence ?? null,
+      ttlDays: data.ttlDays ?? null,
       expiresAt: data.expiresAt ?? null,
       updatedAt: new Date().toISOString(),
     };

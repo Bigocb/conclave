@@ -270,6 +270,31 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
   } catch (migErr: any) {
     console.error('[initDb] expires_at migration failed:', migErr.message);
   }
+  // Memory context fields migration (Slice 1: #109)
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS source_task_id TEXT`;
+    console.log('[initDb] source_task_id column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] source_task_id migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS source_principal_id TEXT`;
+    console.log('[initDb] source_principal_id column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] source_principal_id migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS confidence REAL DEFAULT 0.5`;
+    console.log('[initDb] confidence column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] confidence migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS ttl_days INTEGER DEFAULT 30`;
+    console.log('[initDb] ttl_days column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] ttl_days migration failed:', migErr.message);
+  }
   try {
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'`;
