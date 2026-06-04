@@ -338,7 +338,7 @@ export class TaskService {
             key: `convention:${this.memoryExtractor.getConventionKey(conv.convention)}`,
             value: conv.convention,
             category: conv.category,
-            sourceTaskId: data.taskId ?? null,
+            sourceTaskId: data.taskId ?? undefined,
             sourcePrincipalId: data.principalId,
             confidence: conv.confidence,
             ttlDays: 30,
