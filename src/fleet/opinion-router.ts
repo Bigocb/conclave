@@ -705,17 +705,24 @@ export class OpinionRouter {
     if (this.activeReviews >= this.config.maxConcurrent) return;
 
     // Claim an open opinion via SKIP LOCKED
-    // FIX: Only pick opinions that have at least one subscriber on their channel
-    // to avoid head-of-line blocking by orphans.
+    // FIX: Only pick opinions that are truly routable: 
+    // 1. Must have at least one subscriber on the channel
+    // 2. That subscriber must have at least one active agent
     const result = await this.sql`
       UPDATE clv_opinions
       SET status = 'in_review'
       WHERE id = (
         SELECT o.id FROM clv_opinions o
-        JOIN clv_channel_subscriptions cs ON cs.channel_id = (
-          SELECT id FROM clv_channels WHERE name = o.channel
-        )
         WHERE o.status = 'open'
+        AND EXISTS (
+          SELECT 1 
+          FROM clv_channel_subscriptions cs
+          JOIN clv_channels ch ON ch.id = cs.channel_id
+          JOIN clv_agents a ON a.principal_id = cs.principal_id
+          WHERE ch.name = o.channel 
+          AND a.status = 'active'
+          AND cs.principal_id != o.principal_id
+        )
         ORDER BY o.created_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
@@ -821,7 +828,6 @@ export class OpinionRouter {
 
     if (subscribers.length === 0) {
       console.log(`  ⏭ No other subscribers on channel '${opinion.channel}' — nothing to route`);
-      await this.sql`UPDATE clv_opinions SET status = 'open' WHERE id = ${opinion.id}`;
       return;
     }
 
