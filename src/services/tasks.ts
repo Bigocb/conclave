@@ -8,11 +8,59 @@ import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
 import { BUDGET } from '../services/budget.js';
 import { MemoryService } from '../services/memory.js';
+import { MemoryExtractor, type LlmCallFn } from '../services/memory-extractor.js';
 
 export class TaskService {
   private memorySvc: MemoryService;
+  private memoryExtractor: MemoryExtractor;
   constructor(private db: ConclaveDb, private budgetService?: any) {
     this.memorySvc = new MemoryService(db as any);
+    this.memoryExtractor = new MemoryExtractor();
+    this.configureExtractor();
+  }
+
+  /**
+   * Configure the MemoryExtractor with an LLM call function based on environment.
+   * Uses the first available LLM credential from env vars.
+   */
+  private configureExtractor(): void {
+    const llmUrl = process.env.OLLAMA_URL || process.env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions';
+    const llmKey = process.env.OLLAMA_KEY || process.env.OPENAI_API_KEY || '';
+
+    if (!llmKey) {
+      console.log('[MemoryExtractor] No LLM key configured — using keyword-grep fallback only');
+      return;
+    }
+
+    this.memoryExtractor.setLlmCall(this.buildLlmCall(llmUrl, llmKey));
+  }
+
+  private buildLlmCall(llmUrl: string, llmKey: string): LlmCallFn {
+    return async (prompt: string) => {
+      const res = await fetch(llmUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${llmKey}`,
+        },
+        body: JSON.stringify({
+          model: process.env.EXTRACTOR_MODEL || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You extract actionable conventions from code review feedback. Return only valid JSON.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 500,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`LLM call failed: ${res.status} ${res.statusText}`);
+      }
+
+      const data = await res.json() as any;
+      return data.choices?.[0]?.message?.content || '';
+    };
   }
 
   async create(data: {
@@ -170,11 +218,18 @@ export class TaskService {
       }
     }
 
-    // Issue #76: Auto-write memory facts from review activity
-    // Extracts patterns, conventions, and preferences from review feedback
+    // Issue #76/#108: Extract actionable conventions from review feedback
     // Write to BOTH the submitter (who receives feedback) AND the reviewer (who gave it)
     const submitterPrincipalId = task?.principal_id;
-    await this.writeMemoryFromReview(data, submitterPrincipalId);
+    await this.writeMemoryFromReview({
+      comment: data.comment,
+      suggestions: data.suggestions,
+      approved: data.approved,
+      scores: data.scores,
+      principalId: data.principalId,
+      taskId: data.taskId,
+      taskDescription: task?.description,
+    }, submitterPrincipalId);
 
     return this.getReviewById(data.id);
   }
@@ -244,7 +299,8 @@ export class TaskService {
   }
 
   /**
-   * Issue #76: Extract and write memory facts from a submitted review.
+   * Issue #76/108: Extract and write actionable conventions from a submitted review.
+   * Uses MemoryExtractor (LLM + keyword-grep fallback) to distill conventions.
    * Non-blocking — failures are logged but don't fail the review submission.
    */
   private async writeMemoryFromReview(data: {
@@ -253,82 +309,43 @@ export class TaskService {
     approved?: boolean;
     scores: Record<string, number>;
     principalId: string;  // reviewer's principal
+    taskId?: string;
+    taskDescription?: string;
   }, submitterPrincipalId?: string): Promise<void> {
     try {
-      const facts: Array<{ key: string; value: string; category: string }> = [];
-
-      // Track approval rate as a fact
-      facts.push({
-        key: 'review:last:approved',
-        value: data.approved ? 'true' : 'false',
-        category: 'fact',
+      // Use the MemoryExtractor to get actionable conventions
+      const conventions = await this.memoryExtractor.extract({
+        taskDescription: data.taskDescription || '',
+        comment: data.comment,
+        scores: data.scores,
+        suggestions: data.suggestions,
       });
 
-      // Extract high/low scores as patterns
-      for (const [dimension, score] of Object.entries(data.scores)) {
-        if (score >= 8) {
-          facts.push({
-            key: `review:score:${dimension}:high`,
-            value: String(score),
-            category: 'convention',
-          });
-        } else if (score <= 4) {
-          facts.push({
-            key: `review:score:${dimension}:low`,
-            value: String(score),
-            category: 'convention',
-          });
-        }
+      if (conventions.length === 0) {
+        console.log(`  ℹ️ No conventions extracted from review by ${data.principalId}`);
+        return;
       }
 
-      // Extract patterns from comment (keyword extraction)
-      if (data.comment) {
-        const lowerComment = data.comment.toLowerCase();
-        const conventionKeywords = [
-          'naming', 'convention', 'pattern', 'style', 'format',
-          'documentation', 'comment', 'type', 'interface', 'schema',
-          'error handling', 'validation', 'testing', 'test',
-        ];
-        for (const keyword of conventionKeywords) {
-          if (lowerComment.includes(keyword)) {
-            facts.push({
-              key: `review:topic:${keyword.replace(/\s+/g, '-')}`,
-              value: data.comment.slice(0, 200),
-              category: 'convention',
-            });
-          }
-        }
-      }
-
-      // Track suggestions count
-      if (data.suggestions && data.suggestions.length > 0) {
-        facts.push({
-          key: 'review:suggestions:count',
-          value: String(data.suggestions.length),
-          category: 'fact',
-        });
-      }
-
-      // Write facts to memory for the reviewer (existing behavior)
       const targets = [data.principalId];
-      // Also write to the submitter — they're the one who needs to learn from feedback
       if (submitterPrincipalId && submitterPrincipalId !== data.principalId) {
         targets.push(submitterPrincipalId);
       }
 
-      if (facts.length > 0) {
-        for (const targetPrincipalId of targets) {
-          for (const fact of facts) {
-            await this.memorySvc.upsert({
-              principalId: targetPrincipalId,
-              key: fact.key,
-              value: fact.value,
-              category: fact.category,
-            });
-          }
+      for (const targetPrincipalId of targets) {
+        for (const conv of conventions) {
+          await this.memorySvc.upsert({
+            principalId: targetPrincipalId,
+            key: `convention:${this.memoryExtractor.getConventionKey(conv.convention)}`,
+            value: conv.convention,
+            category: conv.category,
+            sourceTaskId: data.taskId ?? null,
+            sourcePrincipalId: data.principalId,
+            confidence: conv.confidence,
+            ttlDays: 30,
+          });
         }
-        console.log(`  📝 Wrote ${facts.length * targets.length} memory facts (${targets.length} principals) from review`);
       }
+      console.log(`  📝 Wrote ${conventions.length * targets.length} convention memories (${targets.length} principals) from review`);
     } catch (err) {
       // Non-blocking — log but don't fail the review
       console.warn(`  ⚠️ Failed to write memory facts from review: ${err}`);
