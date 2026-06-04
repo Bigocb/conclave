@@ -313,4 +313,51 @@ describe('MemoryService', () => {
       expect(mockDb.delete).not.toHaveBeenCalled();
     });
   });
+
+  describe('getGrouped', () => {
+    it('should group memories by category, including convention, confidence, source_task, updated_at', async () => {
+      const entries = [
+        { id: 'mem_1', principalId: 'prn_1', key: 'convention:a', value: 'Use async/await', category: 'style', sourceTaskId: 'tsk_abc', sourcePrincipalId: 'prn_1', confidence: 0.9, ttlDays: 30, expiresAt: null, updatedAt: '2024-01-01' },
+        { id: 'mem_2', principalId: 'prn_1', key: 'convention:b', value: 'Add JSDoc comments', category: 'docs', sourceTaskId: 'tsk_def', sourcePrincipalId: 'prn_1', confidence: 0.8, ttlDays: 30, expiresAt: null, updatedAt: '2024-01-02' },
+        { id: 'mem_3', principalId: 'prn_1', key: 'convention:c', value: 'Use custom error classes', category: 'error-handling', sourceTaskId: 'tsk_ghi', sourcePrincipalId: 'prn_1', confidence: 0.7, ttlDays: 30, expiresAt: null, updatedAt: '2024-01-03' },
+        { id: 'mem_4', principalId: 'prn_1', key: 'convention:d', value: 'Write unit tests', category: 'testing', sourceTaskId: null, sourcePrincipalId: 'prn_1', confidence: 0.6, ttlDays: 30, expiresAt: null, updatedAt: '2024-01-04' },
+      ];
+
+      // Mock getByPrincipal called internally by getGrouped(principalId)
+      const mockFrom = vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve(entries)),
+      }));
+      mockDb.select.mockReturnValue({ from: mockFrom });
+
+      memoryService = new MemoryService(mockDb);
+      const grouped = await memoryService.getGroupedByPrincipal('prn_1');
+
+      expect(grouped).toHaveProperty('style');
+      expect(grouped).toHaveProperty('docs');
+      expect(grouped).toHaveProperty('error-handling');
+      expect(grouped).toHaveProperty('testing');
+
+      expect(grouped.style).toHaveLength(1);
+      expect(grouped.style[0]).toEqual({
+        convention: 'Use async/await',
+        confidence: 0.9,
+        source_task: 'tsk_abc',
+        updated_at: '2024-01-01',
+      });
+
+      expect(grouped.testing[0].source_task).toBeNull();
+    });
+
+    it('should return empty object when no memories exist', async () => {
+      const mockFrom = vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve([])),
+      }));
+      mockDb.select.mockReturnValue({ from: mockFrom });
+
+      memoryService = new MemoryService(mockDb);
+      const grouped = await memoryService.getGroupedByPrincipal('prn_empty');
+
+      expect(grouped).toEqual({});
+    });
+  });
 });
