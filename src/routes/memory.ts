@@ -6,7 +6,7 @@
 import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import { MemoryService } from '../services/memory.js';
 import { success, error } from '../utils/response.js';
-import { authenticate } from '../middleware/auth';
+import { authenticate } from '../middleware/auth.js';
 import { eq } from 'drizzle-orm';
 import { principalMemory } from '../db/schema.js';
 
