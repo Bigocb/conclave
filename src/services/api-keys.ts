@@ -29,4 +29,35 @@ export class ApiKeyService {
 
     return { id, plaintextKey: rawKey };
   }
+
+  async lookupKey(key: string): Promise<{
+    id: string;
+    orgId: string;
+    name: string;
+    keyHash: string;
+    permission: string;
+    revokedAt: string | null;
+  } | null> {
+    const keyHash = createHash('sha256').update(key).digest('hex');
+
+    const rows = await this.db.select()
+      .from(schema.apiKeys)
+      .where(eq(schema.apiKeys.keyHash, keyHash))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+    const row = rows[0];
+
+    // Reject revoked keys
+    if (row.revokedAt) return null;
+
+    return {
+      id: row.id,
+      orgId: row.orgId,
+      name: row.name,
+      keyHash: row.keyHash,
+      permission: row.permission,
+      revokedAt: row.revokedAt,
+    };
+  }
 }

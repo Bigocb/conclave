@@ -65,4 +65,41 @@ describe('ApiKeyService', () => {
       await client.unsafe(`DELETE FROM clv_api_keys WHERE id IN ($1, $2)`, [r1.id, r2.id]);
     });
   });
+
+  describe('lookupKey', () => {
+    it('returns key record for a valid key', async () => {
+      const { id, plaintextKey } = await service.generateKey(testOrgId, 'Lookup Test', 'admin');
+
+      const found = await service.lookupKey(plaintextKey);
+
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(id);
+      expect(found!.orgId).toBe(testOrgId);
+      expect(found!.name).toBe('Lookup Test');
+      expect(found!.permission).toBe('admin');
+      expect(found!.keyHash).toBeDefined();
+      expect(found!.revokedAt).toBeNull();
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
+    });
+
+    it('returns null for an unknown key', async () => {
+      const result = await service.lookupKey('clv_api_unknownkey123');
+      expect(result).toBeNull();
+    });
+
+    it('returns null for a revoked key', async () => {
+      const { id, plaintextKey } = await service.generateKey(testOrgId, 'Revoke Test', 'read');
+
+      // Revoke it directly
+      await client.unsafe(`UPDATE clv_api_keys SET revoked_at = $1 WHERE id = $2`, [new Date().toISOString(), id]);
+
+      const found = await service.lookupKey(plaintextKey);
+      expect(found).toBeNull();
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
+    });
+  });
 });
