@@ -60,4 +60,45 @@ export class ApiKeyService {
       revokedAt: row.revokedAt,
     };
   }
+
+  async listKeys(orgId: string): Promise<Array<{
+    id: string;
+    orgId: string;
+    name: string;
+    keyPrefix: string;
+    permission: string;
+    createdAt: string;
+    revokedAt: string | null;
+  }>> {
+    const rows = await this.db.select()
+      .from(schema.apiKeys)
+      .where(eq(schema.apiKeys.orgId, orgId));
+
+    return rows.filter(r => !r.revokedAt).map(r => ({
+      id: r.id,
+      orgId: r.orgId,
+      name: r.name,
+      keyPrefix: r.keyPrefix,
+      permission: r.permission,
+      createdAt: r.createdAt,
+      revokedAt: r.revokedAt,
+    }));
+  }
+
+  async revokeKey(id: string, orgId: string): Promise<void> {
+    // Fetch to verify ownership
+    const rows = await this.db.select()
+      .from(schema.apiKeys)
+      .where(eq(schema.apiKeys.id, id))
+      .limit(1);
+
+    if (rows.length === 0) return; // already gone
+    if (rows[0].orgId !== orgId) {
+      throw new Error('KEY_ORG_MISMATCH');
+    }
+
+    await this.db.update(schema.apiKeys)
+      .set({ revokedAt: new Date().toISOString() })
+      .where(eq(schema.apiKeys.id, id));
+  }
 }

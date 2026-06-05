@@ -102,4 +102,101 @@ describe('ApiKeyService', () => {
       await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
     });
   });
+
+  describe('listKeys', () => {
+    it('returns all keys for an org', async () => {
+      // Create two keys
+      const k1 = await service.generateKey(testOrgId, 'List Key 1', 'read');
+      const k2 = await service.generateKey(testOrgId, 'List Key 2', 'write');
+
+      const keys = await service.listKeys(testOrgId);
+
+      expect(keys.length).toBeGreaterThanOrEqual(2);
+      const found1 = keys.find(k => k.id === k1.id);
+      const found2 = keys.find(k => k.id === k2.id);
+      expect(found1).toBeDefined();
+      expect(found1!.name).toBe('List Key 1');
+      expect(found1!.keyPrefix).toBe(k1.plaintextKey.slice(0, 8));
+      expect(found1!.permission).toBe('read');
+      expect(found2).toBeDefined();
+      expect(found2!.name).toBe('List Key 2');
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id IN ($1, $2)`, [k1.id, k2.id]);
+    });
+
+    it('returns keys scoped to the correct org', async () => {
+      // Create a user + second org in DB for cross-org scoping test
+      const otherUserId = `usr_test_${Date.now()}`;
+      const otherOrgId = `org_test_${Date.now()}`;
+      await client.unsafe(
+        `INSERT INTO clv_users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [otherUserId, `${otherUserId}@test.com`, 'hash', new Date().toISOString()]
+      );
+      await client.unsafe(
+        `INSERT INTO clv_organizations (id, name, slug, owner_id, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [otherOrgId, 'Other Test Org', `other-${Date.now()}`, otherUserId, new Date().toISOString()]
+      );
+
+      const k1 = await service.generateKey(testOrgId, 'My Key', 'read');
+      const k2 = await service.generateKey(otherOrgId, 'Other Key', 'read');
+
+      const myKeys = await service.listKeys(testOrgId);
+      const myIds = myKeys.map(k => k.id);
+      expect(myIds).toContain(k1.id);
+      expect(myIds).not.toContain(k2.id);
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id IN ($1, $2)`, [k1.id, k2.id]);
+      await client.unsafe(`DELETE FROM clv_organizations WHERE id = $1`, [otherOrgId]);
+      await client.unsafe(`DELETE FROM clv_users WHERE id = $1`, [otherUserId]);
+    });
+
+    it('returns only non-revoked keys', async () => {
+      const k1 = await service.generateKey(testOrgId, 'Active Key', 'read');
+      await service.revokeKey(k1.id, testOrgId);
+
+      const keys = await service.listKeys(testOrgId);
+      const activeIds = keys.map(k => k.id);
+      expect(activeIds).not.toContain(k1.id);
+    });
+  });
+
+  describe('revokeKey', () => {
+    it('sets revoked_at on the key', async () => {
+      const { id, plaintextKey } = await service.generateKey(testOrgId, 'To Revoke', 'read');
+
+      await service.revokeKey(id, testOrgId);
+
+      // Verify revoked
+      const found = await service.lookupKey(plaintextKey);
+      expect(found).toBeNull();
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
+    });
+
+    it('throws when revoking a key from a different org context', async () => {
+      const { id } = await service.generateKey(testOrgId, 'Org Mismatch', 'read');
+
+      // construct like the route would — passing a different orgId
+      await expect(service.revokeKey(id, 'org_different_context')).rejects.toThrow();
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
+    });
+
+    it('is idempotent when called multiple times', async () => {
+      const { id } = await service.generateKey(testOrgId, 'Double Revoke', 'read');
+
+      await service.revokeKey(id, testOrgId);
+      await service.revokeKey(id, testOrgId); // should not throw
+
+      const row = await client.unsafe(`SELECT revoked_at FROM clv_api_keys WHERE id = $1`, [id]);
+      expect(row[0].revoked_at).toBeDefined();
+
+      // Cleanup
+      await client.unsafe(`DELETE FROM clv_api_keys WHERE id = $1`, [id]);
+    });
+  });
 });
