@@ -307,3 +307,18 @@ export const principalMemory = pgTable('clv_principal_memory', {
   prinIdx: index('idx_mem_prin').on(table.principalId),
   expiresIdx: index('idx_mem_expires').on(table.expiresAt),
 }));
+
+// ─── API Keys (for REST API authentication) ────────────────────
+export const apiKeys = pgTable('clv_api_keys', {
+  id: text('id').primaryKey(),               // clv_api_<uuid>
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  name: text('name').notNull(),
+  keyHash: text('key_hash').notNull(),         // SHA256 hash of the API key
+  keyPrefix: text('key_prefix').notNull(),     // First 8 chars for display
+  permission: text('permission').notNull().default('read'), // read | write | admin
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  revokedAt: text('revoked_at'),              // null = active, set = revoked
+}, (table) => ({
+  orgIdx: index('idx_api_keys_org').on(table.orgId),
+  keyHashIdx: index('idx_api_keys_hash').on(table.keyHash),
+}));

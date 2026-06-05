@@ -246,6 +246,21 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_principal_id ON clv_principal_memory(principal_id)`;
     await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_key ON clv_principal_memory(key)`;
     await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_category ON clv_principal_memory(category)`;
+    
+    // API Keys table (Slice 1: #121)
+    await client`CREATE TABLE IF NOT EXISTS clv_api_keys (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL REFERENCES clv_organizations(id),
+      name TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      permission TEXT NOT NULL DEFAULT 'read',
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_api_keys_org ON clv_api_keys(org_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON clv_api_keys(key_hash)`;
+    console.log('[initDb] API keys table created');
     console.log('[initDb] Schema push complete');
   } catch (err: any) {
     if (err.code === '42P07' || err.message?.includes('already exists')) {
