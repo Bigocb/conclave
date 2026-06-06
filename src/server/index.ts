@@ -28,6 +28,7 @@ import { providerRoutes } from '../routes/providers.js';
 import { cronRoutes } from '../routes/cron.js';
 import { authRoutes } from '../routes/auth.js';
 import { vaultRoutes } from '../routes/vault.js';
+import { apiKeyRoutes } from '../routes/api-keys.js';
 import { pushRoutes } from '../routes/push.js';
 import { profileRoutes } from '../routes/profiles.js';
 import { pulseRoutes } from '../routes/pulse.js';
@@ -205,6 +206,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(providerRoutes, { prefix: '/v1' });
   await fastify.register(pulseRoutes, { prefix: '/v1' });
   await fastify.register(memoryRoutes, { prefix: '/v1' });
+  await fastify.register(apiKeyRoutes, { prefix: '/v1' });
   // Bare /pulse route for EventSource clients (browsers can't set custom headers)
   await fastify.register(pulseRoutes, { prefix: '' });
 
