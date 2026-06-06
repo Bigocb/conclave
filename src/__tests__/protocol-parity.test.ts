@@ -193,5 +193,74 @@ describe('Protocol Parity (REST enforces same rules as MCP)', () => {
       const body = JSON.parse(res.body);
       expect(body.status).toBe('error');
     });
+
+    it('returns 422 when submitting a task with non-string dimension values', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/tasks',
+        headers: { authorization: 'Bearer ' + testAgentToken },
+        payload: {
+          task_description: 'Testing dimension validation with wrong types through the REST endpoint.',
+          output: 'Testing dimension type validation.',
+          channel: channelName,
+          dimensions: ['quality', 123 as any], // mixed types
+        },
+      });
+
+      expect(res.statusCode).toBe(422);
+    });
+  });
+
+  describe('Budget Enforcement', () => {
+    let zeroBudgetAgentToken: string;
+
+    beforeAll(async () => {
+      // Create a principal and explicitly drain all budget
+      const drainedPrnId = 'prn_drained_' + Date.now().toString(36);
+      await client.unsafe(
+        'INSERT INTO clv_principals (id, name, org_id, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+        [drainedPrnId, 'Drained Budget Principal', testOrgId, new Date().toISOString()]
+      );
+
+      const crypto = await import('crypto');
+      zeroBudgetAgentToken = 'clv_drained_' + crypto.randomBytes(16).toString('hex');
+      const drainedAgentId = 'agt_drained_' + Date.now().toString(36);
+      await client.unsafe(
+        `INSERT INTO clv_agents (id, name, token, principal_id, org_id, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', $6) ON CONFLICT (id) DO NOTHING`,
+        [drainedAgentId, 'Drained Budget Agent', zeroBudgetAgentToken, drainedPrnId, testOrgId, new Date().toISOString()]
+      );
+
+      // Drain the budget: seed is 15, spend it all so available < 5 (task cost)
+      const { BudgetService } = await import('../services/budget.js');
+      const drainSvc = new BudgetService(db);
+      await drainSvc.spend(drainedPrnId, 15, 'test_drain', 'drain_' + Date.now());
+
+      // Subscribe to channel
+      const chSvc = new ChannelService(db);
+      const channel = await chSvc.getByName(channelName);
+      if (channel) {
+        await chSvc.subscribe(drainedPrnId, channel.id);
+      }
+    });
+
+    it('returns 402 when submitting a task with insufficient budget', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/tasks',
+        headers: { authorization: 'Bearer ' + zeroBudgetAgentToken },
+        payload: {
+          task_description: 'This task should fail due to insufficient budget for protocol parity testing.',
+          output: 'Verifying 402 response when REST API enforces budget the same way MCP does.',
+          channel: channelName,
+          dimensions: ['quality'],
+        },
+      });
+
+      expect(res.statusCode).toBe(402);
+      const body = JSON.parse(res.body);
+      expect(body.status).toBe('error');
+      expect(body.error.message).toMatch(/budget|insufficient/i);
+    });
   });
 });
