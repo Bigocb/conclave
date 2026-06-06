@@ -229,6 +229,25 @@ export async function agentRoutes(fastify: FastifyInstance) {
     return reply.send(success({ decommissioned: true, id }));
   });
 
+  // GET /v1/agents/:id/mcp-config — Generate MCP config snippets for this agent
+  fastify.get('/agents/:id/mcp-config', async (request, reply) => {
+    const { id } = request.params as any;
+    const currentOrgId = (request as any).orgId;
+
+    if (!currentOrgId) {
+      return reply.status(403).send(error('UNAUTHORIZED', 'No active organization context'));
+    }
+
+    const { getMcpConfigForAgent } = await import('../services/mcp-config.js');
+    const result = await getMcpConfigForAgent(fastify, id, currentOrgId);
+
+    if (!result) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found or token unavailable'));
+    }
+
+    return reply.send(success(result));
+  });
+
   // GET /v1/agents/:id/subscriptions — Get channels this agent's principal is subscribed to
   fastify.get('/agents/:id/subscriptions', async (request, reply) => {
     const { id } = request.params as any;
