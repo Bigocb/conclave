@@ -640,10 +640,10 @@ export class FleetManager extends EventEmitter {
             this.broadcastPulse('FLEET_SKIP', { taskId, reason: `status: ${taskStatus}`, reviewerName: proc.reviewerName });
             continue;
           }
-          // Skip own org's tasks in private mode
-          if (this.config.scope === 'private' && feedItem.org_id && feedItem.org_id !== this.config.org_id) {
-            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (private scope mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
-            this.broadcastPulse('FLEET_SKIP', { taskId, reason: 'private scope mismatch', reviewerName: proc.reviewerName });
+          // Skip tasks from other orgs — fleet agents only belong to one org
+          if (feedItem.org_id && feedItem.org_id !== this.config.org_id) {
+            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (org mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
+            this.broadcastPulse('FLEET_SKIP', { taskId, reason: 'org mismatch', reviewerName: proc.reviewerName });
             continue;
           }
 
