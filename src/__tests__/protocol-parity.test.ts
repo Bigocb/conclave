@@ -173,4 +173,25 @@ describe('Protocol Parity (REST enforces same rules as MCP)', () => {
       expect(body.error.message).toMatch(/cannot review|self.?review/i);
     });
   });
+
+  describe('Dimension Validation', () => {
+    it('returns 422 when submitting a task with invalid dimensions format', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/tasks',
+        headers: { authorization: 'Bearer ' + testAgentToken },
+        payload: {
+          task_description: 'Testing dimension validation through the REST endpoint to verify protocol parity.',
+          output: 'This should be accepted if dimensions are valid.',
+          channel: channelName,
+          dimensions: [],
+        },
+      });
+
+      // Empty dimensions array should fail Zod validation with 422
+      expect(res.statusCode).toBe(422);
+      const body = JSON.parse(res.body);
+      expect(body.status).toBe('error');
+    });
+  });
 });
