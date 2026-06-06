@@ -27,7 +27,7 @@ describe('OpenAPI Spec /v1/openapi.json', () => {
               type: 'http',
               scheme: 'bearer',
               bearerFormat: 'JWT',
-              description: 'Bearer tokens: clv_ agent tokens or clv_api_ API keys',
+              description: 'Supports two token types: clv_ (agent tokens, admin by default) and clv_api_ (API keys with read/write/admin permission scoping)',
             },
           },
         },
