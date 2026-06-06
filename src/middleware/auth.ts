@@ -1,8 +1,9 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { authService } from '../services/auth.js';
 import { db } from '../db/index.js';
-import { agents } from '../db/schema.js';
+import { agents, apiKeys } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { createHash } from 'crypto';
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   let token: string | undefined;
@@ -20,6 +21,30 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       error: 'Unauthorized',
       message: 'Missing or invalid authentication token',
     });
+  }
+
+  // Check clv_api_ tokens first (API keys)
+  if (token.startsWith('clv_api_')) {
+    const keyHash = createHash('sha256').update(token).digest('hex');
+
+    const rows = await db.select()
+      .from(apiKeys)
+      .where(eq(apiKeys.keyHash, keyHash))
+      .limit(1);
+
+    if (rows.length === 0 || rows[0].revokedAt) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Invalid or revoked API key',
+      });
+    }
+
+    const key = rows[0];
+    (request as any).orgId = key.orgId;
+    (request as any).apiKeyId = key.id;
+    (request as any).permission = key.permission;
+
+    return { sub: key.orgId, orgId: key.orgId, permission: key.permission };
   }
 
   // Support clv_ agent tokens (lookup in DB)
