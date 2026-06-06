@@ -660,13 +660,13 @@ export class FleetManager extends EventEmitter {
           try {
             const taskResp = await client.getTask(taskId);
             fullTask = taskResp.data;
-          } catch {
+          } catch (err: any) {
             taskFetchFailed = true;
+            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — ${err.message || err}`);
           }
 
           // Skip tasks we can't fetch — wrong org or insufficient permissions
           if (taskFetchFailed) {
-            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — skipping`);
             this.broadcastPulse('FLEET_FETCH_ERROR', { taskId, reviewerName: proc.reviewerName, error: 'Cannot fetch task' });
             proc.reviewedTaskIds.delete(taskId);
             continue;
