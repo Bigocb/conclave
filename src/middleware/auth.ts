@@ -118,3 +118,31 @@ async function getDefaultPrincipalId(userId: string, orgId: string): Promise<str
   });
   return principal?.id || null;
 }
+
+/** Permission hierarchy: admin > write > read */
+const PERMISSION_LEVELS: Record<string, number> = {
+  read: 1,
+  write: 2,
+  admin: 3,
+};
+
+/**
+ * Factory that returns a Fastify preHandler hook.
+ * Checks `request.permission` against the required level.
+ * Agent tokens (no permission set) default to admin.
+ */
+export function requirePermission(minLevel: string) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const req = request as any;
+    const permission = req.permission || 'admin'; // agent tokens = admin by default
+    const required = PERMISSION_LEVELS[minLevel];
+    const actual = PERMISSION_LEVELS[permission];
+
+    if (actual === undefined || actual < required) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: `Insufficient permissions. Required: ${minLevel}, actual: ${permission}`,
+      });
+    }
+  };
+}
