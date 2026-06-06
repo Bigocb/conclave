@@ -192,6 +192,15 @@ export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
 export type MarkHelpfulInput = z.infer<typeof MarkHelpfulSchema>;
 export type AskOpinionInput = z.infer<typeof AskOpinionSchema>;
 export type SubmitOpinionResponseInput = z.infer<typeof SubmitOpinionResponseSchema>;
+// ─── API Keys ────────────────────────────────────────────────────
+
+export const CreateApiKeySchema = z.object({
+  name: z.string().min(1).max(200),
+  permission: z.enum(['read', 'write', 'admin']).default('write'),
+});
+
+export type CreateApiKeyInput = z.infer<typeof CreateApiKeySchema>;
+
 export type CreateChannelInput = z.infer<typeof CreateChannelSchema>;
 export type SpotCheckInput = z.infer<typeof SpotCheckSchema>;
 

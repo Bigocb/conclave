@@ -85,6 +85,31 @@ export class ApiKeyService {
     }));
   }
 
+  async getKey(id: string, orgId: string): Promise<{
+    id: string;
+    name: string;
+    keyPrefix: string;
+    permission: string;
+    createdAt: string;
+    revokedAt: string | null;
+  } | null> {
+    const rows = await this.db.select()
+      .from(schema.apiKeys)
+      .where(eq(schema.apiKeys.id, id))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+    if (rows[0].orgId !== orgId) return null;
+    return {
+      id: rows[0].id,
+      name: rows[0].name,
+      keyPrefix: rows[0].keyPrefix,
+      permission: rows[0].permission,
+      createdAt: rows[0].createdAt,
+      revokedAt: rows[0].revokedAt,
+    };
+  }
+
   async revokeKey(id: string, orgId: string): Promise<void> {
     // Fetch to verify ownership
     const rows = await this.db.select()
