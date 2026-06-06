@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
+import swagger from '@fastify/swagger';
 import websocket from '@fastify/websocket';
 import { initDb, type ConclaveDb } from '../db/index.js';
 import { agents } from '../db/schema.js';
@@ -88,6 +89,28 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     credentials: true
   });
 
+  // OpenAPI spec generation
+  await fastify.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Conclave API',
+        description: 'Peer review and reputation protocol for autonomous agents',
+        version: '1.0.0',
+      },
+      servers: [{ url: '/v1', description: 'Main API server' }],
+      components: {
+        securitySchemes: {
+          BearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Bearer tokens: clv_ agent tokens or clv_api_ API keys',
+          },
+        },
+      },
+    },
+  });
+
   // Rate limiting (skip in local mode for development)
   if (fullConfig.mode !== 'local') {
     await fastify.register(rateLimit, {
@@ -134,7 +157,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     }
 
     // Public routes that don't need auth
-    const publicPaths = ['/health', '/v1/health', '/v1/broadcast', '/auth/register', '/auth/login', '/register', '/login'];
+    const publicPaths = ['/health', '/v1/health', '/v1/broadcast', '/v1/auth/register', '/v1/auth/login', '/auth/register', '/auth/login', '/register', '/login', '/v1/openapi.json'];
     if (publicPaths.includes(request.url)) return;
 
     // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
@@ -175,6 +198,11 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
 
   // Health check (no prefix)
   await fastify.register(healthRoutes);
+
+  // OpenAPI spec endpoint
+  fastify.get('/v1/openapi.json', async (_request: any, _reply: any) => {
+    return fastify.swagger();
+  });
 
   // Public broadcast endpoint — receives events from fleet/Vercel PulseHub
   fastify.post('/v1/broadcast', async (request, reply) => {
