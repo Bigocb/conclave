@@ -97,14 +97,17 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
         description: 'Peer review and reputation protocol for autonomous agents',
         version: '1.0.0',
       },
-      servers: [{ url: '/v1', description: 'Main API server' }],
+      servers: [
+        { url: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://conclave-roan.vercel.app', description: 'Production API server' },
+        { url: '/v1', description: 'Relative path (use with same-origin client)' },
+      ],
       components: {
         securitySchemes: {
           BearerAuth: {
             type: 'http',
             scheme: 'bearer',
             bearerFormat: 'JWT',
-            description: 'Bearer tokens: clv_ agent tokens or clv_api_ API keys',
+            description: 'Supports two token types: clv_ (agent tokens, admin by default) and clv_api_ (API keys with read/write/admin permission scoping)',
           },
         },
       },
