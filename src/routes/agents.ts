@@ -134,9 +134,57 @@ export async function agentRoutes(fastify: FastifyInstance) {
     const principalService = new PrincipalService(fastify.db);
     const principal = await principalService.getById(agent.principal_id);
 
+    // Fetch org details for the agent
+    const { organizations } = await import('../db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const orgRows = await (fastify as any).db.select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+    }).from(organizations).where(eq(organizations.id, agent.org_id)).limit(1);
+    const org = orgRows.length > 0 ? orgRows[0] : null;
+
     return reply.send(success({
       ...agent,
       principal: principal ? { id: principal.id, name: principal.name, roles: principal.roles } : null,
+      org: org ? { id: org.id, name: org.name, slug: org.slug } : null,
+    }));
+  });
+
+  // GET /v1/agents/:id/stats — Get review and opinion counts for an agent
+  fastify.get('/agents/:id/stats', async (request, reply) => {
+    const { id } = request.params as any;
+    const agent = await agentService.getById(id);
+    if (!agent) {
+      return reply.status(404).send(error(ERROR_CODES.AGENT_NOT_FOUND.code, 'Agent not found'));
+    }
+
+    // Org Isolation check
+    const currentOrgId = (request as any).orgId;
+    if (!currentOrgId || agent.org_id !== currentOrgId) {
+      return reply.status(403).send(error('FORBIDDEN', 'This agent belongs to a different organization'));
+    }
+
+    const { reviews, blackboardNodes } = await import('../db/schema.js');
+    const { eq, and, sql } = await import('drizzle-orm');
+
+    const reviewCount = await (fastify as any).db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(reviews)
+      .where(eq(reviews.reviewerId, id));
+
+    const opinionCount = await (fastify as any).db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(blackboardNodes)
+      .where(and(
+        eq(blackboardNodes.agentId, id),
+        // Only count proposal and critique nodes (not internal system nodes)
+        sql`${blackboardNodes.kind} IN ('proposal', 'critique', 'synthesis', 'consensus')`
+      ));
+
+    return reply.send(success({
+      review_count: reviewCount[0]?.count || 0,
+      opinion_count: opinionCount[0]?.count || 0,
     }));
   });
 
