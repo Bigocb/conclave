@@ -317,6 +317,28 @@ export const taskRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _opt
     reply.send(success({ review_id: parsed.data.review_id, helpful: parsed.data.helpful }));
   });
 
+  // POST /v1/tasks/:id/expire
+  fastify.post('/tasks/:id/expire', async (request: any, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const task = await taskSvc.expireTask(id);
+      if (!task) return reply.code(404).send(error(ERROR_CODES.TASK_NOT_FOUND.code, 'Task not found'));
+      reply.send(success(task));
+    } catch (err: any) {
+      if (err.message?.startsWith('INVALID_TRANSITION')) {
+        const task = await taskSvc.getById(id);
+        return reply.code(422).send(error(ERROR_CODES.INVALID_TRANSITION.code, err.message, {
+          current_status: task?.status,
+          required_status: 'open',
+        }));
+      }
+      if (err.message === 'TASK_NOT_FOUND') {
+        return reply.code(404).send(error(ERROR_CODES.TASK_NOT_FOUND.code, 'Task not found'));
+      }
+      throw err;
+    }
+  });
+
   // POST /v1/tasks/:id/archive
   fastify.post('/tasks/:id/archive', async (request: any, reply) => {
     const { id } = request.params as { id: string };
