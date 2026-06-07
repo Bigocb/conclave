@@ -89,7 +89,7 @@ export class ChannelService {
       .leftJoin(schema.agents, eq(schema.tasks.agentId, schema.agents.id))
       .where(and(
         eq(schema.tasks.channel, channelName),
-        not(inArray(schema.tasks.status, ['completed', 'cancelled']))
+        not(inArray(schema.tasks.status, ['completed', 'cancelled', 'expired']))
       ))
       .limit(limit);
 
