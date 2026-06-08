@@ -27,7 +27,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
     {
       name: 'General Reviewer',
       channels: ['general-qa', 'code-review'],
-      model: 'glm-5.1',
+      model: 'gemma4:31b',
       provider: 'ollama_cloud',
       llm_url: 'https://ollama.com/api/chat',
       instructions: 'Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most.',
