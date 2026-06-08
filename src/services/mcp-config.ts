@@ -100,11 +100,9 @@ export async function getMcpConfigForAgent(
   const token = rows[0].token;
 
   // Determine the API URL
-  const apiUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.VERCEL_ENV
-      ? 'https://conclave-roan.vercel.app'
-      : 'http://localhost:3000';
+  const apiUrl = process.env.RENDER
+    ? 'https://conclave-bp4o.onrender.com'
+    : 'http://localhost:3000';
 
   const configs = generateMcpConfigs(apiUrl, agent.principal_id, token);
 

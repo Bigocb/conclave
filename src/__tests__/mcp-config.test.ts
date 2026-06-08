@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { generateMcpConfigs, type McpHostConfig } from '../services/mcp-config.js';
 
 describe('MCP Config Generator', () => {
-  const apiUrl = 'https://conclave-roan.vercel.app';
+  const apiUrl = 'https://conclave-bp4o.onrender.com';
   const principalId = 'prn_test';
   const agentToken = 'clv_test_token_abc123';
 

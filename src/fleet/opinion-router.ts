@@ -18,7 +18,7 @@
  *   DATABASE_URL=postgres://... npx tsx src/fleet/opinion-router.ts
  *
  * Env vars:
- *   SERVER_URL      — Conclave API server (default: https://conclave-roan.vercel.app)
+ *   SERVER_URL      — Conclave API server (default: https://conclave-bp4o.onrender.com)
  *   DATABASE_URL    — PostgreSQL connection string
  *   FLEET_TOKEN     — Org token for API auth
  *   OLLAMA_URL      — Default LLM URL for fallback
@@ -268,7 +268,7 @@ interface RouterConfig {
 
 const DEFAULT_ROUTER_CONFIG: RouterConfig = {
   databaseUrl: '',
-  serverUrl: process.env.SERVER_URL || 'https://conclave-roan.vercel.app',
+  serverUrl: process.env.SERVER_URL || 'https://conclave-bp4o.onrender.com',
   token: process.env.FLEET_TOKEN || process.env.CONCLAVE_TOKEN || '',
   llmUrl: process.env.OLLAMA_URL || 'https://ollama.com/api/chat',
   llmKey: process.env.OLLAMA_KEY || '',
