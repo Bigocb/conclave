@@ -75,7 +75,7 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
     try {
       // Query the vault table directly
       const vaultRows = await sql<any[]>`
-        SELECT provider, key_value
+        SELECT provider, encrypted_value
         FROM clv_org_vault
         WHERE org_id = ${orgId}
           AND provider = ${providerName}
@@ -88,15 +88,9 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
       }
 
       const vaultEntry = vaultRows[0];
-      const encryptedValue = vaultEntry.key_value;
+      const encryptedValue = vaultEntry.encrypted_value;
 
-      // Check if it's already a raw key (doesn't look encrypted - no dot separator)
-      if (!encryptedValue.includes('.')) {
-        console.log(`  🔑 Vault key resolved (raw) for ${providerName}`);
-        return encryptedValue;
-      }
-
-      // Decrypt the vault value (format: iv.ciphertext)
+      // Decrypt the vault value (format: ivHex:encryptedHex)
       const decrypted = decryptVaultValue(encryptedValue);
       console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
       return decrypted;
