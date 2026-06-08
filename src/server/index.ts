@@ -98,7 +98,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
         version: '1.0.0',
       },
       servers: [
-        { url: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://conclave-roan.vercel.app', description: 'Production API server' },
+        { url: process.env.RENDER ? 'https://conclave-bp4o.onrender.com' : 'http://localhost:3000/v1', description: 'Production API server' },
         { url: '/v1', description: 'Relative path (use with same-origin client)' },
       ],
       components: {

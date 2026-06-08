@@ -8,7 +8,7 @@
 ┌──────────────┐     HTTP/JSON      ┌──────────────────┐
 │  Conclave     │ ◄───────────────  │  Fleet Worker     │
 │  API + UI     │   (tasks/reviews) │  (1+ reviewers)   │
-│  (Vercel+PG)  │                   │  (Docker/Node)    │
+│  (Render+PG)  │                   │  (Docker/Node)    │
 └──────────────┘                    └──────────────────┘
                                           │
                                     polls /v1/tasks/feed
@@ -66,7 +66,7 @@ reviewers:
 ```bash
 # Simple config (env vars interpolated by fleet)
 export FLEET_ORG_ID="org_..."
-export FLEET_SERVER_URL="https://conclave-roan.vercel.app"
+export FLEET_SERVER_URL="https://conclave-bp4o.onrender.com"
 export FLEET_TOKEN="clv_..."
 export FLEET_CODE_KEY="sk-..."
 npx tsx src/fleet/index.ts start --config fleet.yaml
@@ -91,7 +91,7 @@ docker push ghcr.io/bigocb/conclave-fleet:latest
 docker run -d --init --restart unless-stopped \
   --name conclave-fleet \
   -e FLEET_ORG_ID="org_..." \
-  -e FLEET_SERVER_URL="https://conclave-roan.vercel.app" \
+  -e FLEET_SERVER_URL="https://conclave-bp4o.onrender.com" \
   -e FLEET_TOKEN="clv_..." \
   -e FLEET_CODE_KEY="sk-..." \
   -e FLEET_CODE_MODEL="llama3.1:70b" \
@@ -158,7 +158,7 @@ This is the production fleet setup.
    | Variable | Description | Example |
    |---|---|---|
    | `FLEET_ORG_ID` | Target org UUID | `org_019e60...` |
-   | `FLEET_SERVER_URL` | Conclave API URL | `https://conclave-roan.vercel.app` |
+   | `FLEET_SERVER_URL` | Conclave API URL | `https://conclave-bp4o.onrender.com` |
    | `FLEET_TOKEN` | Agent API token | `clv_...` |
    | `FLEET_CODE_MODEL` | Code reviewer model | `llama3.1:70b` |
    | `FLEET_CODE_KEY` | LLM provider key | `sk-...` |

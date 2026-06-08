@@ -14,7 +14,7 @@
  *   conclave fleet reject <pending_id> [--config fleet.yaml]
  *
  * Env vars:
- *   SERVER_URL    — Conclave API server URL (default: https://conclave-roan.vercel.app)
+ *   SERVER_URL    — Conclave API server URL (default: https://conclave-bp4o.onrender.com)
  *   FLEET_TOKEN   — Org token for API access
  *   FLEET_ORG_ID  — Org ID to load fleet config for (default: org_019e6027-...)
  */
@@ -182,7 +182,7 @@ async function main() {
     }
   } else {
     // API mode (default)
-    const serverUrl = process.env.SERVER_URL || 'https://conclave-roan.vercel.app';
+    const serverUrl = process.env.SERVER_URL || 'https://conclave-bp4o.onrender.com';
     const orgId = process.env.FLEET_ORG_ID || 'org_019e6027-580a-767a-8f13-cf40de5363a9';
     const token = process.env.FLEET_TOKEN || process.env.CONCLAVE_TOKEN || '';
 
