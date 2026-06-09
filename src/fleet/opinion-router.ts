@@ -31,6 +31,7 @@
 import { randomUUID, createDecipheriv } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import * as crypto from 'crypto';
 import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
 
 // For backwards compatibility in case other code uses crypto.createDecipheriv
@@ -50,7 +51,7 @@ function decryptVaultValue(encryptedData: string): string {
   try {
     const iv = Buffer.from(ivHex, 'hex');
     const encryptedText = Buffer.from(encryptedHex, 'hex');
-    const decipher = createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
     let decrypted = decipher.update(encryptedText);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();
@@ -59,68 +60,6 @@ function decryptVaultValue(encryptedData: string): string {
     return encryptedData;
   }
 }
-
-/**
- * Resolve a vault reference (org_{provider}) OR decrypt an encrypted key.
- * Uses direct postgres query + AES decryption — no Drizzle dependency needed.
- */
-async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<string> {
-  if (!key) return key;
-
-  // Check if it's a vault reference (org_{provider})
-  if (key.startsWith('org_')) {
-    const providerName = key.replace(/^org_/, '');
-    console.log(`  🔑 Resolving vault key '${key}' for provider '${providerName}' in org '${orgId}'`);
-
-    try {
-      // Query the vault table directly
-      const vaultRows = await sql<any[]>`
-        SELECT provider, encrypted_value
-        FROM clv_org_vault
-        WHERE org_id = ${orgId}
-          AND provider = ${providerName}
-        LIMIT 1
-      `;
-
-      if (vaultRows.length === 0) {
-        console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using fallback`);
-        return key;
-      }
-
-      const vaultEntry = vaultRows[0];
-      const encryptedValue = vaultEntry.encrypted_value;
-
-      // Decrypt the vault value (format: ivHex:encryptedHex)
-      const decrypted = decryptVaultValue(encryptedValue);
-      console.log(`  🔑 Vault key resolved (decrypted) for ${providerName}`);
-      return decrypted;
-    } catch (err: any) {
-      console.warn(`  ⚠ Vault key resolution failed for '${key}': ${err.message}`);
-      return key;
-    }
-  }
-
-  // Check if it's an already-encrypted key (has colon separator like "ivHex:encryptedHex")
-  // Vault-encrypted keys use COLON separator. Dot-separated keys are raw Ollama Cloud keys (keyId.secret).
-  if (key.includes(':') && !key.startsWith('sk-')) {
-    console.log(`  🔑 Attempting to decrypt stored key (vault format: iv:ciphertext)`);
-    try {
-      const decrypted = decryptVaultValue(key);
-      console.log(`  🔑 Key decrypted successfully`);
-      return decrypted;
-    } catch (err: any) {
-      console.warn(`  ⚠ Key decryption failed: ${err.message}, using as-is`);
-      return key;
-    }
-  }
-
-  // Dot-separated keys like "a25be730...39DL" are raw Ollama Cloud API keys (keyId.secret format)
-  // Just use them directly — no decryption needed
-  console.log(`  🔑 Key appears to be raw API key format, using as-is`);
-  return key;
-}
-
-// ─── Agent LLM Key Resolution ─────────────────────────────────────
 
 /**
  * Resolve an LLM key for an agent:
@@ -236,7 +175,7 @@ interface CriticAgent {
   provider: string | null;
   llm_url: string | null;
   token: string | null;
-  llm_key?: string | null;  // Optional — not present in agents table, may come from fleet_reviewers join
+  llm_key: string | null;  // From fleet_reviewers table
 }
 
 interface BlackboardNode {
@@ -841,11 +780,12 @@ export class OpinionRouter {
 
     const critiquePromises = selected.map(async (sub) => {
       try {
-        // Find an eligible agent for this principal
-        // Note: fleet_reviewers and agents tables don't have llm_key columns
+        // Find an eligible agent for this principal, join with fleet_reviewers for LLM key
         const agents = await this.sql<CriticAgent[]>`
-          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
+          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token,
+                 COALESCE(fr.llm_key, a.token) as llm_key
           FROM clv_agents a
+          LEFT JOIN clv_fleet_reviewers fr ON fr.agent_id = a.id
           WHERE a.principal_id = ${sub.principal_id}
             AND a.status = 'active'
           ORDER BY a.created_at ASC
@@ -861,30 +801,18 @@ export class OpinionRouter {
         
         // 1. Get model and LLM URL from agent (or fallback to config)
         const model = agent.model || this.config.model;
-        const llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
         
-        // 2. Resolve the agent's LLM key using its provider
-        //    Look up org_<provider> in the vault to get the actual API key
-        let llmKey = this.config.llmKey;
-        if (agent.provider) {
-          const vaultRef = `org_${agent.provider}`;
-          console.log(`  🔑 Looking up vault key '${vaultRef}' for agent ${agent.id} (provider: ${agent.provider})`);
-          const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
-          if (resolvedKey && resolvedKey !== vaultRef) {
-            llmKey = resolvedKey;
-          }
-        }
+        // Normalize URL and resolve key
+        let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
+        
+        // Resolve the agent's LLM key (vault reference, encrypted, or raw)
+        let llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key || this.config.llmKey);
         
         // Fallback to config key if resolution returned empty
         if (!llmKey) {
           llmKey = this.config.llmKey;
         }
-        
-        // Debug: log what key we're using (masked)
-        const maskedKey = llmKey.length > 8 
-          ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
-          : (llmKey ? `Length ${llmKey.length}` : 'NONE');
-        console.log(`  🔑 Resolved LLM Key: ${maskedKey}`);
+
         console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
 
         // Call LLM
@@ -1208,10 +1136,12 @@ Respond in JSON format:
         break;
       }
 
-      // Find critic's agent
+      // Find critic's agent with fleet_reviewers for LLM key
       const agents = await this.sql<CriticAgent[]>`
-        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
+        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token,
+               COALESCE(fr.llm_key, a.token) as llm_key
         FROM clv_agents a
+        LEFT JOIN clv_fleet_reviewers fr ON fr.agent_id = a.id
         WHERE a.principal_id = ${cp.principal_id}
           AND a.status = 'active'
         ORDER BY a.created_at ASC
@@ -1231,15 +1161,7 @@ Respond in JSON format:
       
       // Normalize URL and resolve key
       let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
-      // Resolve the agent's LLM key using its provider
-      let llmKey = this.config.llmKey;
-      if (agent.provider) {
-        const vaultRef = `org_${agent.provider}`;
-        const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
-        if (resolvedKey && resolvedKey !== vaultRef) {
-          llmKey = resolvedKey;
-        }
-      }
+      let llmKey = await resolveAgentLlmKey(agent.id, agent.org_id, agent.llm_key || this.config.llmKey);
       if (!llmKey) {
         llmKey = this.config.llmKey;
       }
