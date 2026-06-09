@@ -54,17 +54,9 @@ export async function fleetRoutes(fastify: FastifyInstance) {
     if (!orgId) return reply.code(400).send(error('VALIDATION_ERROR', 'orgId is required'));
     const reviewers = await (fastify as any).db.query.fleetReviewers.findMany({ where: eq(fleetReviewers.orgId, orgId) });
 
-    // Decrypt vault-stored keys before returning
-    const decrypted = await Promise.all(reviewers.map(async (r: any) => {
-      if (r.llmKey && !r.llmKey.startsWith('sk-') && !r.llmKey.startsWith('key_')) {
-        // llmKey is a vault reference — decrypt it
-        const raw = await vault.getKey(orgId, r.llmKey);
-        return { ...r, llmKey: raw ?? r.llmKey };
-      }
-      return r;
-    }));
-
-    reply.send(success({ reviewers: decrypted, total: decrypted.length }));
+    // Return vault references as-is — the fleet manager resolves them at review time
+    // This ensures key updates in the vault take effect without restarting the fleet
+    reply.send(success({ reviewers, total: reviewers.length }));
   });
 
   /**
@@ -77,8 +69,10 @@ export async function fleetRoutes(fastify: FastifyInstance) {
 
     let encryptedKey = null;
     if (llmKey) {
-      await vault.upsertKey(orgId, `${provider || 'fleet-reviewer'}_${name}`, llmKey);
-      encryptedKey = `${provider || 'fleet-reviewer'}_${name}`;
+      // Store the key in the vault under org_${provider} and reference it
+      const vaultRef = `org_${provider || 'fleet-reviewer'}`;
+      await vault.upsertKey(orgId, provider || 'fleet-reviewer', llmKey);
+      encryptedKey = vaultRef;
     } else if (provider) {
       // Fallback: map the reviewer to the organization's existing key for this provider
       encryptedKey = `org_${provider}`;
@@ -141,8 +135,10 @@ export async function fleetRoutes(fastify: FastifyInstance) {
       const rev = await (fastify as any).db.query.fleetReviewers.findFirst({ where: eq(fleetReviewers.id, id) });
       const orgId = rev?.orgId;
       if (orgId) {
-        await vault.upsertKey(orgId, `${body.provider || 'fleet-reviewer'}_${body.name || 'unknown'}`, body.llmKey);
-        updates.llmKey = `${body.provider || 'fleet-reviewer'}_${body.name || 'unknown'}`;
+        const provider = body.provider || rev?.provider || 'fleet-reviewer';
+        const vaultRef = `org_${provider}`;
+        await vault.upsertKey(orgId, provider, body.llmKey);
+        updates.llmKey = vaultRef;
       }
     }
 
