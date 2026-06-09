@@ -1,4 +1,5 @@
 import { migrateFleetToProfiles } from './db/migrations/fleet_profiles.js';
+import { migrateVaultKeyReferences } from './db/migrations/vault-key-refs.js';
 import { initDb } from './db/index.js';
 /**
  * Conclave — Entry point
@@ -29,6 +30,7 @@ const config = {
     const { client } = await initDb(config.database);
     await applyPerformanceIndexes(client);
     await migrateFleetToProfiles(client);
+    await migrateVaultKeyReferences(client);
     await startServer(config);
   } catch (err) {
     console.error('Fatal error starting Conclave:', err);
