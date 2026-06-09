@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
+import swagger from '@fastify/swagger';
 import websocket from '@fastify/websocket';
 import { initDb, type ConclaveDb } from '../db/index.js';
 import { agents } from '../db/schema.js';
@@ -28,9 +29,11 @@ import { providerRoutes } from '../routes/providers.js';
 import { cronRoutes } from '../routes/cron.js';
 import { authRoutes } from '../routes/auth.js';
 import { vaultRoutes } from '../routes/vault.js';
+import { apiKeyRoutes } from '../routes/api-keys.js';
 import { pushRoutes } from '../routes/push.js';
 import { profileRoutes } from '../routes/profiles.js';
 import { pulseRoutes } from '../routes/pulse.js';
+import { memoryRoutes } from '../routes/memory.js';
 import { pulseHub } from '../services/pulse.js';
 import type { FleetManager } from '../fleet/manager.js';
 
@@ -86,6 +89,31 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     credentials: true
   });
 
+  // OpenAPI spec generation
+  await fastify.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Conclave API',
+        description: 'Peer review and reputation protocol for autonomous agents',
+        version: '1.0.0',
+      },
+      servers: [
+        { url: process.env.RENDER ? 'https://conclave-bp4o.onrender.com' : 'http://localhost:3000/v1', description: 'Production API server' },
+        { url: '/v1', description: 'Relative path (use with same-origin client)' },
+      ],
+      components: {
+        securitySchemes: {
+          BearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Supports two token types: clv_ (agent tokens, admin by default) and clv_api_ (API keys with read/write/admin permission scoping)',
+          },
+        },
+      },
+    },
+  });
+
   // Rate limiting (skip in local mode for development)
   if (fullConfig.mode !== 'local') {
     await fastify.register(rateLimit, {
@@ -119,6 +147,10 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   // In cloud mode, X-Agent-Id header is used by MCP clients and API keys
   fastify.addHook('preHandler', async (request, reply) => {
     const headerAgentId = request.headers['x-agent-id'] as string | undefined;
+    const authHeader = request.headers.authorization;
+    const tokenFromHeader = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+    
+    console.log(`[Auth] mode=${fullConfig.mode} url=${request.url} token=${tokenFromHeader?.slice(0,10)}... headerAgentId=${headerAgentId}`);
 
     if (fullConfig.mode === 'local') {
       (request as any).agentId = headerAgentId || 'agt_dev';
@@ -128,7 +160,7 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
     }
 
     // Public routes that don't need auth
-    const publicPaths = ['/health', '/v1/health', '/v1/broadcast', '/auth/register', '/auth/login', '/register', '/login'];
+    const publicPaths = ['/health', '/v1/health', '/v1/broadcast', '/v1/auth/register', '/v1/auth/login', '/auth/register', '/auth/login', '/register', '/login', '/v1/openapi.json'];
     if (publicPaths.includes(request.url)) return;
 
     // Cloud mode: try JWT first, then X-Agent-Id header, then anonymous
@@ -170,6 +202,11 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   // Health check (no prefix)
   await fastify.register(healthRoutes);
 
+  // OpenAPI spec endpoint
+  fastify.get('/v1/openapi.json', async (_request: any, _reply: any) => {
+    return fastify.swagger();
+  });
+
   // Public broadcast endpoint — receives events from fleet/Vercel PulseHub
   fastify.post('/v1/broadcast', async (request, reply) => {
     const { event, orgId } = request.body as any;
@@ -199,6 +236,8 @@ export async function createServer(config: Partial<ConclaveConfig> = {}, fleetMa
   await fastify.register(orgRoutes, { prefix: '/v1' });
   await fastify.register(providerRoutes, { prefix: '/v1' });
   await fastify.register(pulseRoutes, { prefix: '/v1' });
+  await fastify.register(memoryRoutes, { prefix: '/v1' });
+  await fastify.register(apiKeyRoutes, { prefix: '/v1' });
   // Bare /pulse route for EventSource clients (browsers can't set custom headers)
   await fastify.register(pulseRoutes, { prefix: '' });
 

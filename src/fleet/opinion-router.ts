@@ -18,7 +18,7 @@
  *   DATABASE_URL=postgres://... npx tsx src/fleet/opinion-router.ts
  *
  * Env vars:
- *   SERVER_URL      — Conclave API server (default: https://conclave-roan.vercel.app)
+ *   SERVER_URL      — Conclave API server (default: https://conclave-bp4o.onrender.com)
  *   DATABASE_URL    — PostgreSQL connection string
  *   FLEET_TOKEN     — Org token for API auth
  *   OLLAMA_URL      — Default LLM URL for fallback
@@ -28,20 +28,24 @@
  *   MAX_CONCURRENT  — Max opinion critiques at once (default: 3)
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID, createDecipheriv } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import * as crypto from 'crypto';
 import { getProviderConfig, resolveLlmUrl, buildAuthHeaders } from './providers.js';
 
+// For backwards compatibility in case other code uses crypto.createDecipheriv
+const crypto = { createDecipheriv };
+
 // ─── Vault Key Resolution ────────────────────────────────────────
 
 /**
  * Decrypt a vault-encrypted value using AES-256-CBC.
- * Format: iv_hex:encrypted_hex (colon separator, not dot!)
+ * Used by resolveVaultKey when direct DB access is available.
  */
 function decryptVaultValue(encryptedData: string): string {
   const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
+  // Format is ivHex:encryptedHex (separated by colon!)
   const [ivHex, encryptedHex] = encryptedData.split(':');
   if (!ivHex || !encryptedHex) return encryptedData;
   try {
@@ -197,7 +201,7 @@ interface RouterConfig {
 
 const DEFAULT_ROUTER_CONFIG: RouterConfig = {
   databaseUrl: '',
-  serverUrl: process.env.SERVER_URL || 'https://conclave-roan.vercel.app',
+  serverUrl: process.env.SERVER_URL || 'https://conclave-bp4o.onrender.com',
   token: process.env.FLEET_TOKEN || process.env.CONCLAVE_TOKEN || '',
   llmUrl: process.env.OLLAMA_URL || 'https://ollama.com/api/chat',
   llmKey: process.env.OLLAMA_KEY || '',
@@ -337,7 +341,10 @@ async function callOpinionCritiqueLLM(
         stream: false,
       };
 
-  console.log(`  [OpinionRouter] LLM call: model=${model} url=${endpoint}`);
+  const maskedKey = llmKey.length > 8 
+    ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}` 
+    : '***';
+  console.log(`  [OpinionRouter] LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
 
   const resp = await fetch(endpoint, {
     method: 'POST',
@@ -409,7 +416,10 @@ async function callVoteLLM(
         stream: false,
       };
 
-  console.log(`  [OpinionRouter] Vote LLM call: model=${model} url=${endpoint}`);
+  const maskedKey = llmKey.length > 8 
+    ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
+    : '***';
+  console.log(`  [OpinionRouter] Vote LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
 
   const resp = await fetch(endpoint, {
     method: 'POST',
@@ -506,6 +516,16 @@ export class OpinionRouter {
 
     // Start polling
     this.startPolling();
+
+    // Start a minimal HTTP server so Render detects the port and marks deploy as live
+    const http = await import('http');
+    const port = parseInt(process.env.PORT || '10000', 10);
+    http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', uptime: Math.floor((Date.now() - this.startTime) / 1000), routed: this.totalRouted }));
+    }).listen(port, () => {
+      console.log(`  🩺 Health check listening on port ${port}`);
+    });
 
     // Status display
     const statusInterval = setInterval(() => {
@@ -618,13 +638,25 @@ export class OpinionRouter {
     if (this.activeReviews >= this.config.maxConcurrent) return;
 
     // Claim an open opinion via SKIP LOCKED
+    // FIX: Only pick opinions that are truly routable: 
+    // 1. Must have at least one subscriber on the channel
+    // 2. That subscriber must have at least one active agent
     const result = await this.sql`
       UPDATE clv_opinions
       SET status = 'in_review'
       WHERE id = (
-        SELECT id FROM clv_opinions
-        WHERE status = 'open'
-        ORDER BY created_at ASC
+        SELECT o.id FROM clv_opinions o
+        WHERE o.status = 'open'
+        AND EXISTS (
+          SELECT 1 
+          FROM clv_channel_subscriptions cs
+          JOIN clv_channels ch ON ch.id = cs.channel_id
+          JOIN clv_agents a ON a.principal_id = cs.principal_id
+          WHERE ch.name = o.channel 
+          AND a.status = 'active'
+          AND cs.principal_id != o.principal_id
+        )
+        ORDER BY o.created_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
       )
@@ -716,18 +748,19 @@ export class OpinionRouter {
       return;
     }
 
-    // 3. Find eligible critics — other principals subscribed to the opinion's channel
+    // 3. Find eligible critics — only principals subscribed to the channel who ALSO have at least one active agent
     const subscribers = await this.sql<ChannelSubRow[]>`
-      SELECT cs.principal_id
+      SELECT DISTINCT cs.principal_id
       FROM clv_channel_subscriptions cs
       JOIN clv_channels ch ON ch.id = cs.channel_id
+      JOIN clv_agents a ON a.principal_id = cs.principal_id
       WHERE ch.name = ${opinion.channel}
+      AND a.status = 'active'
       AND cs.principal_id != ${opinion.principal_id}
     `;
 
     if (subscribers.length === 0) {
       console.log(`  ⏭ No other subscribers on channel '${opinion.channel}' — nothing to route`);
-      await this.sql`UPDATE clv_opinions SET status = 'open' WHERE id = ${opinion.id}`;
       return;
     }
 
@@ -765,6 +798,8 @@ export class OpinionRouter {
         }
 
         const agent = agents[0];
+        
+        // 1. Get model and LLM URL from agent (or fallback to config)
         const model = agent.model || this.config.model;
         
         // Normalize URL and resolve key
@@ -834,9 +869,9 @@ export class OpinionRouter {
       console.log(`  ✅ Opinion ${opinion.id}: ${succeeded}/${count} critiques received — ready for synthesis`);
       await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinion.id}`;
     } else if (succeeded > 0) {
-      // Some critics responded — still useful, move to synthesis
-      console.log(`  ⚠ Opinion ${opinion.id}: ${succeeded}/${count} critiques received (partial) — ready for synthesis`);
-      await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinion.id}`;
+      // Some critics responded — keep as open, waiting for remaining
+      console.log(`  ⏳ Opinion ${opinion.id}: ${succeeded}/${count} critiques received — waiting for remaining`);
+      // Keep status as 'open' — don't move to synthesizing until all are in
     } else {
       // All critics failed — put back
       console.log(`  ❌ Opinion ${opinion.id}: all critics failed`);
@@ -866,10 +901,153 @@ export class OpinionRouter {
       `;
 
       if (synthNodes.length > 0) {
-        console.log(`  🗳️ Opinion ${opinion.id}: SynthesisNode detected — triggering vote round`);
-        await this.triggerVoteRound(opinion.id);
+        // Trigger discussion round before voting
+        console.log(`  💬 Opinion ${opinion.id}: SynthesisNode detected — triggering discussion round`);
+        await this.triggerDiscussionRound(opinion.id);
       }
     }
+  }
+
+  // ─── Trigger Discussion Round ────────────────────────────
+  // Called when synthesis is submitted - triggers critics to respond
+
+  private async triggerDiscussionRound(opinionId: string): Promise<void> {
+    // Get existing critique nodes and their critics
+    const critiqueNodes = await this.sql`
+      SELECT n.id, n.agent_id, n.principal_id, a.name as agent_name, a.model, a.provider, a.llm_url, a.token, a.org_id
+      FROM clv_blackboard_nodes n
+      LEFT JOIN clv_agents a ON a.id = n.agent_id
+      WHERE n.opinion_id = ${opinionId} AND n.kind = 'critique'
+    `;
+
+    if (critiqueNodes.length === 0) {
+      console.log(`  ⚠ Opinion ${opinionId}: no critique nodes found — going to vote`);
+      await this.triggerVoteRound(opinionId);
+      return;
+    }
+
+    // Get the synthesis node
+    const synthNodes = await this.sql`
+      SELECT id, payload, agent_id
+      FROM clv_blackboard_nodes
+      WHERE opinion_id = ${opinionId} AND kind = 'synthesis'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    if (synthNodes.length === 0) {
+      console.log(`  ⚠ Opinion ${opinionId}: no synthesis node found`);
+      return;
+    }
+
+    const synthesis = synthNodes[0];
+    const synthesisContent = typeof synthesis.payload === 'string' 
+      ? JSON.parse(synthesis.payload) 
+      : (synthesis.payload || {});
+
+    const serverUrl = this.config.serverUrl;
+    const token = this.config.token;
+
+    // Get the opinion for context
+    const opinions = await this.sql`
+      SELECT question, context, channel FROM clv_opinions WHERE id = ${opinionId}
+    `;
+    if (opinions.length === 0) return;
+    const opinion = opinions[0];
+
+    console.log(`  💬 Triggering discussion round for ${critiqueNodes.length} critics`);
+
+    // Ask each critic to respond to the synthesis
+    for (const critic of critiqueNodes) {
+      // Get critique for context
+      const critiqueResult = await this.sql`
+        SELECT payload FROM clv_blackboard_nodes WHERE id = ${critic.id}
+      `;
+      const critiquePayload = critiqueResult[0]?.payload 
+        ? (typeof critiqueResult[0].payload === 'string' ? JSON.parse(critiqueResult[0].payload) : critiqueResult[0].payload) 
+        : {};
+
+      const prompt = `You submitted a critique for this question:
+
+"${opinion.question}"
+
+Your original critique:
+- Concerns: ${critiquePayload.concerns?.join(', ') || 'None'}
+- Suggestions: ${critiquePayload.suggestions?.join(', ') || 'None'}
+- Confidence: ${critiquePayload.confidence}/10
+
+The asker has now provided a synthesis:
+
+"${synthesisContent.text || synthesisContent.response || synthesisContent.recommendation || 'No synthesis text'}"
+
+Your task: Review this synthesis and either:
+1. APPROVE it if it addresses your concerns
+2. RESPOND with follow-up concerns if it doesn't
+
+Respond in JSON format:
+\`\`\`json
+{
+  "approved": true/false,
+  "reasoning": "Your reasoning...",
+  "remaining_concerns": ["concern1", "concern2"] // only if not approved
+}
+\`\`\``;
+
+      // Get LLM key for this critic
+      let llmKey = this.config.llmKey;
+      if (critic.provider) {
+        const vaultRef = `org_${critic.provider}`;
+        const resolved = await resolveVaultKey(this.sql, vaultRef, critic.org_id);
+        if (resolved && resolved !== vaultRef) llmKey = resolved;
+      }
+      if (!llmKey) llmKey = this.config.llmKey;
+
+      const model = critic.model || this.config.model;
+      const llmUrl = normalizeLlmUrl(critic.llm_url || this.config.llmUrl);
+
+      try {
+        const result = await callOpinionCritiqueLLM(model, prompt, llmUrl, llmKey);
+        
+        if (!result) {
+          console.log(`  ⚠ Critic ${critic.agent_name || critic.agent_id} failed to respond — skipping`);
+          continue;
+        }
+
+        // Create follow-up critique node
+        const followBody = JSON.stringify({
+          kind: 'critique',
+          content: {
+            concerns: result.concerns,
+            suggestions: result.suggestions,
+            confidence: result.confidence,
+            is_follow_up: true,
+            addresses_synthesis: result.confidence >= 5,
+          },
+          parent_node_id: synthesis.id,
+          parent_edge_kind: 'addresses',
+        });
+
+        const authToken = critic.token || token;
+        const followResp = await fetch(`${serverUrl}/v1/opinions/${opinionId}/nodes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: followBody,
+        });
+
+        if (followResp.ok) {
+          console.log(`  💬 Follow-up critique from ${critic.agent_name || critic.agent_id}: approved=${result.confidence >= 5}`);
+        }
+      } catch (err: any) {
+        console.warn(`  ⚠ Discussion round error for ${critic.agent_name || critic.agent_id}: ${err.message}`);
+      }
+    }
+
+    // After discussion, trigger vote round
+    console.log(`  🗳️ Discussion complete — going to vote`);
+    await this.triggerVoteRound(opinionId);
   }
 
   // ─── Trigger Vote Round ──────────────────────────────

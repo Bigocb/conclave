@@ -288,7 +288,7 @@ The submitting agent described what they did and what concerns them. Pay close a
 ## Durable Project Conventions
 
 ${input.memories && input.memories.length > 0
-  ? input.memories.map(m => '- ' + m).join('\n')
+  ? input.memories.join('\n')
   : 'No specific project conventions identified for this review.'}
 
 ## Your Task

@@ -254,10 +254,13 @@ export class FleetManager extends EventEmitter {
   private startTime: number = 0;
   private running: boolean = false;
   private _syncTimer?: ReturnType<typeof setInterval>;
+  private memoryService: MemoryService;
 
   constructor(config: FleetConfig) {
     super();
     this.config = config;
+    // Use default parameter like other services to avoid type issues
+    this.memoryService = new MemoryService(db as any);
   }
 
   // ─── Pulse Relay ───────────────────────────────────────────
@@ -637,10 +640,10 @@ export class FleetManager extends EventEmitter {
             this.broadcastPulse('FLEET_SKIP', { taskId, reason: `status: ${taskStatus}`, reviewerName: proc.reviewerName });
             continue;
           }
-          // Skip own org's tasks in private mode
-          if (this.config.scope === 'private' && feedItem.org_id && feedItem.org_id !== this.config.org_id) {
-            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (private scope mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
-            this.broadcastPulse('FLEET_SKIP', { taskId, reason: 'private scope mismatch', reviewerName: proc.reviewerName });
+          // Skip tasks from other orgs — fleet agents only belong to one org
+          if (feedItem.org_id && feedItem.org_id !== this.config.org_id) {
+            console.log(`  ⏭ ${proc.reviewerName}: Skipping ${taskId} (org mismatch: ${feedItem.org_id} != ${this.config.org_id})`);
+            this.broadcastPulse('FLEET_SKIP', { taskId, reason: 'org mismatch', reviewerName: proc.reviewerName });
             continue;
           }
 
@@ -657,13 +660,13 @@ export class FleetManager extends EventEmitter {
           try {
             const taskResp = await client.getTask(taskId);
             fullTask = taskResp.data;
-          } catch {
+          } catch (err: any) {
             taskFetchFailed = true;
+            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — ${err.message || err}`);
           }
 
           // Skip tasks we can't fetch — wrong org or insufficient permissions
           if (taskFetchFailed) {
-            console.log(`  ⚠ ${proc.reviewerName}: Cannot fetch task ${taskId} — skipping`);
             this.broadcastPulse('FLEET_FETCH_ERROR', { taskId, reviewerName: proc.reviewerName, error: 'Cannot fetch task' });
             proc.reviewedTaskIds.delete(taskId);
             continue;
@@ -706,6 +709,47 @@ export class FleetManager extends EventEmitter {
     try {
       // 1. Build input for any backend type
       const taskId = task.id ?? task.task_id;
+      
+      // Fetch memories for the task's principal (the submitter) to inject into the review prompt
+      let memories: string[] = [];
+      const principalId = task.principalId;
+      if (principalId) {
+        try {
+          const memoryEntries = await this.memoryService.getByPrincipal(principalId);
+          
+          // Build structured convention block from high-confidence conventions
+          const conventions = memoryEntries
+            .filter(m => m.confidence !== null && m.confidence >= 0.6 && m.category !== 'fact')
+            .map(m => {
+              const sourceInfo = m.sourceTaskId
+                ? `\n  Evidence: "${m.value.slice(0, 200)}"\n  Source: task ${m.sourceTaskId}`
+                : `\n  Evidence: "${m.value.slice(0, 200)}"`;
+              return `- ${m.value} (confidence: ${m.confidence}, category: ${m.category})${sourceInfo}`;
+            });
+
+          if (conventions.length > 0) {
+            memories = [
+              '## Known Conventions (from past reviews)',
+              '',
+              'The following conventions were established in previous reviews. Follow them unless you have a strong reason to deviate.',
+              '',
+              ...conventions,
+              '',
+              '---',
+            ];
+          } else {
+            // Fallback: show raw memory values (backward compat with old-style memories)
+            memories = memoryEntries.map(m => m.value);
+          }
+
+          if (memories.length > 0) {
+            console.log(`[DBG-reviewTask] Loaded ${memoryEntries.length} memories (${conventions.length} conventions) for principal ${principalId}`);
+          }
+        } catch (memErr) {
+          console.warn(`[DBG-reviewTask] Failed to load memories for principal ${principalId}:`, memErr);
+        }
+      }
+
       const reviewInput: ReviewInput = {
         task_id: taskId,
         task_description: task.description,
@@ -714,6 +758,7 @@ export class FleetManager extends EventEmitter {
         channel,
         instructions: proc.instructions,
         skills: proc.skills,
+        memories,
       };
       console.log(`[DBG-reviewTask] reviewerName=${proc.reviewerName} proc.instructions=${JSON.stringify(proc.instructions)} proc.skills=${JSON.stringify(proc.skills)}`);
 
@@ -729,6 +774,8 @@ export class FleetManager extends EventEmitter {
 
       // Resolve vault reference before calling LLM
       const resolvedKey = await resolveVaultKey(proc.llmKey, this.config.org_id);
+      const maskedKey = resolvedKey ? resolvedKey.slice(0, 5) + '***' : '(empty)';
+      console.log(`[DBG-key] ${proc.reviewerName}: llmKey=${proc.llmKey?.slice(0, 5) ?? '(none)'}*** → resolved=${maskedKey} org=${this.config.org_id?.slice(0, 8)}***`);
 
       // 2. Dispatch to the right backend based on type
       let draft: ReviewOutput;
@@ -750,6 +797,8 @@ export class FleetManager extends EventEmitter {
             const stepProc = Array.from(this.processes.values()).find(p => p.reviewerName === stepName);
             if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
             const stepResolvedKey = await resolveVaultKey(stepProc.llmKey, this.config.org_id);
+            const stepMasked = stepResolvedKey ? stepResolvedKey.slice(0, 5) + '***' : '(empty)';
+            console.log(`[DBG-key] pipeline-step ${stepName}: llmKey=${stepProc.llmKey?.slice(0, 5) ?? '(none)'}*** → resolved=${stepMasked}`);
             const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
             const stepType = stepProc.type || 'llm';
             if (stepType === 'code') return runCodeReview(stepAgent, input, stepProc.command!);

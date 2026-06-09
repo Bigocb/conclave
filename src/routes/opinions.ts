@@ -32,16 +32,17 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     const data = parsed.data;
     const agentId = (request as any).agentId ?? 'agt_dev';
     const agent = await agentSvc.getById(agentId);
-    const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
+    // Use provided principal_id from request body, or fall back to agent's principal, or auth principal, or dev
+    const principalId = data.principal_id ?? agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
 
     // Verify principal is subscribed to the target channel
     const channel = await channelSvc.getByName(data.channel);
-    if (channel && agent?.principal_id) {
-      const subcribed = await channelSvc.isSubscribed(agent.principal_id, channel.id);
-      if (!subcribed) {
+    if (channel && principalId && principalId !== 'prn_dev') {
+      const subscribed = await channelSvc.isSubscribed(principalId, channel.id);
+      if (!subscribed) {
         return reply.code(403).send(error(ERROR_CODES.NOT_SUBSCRIBED.code, 'Principal is not subscribed to this channel', {
           channel: data.channel,
-          principal_id: agent.principal_id,
+          principal_id: principalId,
         }));
       }
     }
@@ -65,7 +66,7 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       question: data.question,
       context: data.context,
       channel: data.channel,
-      requestedOpinions: data.requested_opinions,
+      requestedOpinions: data.requested_critics,
       deadline: data.deadline,
       metadata: data.metadata as Record<string, unknown> | undefined,
       budgetSpent: BUDGET.ASK_OPINION,
@@ -146,6 +147,34 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       metadata: data.metadata as Record<string, unknown> | undefined,
     });
 
+    // Also create a SynthesisNode for the worker to detect (unified graph model)
+    const { BlackboardService } = await import('../services/blackboard.js');
+    const bbSvc = new BlackboardService(fastify.db);
+    const { v7: uuidv7 } = await import('uuid');
+    await bbSvc.createNode({
+      id: `nd_${uuidv7().replace(/-/g, '').slice(0, 24)}`,
+      opinionId,
+      agentId: respondentId,
+      principalId,
+      kind: 'synthesis',
+      payload: {
+        response: data.response,
+        confidence: data.confidence,
+        reasoning: data.reasoning,
+        references: data.references,
+      },
+    });
+
+    // Notify worker (in case it's listening)
+    try {
+      const pgClient = (fastify as any).pg;
+      if (pgClient) {
+        await pgClient.query(`SELECT pg_notify('opinion_node_submitted', $1)`, [opinionId]);
+      }
+    } catch (notifyErr: any) {
+      console.warn(`[opinions] pg_notify failed (non-fatal): ${notifyErr.message}`);
+    }
+
     // Earn budget for answering
     await budgetSvc.earn(principalId, BUDGET.ANSWER_OPINION, 'answer_opinion', responseId);
 
@@ -170,6 +199,12 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
       return reply.code(422).send(error('VALIDATION_ERROR', 'Invalid input', parsed.error.flatten()));
     }
     const data = parsed.data;
+
+    // Only allow synthesis when opinion is in synthesizing status
+    if (data.kind === 'synthesis' && opinion.status !== 'synthesizing') {
+      return reply.code(409).send(error('NOT_SYNTHESIZABLE', 'Synthesis can only be submitted when all critiques are received'));
+    }
+
     const agentId = (request as any).agentId ?? 'agt_dev';
     const agent = await agentSvc.getById(agentId);
     const principalId = agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';

@@ -153,9 +153,9 @@ git push origin main  # Auto-deploys to Vercel + Render
 
 ## NOTES
 
-- **Vercel project**: `conclave` (prj_UykwVo6daEG1gKtL4zmfWy7etgP6), team `team_uPiiukCSfrOQFumG1AxPSFqD`
+- **Vercel project**: `conclave-fe` (frontend only)
 - **Render services**: `conclave-bp4o` (API), `conclave-fleet` (fleet worker)
-- **Production API**: `https://conclave-roan.vercel.app`
+- **Production API**: `https://conclave-bp4o.onrender.com`
 - **Prod DB**: `postgresql://promptoria_db_user:...@dpg-d79au56dqaus739isukg-a.oregon-postgres.render.com/promptoria_db`
 - **Auth**: JWT multi-secret fallback in `verifyToken()`. `clv_` tokens skip agent lookup and use embedded claims.
 - **CORS**: Explicit methods needed — `{origin:true}` doesn't allow PATCH/DELETE.
@@ -205,8 +205,8 @@ This project *is* Conclave — all code changes go through its own review system
 
 ### Production Endpoints
 
-- **API:** `https://conclave-roan.vercel.app`
-- **Dashboard:** `https://conclave-roan.vercel.app/dashboard`
+- **API:** `https://conclave-bp4o.onrender.com`
+- **Dashboard:** `https://conclave-bp4o.onrender.com/dashboard`
 - **Worker:** Render (background fleet worker)
 - **Auth:** Use `clv_` tokens — they resolve agent/principal/org server-side.
 

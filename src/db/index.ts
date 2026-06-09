@@ -233,6 +233,34 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
       updated_at TIMESTAMP DEFAULT NOW(),
       UNIQUE (org_id, provider)
     )`;
+    await client`CREATE TABLE IF NOT EXISTS clv_principal_memory (
+      id TEXT PRIMARY KEY,
+      principal_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      category TEXT DEFAULT 'general',
+      embedding JSONB,
+      ttl INTEGER,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_principal_id ON clv_principal_memory(principal_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_key ON clv_principal_memory(key)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_principal_memory_category ON clv_principal_memory(category)`;
+    
+    // API Keys table (Slice 1: #121)
+    await client`CREATE TABLE IF NOT EXISTS clv_api_keys (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL REFERENCES clv_organizations(id),
+      name TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      permission TEXT NOT NULL DEFAULT 'read',
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    )`;
+    await client`CREATE INDEX IF NOT EXISTS idx_api_keys_org ON clv_api_keys(org_id)`;
+    await client`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON clv_api_keys(key_hash)`;
+    console.log('[initDb] API keys table created');
     console.log('[initDb] Schema push complete');
   } catch (err: any) {
     if (err.code === '42P07' || err.message?.includes('already exists')) {
@@ -248,6 +276,39 @@ export async function initDb(config: { url: string }): Promise<{ db: ConclaveDb;
     console.log('[initDb] owner_id column ensured');
   } catch (migErr: any) {
     console.error('[initDb] owner_id migration failed:', migErr.message);
+  }
+
+  // Memory TTL/decay migration
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
+    console.log('[initDb] expires_at column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] expires_at migration failed:', migErr.message);
+  }
+  // Memory context fields migration (Slice 1: #109)
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS source_task_id TEXT`;
+    console.log('[initDb] source_task_id column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] source_task_id migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS source_principal_id TEXT`;
+    console.log('[initDb] source_principal_id column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] source_principal_id migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS confidence REAL DEFAULT 0.5`;
+    console.log('[initDb] confidence column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] confidence migration failed:', migErr.message);
+  }
+  try {
+    await client`ALTER TABLE clv_principal_memory ADD COLUMN IF NOT EXISTS ttl_days INTEGER DEFAULT 30`;
+    console.log('[initDb] ttl_days column ensured');
+  } catch (migErr: any) {
+    console.error('[initDb] ttl_days migration failed:', migErr.message);
   }
   try {
     await client`ALTER TABLE clv_reviews ADD COLUMN IF NOT EXISTS helpful INTEGER`;

@@ -137,8 +137,9 @@ export const AskOpinionSchema = z.object({
   question: z.string().min(10).max(5000),
   context: z.string().max(10000).optional(),
   channel: z.string().default('general-qa'),
-  requested_opinions: z.number().int().min(1).max(10).default(3),
+  requested_critics: z.number().int().min(1).max(10).default(3),
   deadline: z.string().datetime().optional(),
+  principal_id: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -191,6 +192,15 @@ export type SubmitReviewInput = z.infer<typeof SubmitReviewSchema>;
 export type MarkHelpfulInput = z.infer<typeof MarkHelpfulSchema>;
 export type AskOpinionInput = z.infer<typeof AskOpinionSchema>;
 export type SubmitOpinionResponseInput = z.infer<typeof SubmitOpinionResponseSchema>;
+// ─── API Keys ────────────────────────────────────────────────────
+
+export const CreateApiKeySchema = z.object({
+  name: z.string().min(1).max(200),
+  permission: z.enum(['read', 'write', 'admin']).default('write'),
+});
+
+export type CreateApiKeyInput = z.infer<typeof CreateApiKeySchema>;
+
 export type CreateChannelInput = z.infer<typeof CreateChannelSchema>;
 export type SpotCheckInput = z.infer<typeof SpotCheckSchema>;
 

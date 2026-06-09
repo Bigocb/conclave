@@ -32,6 +32,10 @@ export class ChannelService {
       createdByOrg: data.createdByOrg ?? null,
       createdAt: new Date().toISOString(),
     });
+
+    // Auto-subscribe the Fleet Manager (prn_dev / default principal) to ensure visibility
+    await this.subscribe('prn_dev', id);
+
     return this.getByName(data.name);
   }
 
@@ -71,10 +75,21 @@ export class ChannelService {
   }
 
   async getFeed(channelName: string, limit: number = 20) {
-    const tasks = await this.db.select().from(schema.tasks)
+    const tasks = await this.db.select({
+      id: schema.tasks.id,
+      agentId: schema.tasks.agentId,
+      principalId: schema.tasks.principalId,
+      description: schema.tasks.description,
+      channel: schema.tasks.channel,
+      status: schema.tasks.status,
+      createdAt: schema.tasks.createdAt,
+      orgId: schema.agents.orgId,
+    })
+      .from(schema.tasks)
+      .leftJoin(schema.agents, eq(schema.tasks.agentId, schema.agents.id))
       .where(and(
         eq(schema.tasks.channel, channelName),
-        not(inArray(schema.tasks.status, ['completed', 'cancelled']))
+        not(inArray(schema.tasks.status, ['completed', 'cancelled', 'expired']))
       ))
       .limit(limit);
 
@@ -91,6 +106,7 @@ export class ChannelService {
         channel: t.channel,
         status: t.status,
         created_at: t.createdAt,
+        org_id: t.orgId,
       })),
       opinions: opinions.map(o => ({
         type: 'ask_opinion' as const,

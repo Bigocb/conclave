@@ -11,6 +11,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import { tasks, reviews, principals, agents, channels, channelSubscriptions } from '../db/schema.js';
+import { MemoryService } from '../services/memory.js';
 
 export async function cronRoutes(fastify: FastifyInstance) {
 
@@ -26,7 +27,7 @@ export async function cronRoutes(fastify: FastifyInstance) {
     {
       name: 'General Reviewer',
       channels: ['general-qa', 'code-review'],
-      model: 'glm-5.1',
+      model: 'gemma4:31b',
       provider: 'ollama_cloud',
       llm_url: 'https://ollama.com/api/chat',
       instructions: 'Review for factual accuracy, clarity, and quality. Be concise, specific, and helpful. Focus on what matters most.',
@@ -189,6 +190,27 @@ export async function cronRoutes(fastify: FastifyInstance) {
         task_status: taskReviews.length >= requestedReviews ? 'completed' : 'open',
       });
 
+    } catch (err: any) {
+      return reply.code(500).send({ status: 'error', message: err.message });
+    }
+  });
+
+  // ── POST /v1/cron/memory-cleanup — Cleanup expired memories (runs hourly) ──
+  fastify.all('/cron/memory-cleanup', async (request, reply) => {
+    if (!verifySecret(request)) {
+      return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Invalid cron secret' } });
+    }
+
+    const db = (fastify as any).db;
+    const memorySvc = new MemoryService(db);
+
+    try {
+      const deletedCount = await memorySvc.cleanupExpired();
+      return reply.send({
+        status: 'success',
+        deleted_count: deletedCount,
+        message: `Cleaned up ${deletedCount} expired memories`,
+      });
     } catch (err: any) {
       return reply.code(500).send({ status: 'error', message: err.message });
     }

@@ -14,6 +14,7 @@
     "build": "tsc --noEmitOnError false",
     "start": "node dist/main.js",
     "daemon": "tsx src/reviewer-daemon.ts",
+    "worker:opinion": "tsx src/fleet/opinion-router.ts",
     "worker:reviewer": "tsx src/workers/reviewer.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -35,6 +36,7 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/jwt": "^9.0.0",
     "@fastify/rate-limit": "^10.2.0",
+    "@fastify/swagger": "^9.7.0",
     "@fastify/websocket": "^11.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/bcrypt": "^6.0.0",
@@ -68,4 +70,3 @@
     "vitest": "^3.1.0"
   }
 }
- 

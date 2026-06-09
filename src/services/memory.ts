@@ -1,6 +1,6 @@
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
-import { principalMemory } from '../db/schema.js';
+import { eq, and, inArray } from 'drizzle-orm';
+import { principalMemory, principals } from '../db/schema.js';
 import * as crypto from 'crypto';
 
 export interface MemoryEntry {
@@ -8,7 +8,12 @@ export interface MemoryEntry {
   principalId: string;
   key: string;
   value: string;
-  category: string;
+  category: string | null;
+  sourceTaskId: string | null;
+  sourcePrincipalId: string | null;
+  confidence: number | null;
+  ttlDays: number | null;
+  expiresAt: string | null;
   updatedAt: string;
 }
 
@@ -18,6 +23,21 @@ export class MemoryService {
   async getByPrincipal(principalId: string) {
     return await this.db.select().from(principalMemory)
       .where(eq(principalMemory.principalId, principalId));
+  }
+
+  /**
+   * Fetch memories across ALL principals in an org.
+   * Used when a user JWT (usr_) wants to see memories from all their principals,
+   * including those written by MCP agents under sibling principals.
+   */
+  async getByOrg(orgId: string) {
+    const orgPrincipals = await this.db.select({ id: principals.id })
+      .from(principals)
+      .where(eq(principals.orgId, orgId));
+    if (orgPrincipals.length === 0) return [];
+    const principalIds = orgPrincipals.map(p => p.id);
+    return await this.db.select().from(principalMemory)
+      .where(inArray(principalMemory.principalId, principalIds));
   }
 
   async getByKey(principalId: string, key: string) {
@@ -34,6 +54,11 @@ export class MemoryService {
     key: string;
     value: string;
     category?: string;
+    sourceTaskId?: string;
+    sourcePrincipalId?: string;
+    confidence?: number;
+    ttlDays?: number;
+    expiresAt?: string | null;
   }) {
     const existing = await this.getByKey(data.principalId, data.key);
     
@@ -42,11 +67,26 @@ export class MemoryService {
         .set({
           value: data.value,
           category: data.category ?? existing.category,
+          sourceTaskId: data.sourceTaskId !== undefined ? data.sourceTaskId : existing.sourceTaskId,
+          sourcePrincipalId: data.sourcePrincipalId !== undefined ? data.sourcePrincipalId : existing.sourcePrincipalId,
+          confidence: data.confidence !== undefined ? data.confidence : existing.confidence,
+          ttlDays: data.ttlDays !== undefined ? data.ttlDays : existing.ttlDays,
+          expiresAt: data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(principalMemory.id, existing.id));
       
-      return { ...existing, value: data.value, updatedAt: new Date().toISOString() };
+      return {
+        ...existing,
+        value: data.value,
+        category: data.category ?? existing.category,
+        sourceTaskId: data.sourceTaskId !== undefined ? data.sourceTaskId : existing.sourceTaskId,
+        sourcePrincipalId: data.sourcePrincipalId !== undefined ? data.sourcePrincipalId : existing.sourcePrincipalId,
+        confidence: data.confidence !== undefined ? data.confidence : existing.confidence,
+        ttlDays: data.ttlDays !== undefined ? data.ttlDays : existing.ttlDays,
+        expiresAt: data.expiresAt !== undefined ? data.expiresAt : existing.expiresAt,
+        updatedAt: new Date().toISOString(),
+      };
     }
 
     const id = `mem_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
@@ -56,6 +96,11 @@ export class MemoryService {
       key: data.key,
       value: data.value,
       category: data.category ?? 'general',
+      sourceTaskId: data.sourceTaskId ?? null,
+      sourcePrincipalId: data.sourcePrincipalId ?? null,
+      confidence: data.confidence ?? null,
+      ttlDays: data.ttlDays ?? null,
+      expiresAt: data.expiresAt ?? null,
     });
 
     return {
@@ -64,6 +109,11 @@ export class MemoryService {
       key: data.key,
       value: data.value,
       category: data.category ?? 'general',
+      sourceTaskId: data.sourceTaskId ?? null,
+      sourcePrincipalId: data.sourcePrincipalId ?? null,
+      confidence: data.confidence ?? null,
+      ttlDays: data.ttlDays ?? null,
+      expiresAt: data.expiresAt ?? null,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -75,5 +125,80 @@ export class MemoryService {
     await this.db.delete(principalMemory)
       .where(eq(principalMemory.id, existing.id));
     return true;
+  }
+
+  async search(principalId: string, query: string, limit = 20) {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+    
+    const q = query.toLowerCase();
+    const memories = await this.getByPrincipal(principalId);
+    
+    const results = memories.filter(m => 
+      m.key?.toLowerCase().includes(q) ||
+      m.value?.toLowerCase().includes(q) ||
+      m.category?.toLowerCase().includes(q)
+    );
+    
+    results.sort((a, b) => {
+      const aKey = a.key?.toLowerCase().includes(q) ? 0 : 1;
+      const bKey = b.key?.toLowerCase().includes(q) ? 0 : 1;
+      if (aKey !== bKey) return aKey - bKey;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+    
+    return results.slice(0, limit);
+  }
+
+  async cleanupExpired() {
+    const now = new Date().toISOString();
+    const rawResult = await (this.db as any).execute(
+      `DELETE FROM clv_principal_memory WHERE expires_at IS NOT NULL AND expires_at < '${now}'`
+    );
+    return rawResult.rowCount || 0;
+  }
+
+  async getStats(principalId: string) {
+    const memories = await this.getByPrincipal(principalId);
+    const total = memories.length;
+    const categories: Record<string, number> = {};
+    memories.forEach(m => {
+      const cat = m.category || 'general';
+      categories[cat] = (categories[cat] || 0) + 1;
+    });
+    return { total, categories };
+  }
+
+  /**
+   * Group memories by category, returning a record keyed by category name.
+   * Each entry includes convention text, confidence, source task, and updated_at.
+   */
+  async getGroupedByPrincipal(principalId: string): Promise<Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>>> {
+    const memories = await this.getByPrincipal(principalId);
+    return this.groupMemories(memories);
+  }
+
+  /**
+   * Group memories across all principals in an org by category.
+   */
+  async getGroupedByOrg(orgId: string): Promise<Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>>> {
+    const memories = await this.getByOrg(orgId);
+    return this.groupMemories(memories);
+  }
+
+  private groupMemories(memories: any[]): Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>> {
+    const grouped: Record<string, Array<{ convention: string; confidence: number | null; source_task: string | null; updated_at: string }>> = {};
+    for (const m of memories) {
+      const cat = m.category || 'general';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({
+        convention: m.value,
+        confidence: m.confidence,
+        source_task: m.sourceTaskId ?? null,
+        updated_at: m.updatedAt,
+      });
+    }
+    return grouped;
   }
 }

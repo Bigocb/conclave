@@ -1,4 +1,4 @@
-import { pgTable, text, integer, doublePrecision, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, doublePrecision, index } from 'drizzle-orm/pg-core';
 
 // ─── Users ──────────────────────────────────────────────────
 export const users = pgTable('clv_users', {
@@ -296,8 +296,29 @@ export const principalMemory = pgTable('clv_principal_memory', {
   key: text('key').notNull(),               // namespace:category:detail
   value: text('value').notNull(),           // The durable fact
   category: text('category').default('general'), // convention | preference | fact
+  sourceTaskId: text('source_task_id'),       // Task that produced this memory
+  sourcePrincipalId: text('source_principal_id'), // Principal who wrote the source review
+  confidence: real('confidence').default(0.5), // How confident the extraction was
+  ttlDays: integer('ttl_days').default(30),   // Auto-expire after N days without reinforcement
+  expiresAt: text('expires_at'),              // TTL - null means never expires
   updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   prinKeyIdx: index('idx_mem_prin_key').on(table.principalId, table.key),
   prinIdx: index('idx_mem_prin').on(table.principalId),
+  expiresIdx: index('idx_mem_expires').on(table.expiresAt),
+}));
+
+// ─── API Keys (for REST API authentication) ────────────────────
+export const apiKeys = pgTable('clv_api_keys', {
+  id: text('id').primaryKey(),               // clv_api_<uuid>
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  name: text('name').notNull(),
+  keyHash: text('key_hash').notNull(),         // SHA256 hash of the API key
+  keyPrefix: text('key_prefix').notNull(),     // First 8 chars for display
+  permission: text('permission').notNull().default('read'), // read | write | admin
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  revokedAt: text('revoked_at'),              // null = active, set = revoked
+}, (table) => ({
+  orgIdx: index('idx_api_keys_org').on(table.orgId),
+  keyHashIdx: index('idx_api_keys_hash').on(table.keyHash),
 }));
