@@ -774,6 +774,8 @@ export class FleetManager extends EventEmitter {
 
       // Resolve vault reference before calling LLM
       const resolvedKey = await resolveVaultKey(proc.llmKey, this.config.org_id);
+      const maskedKey = resolvedKey ? resolvedKey.slice(0, 5) + '***' : '(empty)';
+      console.log(`[DBG-key] ${proc.reviewerName}: llmKey=${proc.llmKey?.slice(0, 5) ?? '(none)'}*** → resolved=${maskedKey} org=${this.config.org_id?.slice(0, 8)}***`);
 
       // 2. Dispatch to the right backend based on type
       let draft: ReviewOutput;
@@ -795,6 +797,8 @@ export class FleetManager extends EventEmitter {
             const stepProc = Array.from(this.processes.values()).find(p => p.reviewerName === stepName);
             if (!stepProc) throw new Error(`Pipeline step "${stepName}" not found`);
             const stepResolvedKey = await resolveVaultKey(stepProc.llmKey, this.config.org_id);
+            const stepMasked = stepResolvedKey ? stepResolvedKey.slice(0, 5) + '***' : '(empty)';
+            console.log(`[DBG-key] pipeline-step ${stepName}: llmKey=${stepProc.llmKey?.slice(0, 5) ?? '(none)'}*** → resolved=${stepMasked}`);
             const stepAgent: any = { model: stepProc.model, instructions: stepProc.instructions, skills: stepProc.skills };
             const stepType = stepProc.type || 'llm';
             if (stepType === 'code') return runCodeReview(stepAgent, input, stepProc.command!);
