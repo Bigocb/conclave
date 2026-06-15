@@ -402,6 +402,7 @@ export class FleetManager extends EventEmitter {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${this.config.token}`,
             },
+            body: JSON.stringify({}),
           });
           if (agentTokenResp.ok) {
             const tokenData = await agentTokenResp.json() as any;
