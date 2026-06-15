@@ -392,12 +392,11 @@ export class FleetManager extends EventEmitter {
         }
       }
 
-      // 3. Create API client with the first agent's ID and its own token
-      let agentToken = agents[0]?.token || '';
-      if (!agentToken) {
-        // Try to get/fetch a token for the first agent so auth resolves correctly
+      // 3. Ensure every agent has a usable clv_ token, then create the API client
+      for (let i = 0; i < agents.length; i++) {
+        if (agents[i].token && agents[i].token.startsWith('clv_')) continue;
         try {
-          const agentTokenResp = await fetch(`${this.config.server}/v1/agents/${agents[0]?.agentId}/regenerate-token`, {
+          const agentTokenResp = await fetch(`${this.config.server}/v1/agents/${agents[i].agentId}/regenerate-token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -406,10 +405,23 @@ export class FleetManager extends EventEmitter {
           });
           if (agentTokenResp.ok) {
             const tokenData = await agentTokenResp.json() as any;
-            agentToken = tokenData.data?.token ?? tokenData.token ?? '';
-            agents[0] = { ...agents[0], token: agentToken };
+            const freshToken = tokenData.data?.token ?? tokenData.token ?? '';
+            if (freshToken) {
+              agents[i] = { ...agents[i], token: freshToken };
+              console.log(`  🔑 Refreshed token for ${agents[i].agentId}`);
+            }
+          } else {
+            const errBody = await agentTokenResp.text().catch(() => '');
+            console.warn(`  ⚠ Token refresh for ${agents[i].agentId} failed: ${agentTokenResp.status} ${errBody.slice(0, 200)}`);
           }
-        } catch { /* fallback */ }
+        } catch (err: any) {
+          console.warn(`  ⚠ Token refresh for ${agents[i].agentId} threw: ${err.message}`);
+        }
+      }
+
+      const agentToken = agents[0]?.token || '';
+      if (!agentToken || !agentToken.startsWith('clv_')) {
+        console.warn(`  ⚠ ${reviewer.name}: no valid agent token available, reviews will use the fleet token and may fail with SELF_REVIEW_FORBIDDEN`);
       }
       const pollingClient = new ConclaveApiClient({
         serverUrl: this.config.server,
