@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 /**
  * Fix vault key references for fleet reviewers.
  *
@@ -65,9 +67,10 @@ export async function migrateVaultKeyReferences(dbClient: any) {
         const latestKey = recentVault[0];
 
         // Upsert the correct canonical entry
+        const vaultId = 'vlt_' + crypto.randomUUID();
         await sql`
-          INSERT INTO clv_org_vault (org_id, provider, encrypted_value, created_at, updated_at)
-          VALUES (${orgId}, 'ollama_cloud', ${latestKey.encrypted_value}, NOW(), NOW())
+          INSERT INTO clv_org_vault (id, org_id, provider, encrypted_value, created_at, updated_at)
+          VALUES (${vaultId}, ${orgId}, 'ollama_cloud', ${latestKey.encrypted_value}, NOW(), NOW())
           ON CONFLICT (org_id, provider) DO UPDATE
           SET encrypted_value = ${latestKey.encrypted_value}, updated_at = NOW()`;
 

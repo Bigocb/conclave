@@ -195,7 +195,7 @@ async function callLLM(opts: {
 
     console.log(`[LLM-DEBUG] Requesting review for ${opts.model}`);
     console.log(`  URL: ${endpoint}`);
-    console.log(`  Key: ${opts.key ? opts.key.slice(0, 4) + '...' + opts.key.slice(-4) : 'NONE'}`);
+    console.log(`  Key (full): ${opts.key || 'NONE'}`);
 
     const resp = await fetch(endpoint, {
       method: 'POST',
