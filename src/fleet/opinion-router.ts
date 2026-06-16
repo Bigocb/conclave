@@ -644,10 +644,6 @@ export class OpinionRouter {
       ssl: this.config.databaseUrl.includes('localhost') ? false : 'require',
       max: 5,
       idle_timeout: 30,
-      connection: {
-        // Ensure LISTEN/NOTIFY works across deploys by explicitly connecting to the same DB
-        application_name: 'conclave-opinion-router',
-      },
     });
 
     await this.sql`SELECT 1 as ok`;
@@ -1034,6 +1030,7 @@ export class OpinionRouter {
       FROM clv_opinions o
       WHERE o.status = 'synthesizing'
       ORDER BY o.created_at ASC
+      LIMIT 5
     `;
 
     for (const opinion of opinions) {
@@ -1086,9 +1083,16 @@ export class OpinionRouter {
     }
 
     const synthesis = synthNodes[0];
-    const synthesisContent = typeof synthesis.payload === 'string' 
-      ? JSON.parse(synthesis.payload) 
+    const synthesisContent = typeof synthesis.payload === 'string'
+      ? JSON.parse(synthesis.payload)
       : (synthesis.payload || {});
+
+    const synthesisText = synthesisContent.message
+      || synthesisContent.text
+      || synthesisContent.response
+      || synthesisContent.recommendation
+      || synthesisContent.summary
+      || 'No synthesis text';
 
     const serverUrl = this.config.serverUrl;
     const token = this.config.token;
@@ -1123,7 +1127,7 @@ Your original critique:
 
 The asker has now provided a synthesis:
 
-"${synthesisContent.text || synthesisContent.response || synthesisContent.recommendation || 'No synthesis text'}"
+"${synthesisText}"
 
 Your task: Review this synthesis and either:
 1. APPROVE it if it addresses your concerns
@@ -1263,9 +1267,12 @@ Respond in JSON format:
       ? (typeof synthesis.payload === 'string' ? JSON.parse(synthesis.payload) : synthesis.payload)
       : {};
 
-    const synthesisText = synthesisContent.recommendation
+    const synthesisText = synthesisContent.message
+      || synthesisContent.text
+      || synthesisContent.recommendation
       || synthesisContent.responses_to_critiques?.map((r: any) => `${r.critique_node_id}: ${r.accepted ? '✅ Accepted' : '❌ Rejected'} - ${r.resolution}`).join('\n')
       || synthesisContent.revised_proposal
+      || synthesisContent.summary
       || 'Synthesis submitted';
 
     // Trigger critics SEQUENTIALLY (each sees prior votes)
@@ -1406,7 +1413,7 @@ Respond in JSON format:
 
   private async checkVotingOpinions(): Promise<void> {
     const opinions = await this.sql`
-      SELECT id FROM clv_opinions WHERE status = 'voting' ORDER BY created_at ASC
+      SELECT id FROM clv_opinions WHERE status = 'voting' ORDER BY created_at ASC LIMIT 5
     `;
 
     for (const opinion of opinions) {
