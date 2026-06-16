@@ -1237,10 +1237,8 @@ Respond in JSON format:
     const criticPrincipals = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'critique'
-        AND e.kind = 'critiques'
     `;
 
     if (criticPrincipals.length === 0) {
