@@ -1416,7 +1416,28 @@ Respond in JSON format:
     `;
 
     for (const opinion of opinions) {
-      await this.checkAndFinalizeConsensus(opinion.id);
+      // If not all critics have cast a consensus vote yet, re-run the vote round
+      const critics = await this.sql`
+        SELECT DISTINCT n.principal_id
+        FROM clv_blackboard_nodes n
+        WHERE n.opinion_id = ${opinion.id}
+          AND n.kind = 'critique'
+      `;
+      const voters = await this.sql`
+        SELECT DISTINCT n.principal_id
+        FROM clv_blackboard_nodes n
+        JOIN clv_blackboard_edges e ON e.source_node_id = n.id
+        WHERE n.opinion_id = ${opinion.id}
+          AND n.kind = 'consensus'
+          AND e.kind = 'votes_on'
+      `;
+
+      if (voters.length < critics.length) {
+        console.log(`  🗳️ Opinion ${opinion.id}: ${voters.length}/${critics.length} voted — triggering vote round`);
+        await this.triggerVoteRound(opinion.id);
+      } else {
+        await this.checkAndFinalizeConsensus(opinion.id);
+      }
     }
   }
 
@@ -1466,19 +1487,15 @@ Respond in JSON format:
     const critics = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'critique'
-        AND e.kind = 'critiques'
     `;
 
     const voters = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'consensus'
-        AND e.kind = 'votes_on'
     `;
 
     // Not all critics have voted yet
