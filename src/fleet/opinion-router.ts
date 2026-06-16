@@ -1462,13 +1462,6 @@ Respond in JSON format:
     `;
     const total = parseInt(nodeCount[0]?.cnt || '0', 10);
 
-    // If any follow-up critique exists → loop back to synthesizing
-    if (followUpEdges.length > 0) {
-      console.log(`  🔄 Opinion ${opinionId}: ${followUpEdges.length} follow-up critiques — back to synthesizing`);
-      await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinionId}`;
-      return;
-    }
-
     // Check if all critics have voted
     const critics = await this.sql`
       SELECT DISTINCT n.principal_id
