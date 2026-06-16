@@ -83,7 +83,24 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
       `;
 
       if (vaultRows.length === 0) {
-        console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using fallback`);
+        // Fallback: agents with provider='custom' or other legacy providers may
+        // actually use Ollama Cloud. Try org_ollama_cloud before giving up.
+        if (providerName !== 'ollama_cloud') {
+          console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', trying org_ollama_cloud fallback`);
+          const fallbackRows = await sql<any[]>`
+            SELECT provider, encrypted_value
+            FROM clv_org_vault
+            WHERE org_id = ${orgId}
+              AND provider = ${'ollama_cloud'}
+            LIMIT 1
+          `;
+          if (fallbackRows.length > 0) {
+            const decrypted = decryptVaultValue(fallbackRows[0].encrypted_value);
+            console.log(`  🔑 Vault key resolved via org_ollama_cloud fallback (decrypted)`);
+            return decrypted;
+          }
+        }
+        console.warn(`  ⚠ Vault key '${key}' not found for org '${orgId}', using raw value as fallback`);
         return key;
       }
 
@@ -123,12 +140,71 @@ async function resolveVaultKey(sql: any, key: string, orgId: string): Promise<st
 // ─── Agent LLM Key Resolution ─────────────────────────────────────
 
 /**
+ * Resolve an LLM key for a critic/voter agent.
+ * 1. Try org_<provider> if the agent has a provider.
+ * 2. Fall back to org_ollama_cloud (the canonical working key for this org).
+ * 3. Fall back to the configured env key last.
+ */
+async function resolveAgentLlmKey(sql: any, agent: CriticAgent, configKey: string): Promise<string> {
+  // 1. Provider-specific vault reference
+  if (agent.provider) {
+    const vaultRef = `org_${agent.provider}`;
+    const resolved = await resolveVaultKey(sql, vaultRef, agent.org_id);
+    if (resolved && resolved !== vaultRef) {
+      console.log(`  🔑 Resolved ${vaultRef} for agent ${agent.id}`);
+      return resolved;
+    }
+  }
+
+  // 2. Canonical org_ollama_cloud fallback
+  const ollamaRef = 'org_ollama_cloud';
+  const ollamaResolved = await resolveVaultKey(sql, ollamaRef, agent.org_id);
+  if (ollamaResolved && ollamaResolved !== ollamaRef) {
+    console.log(`  🔑 Resolved org_ollama_cloud fallback for agent ${agent.id}`);
+    return ollamaResolved;
+  }
+
+  // 3. Final fallback to configured env key
+  console.log(`  🔑 Using configured env key for agent ${agent.id}`);
+  return configKey;
+}
+
+/**
+ * Refresh an agent's clv_ token if missing or stale.
+ */
+async function refreshAgentToken(agentId: string, serverUrl: string, fleetToken: string): Promise<string> {
+  try {
+    const resp = await fetch(`${serverUrl}/v1/agents/${agentId}/regenerate-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(fleetToken ? { Authorization: `Bearer ${fleetToken}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (resp.ok) {
+      const data = (await resp.json()) as any;
+      const token = data?.data?.token ?? data?.token ?? '';
+      if (token) {
+        console.log(`  🔑 Refreshed token for ${agentId}`);
+        return token;
+      }
+    }
+    const errBody = await resp.text().catch(() => '');
+    console.warn(`  ⚠ Token refresh for ${agentId} failed: ${resp.status} ${errBody.slice(0, 150)}`);
+  } catch (err: any) {
+    console.warn(`  ⚠ Token refresh for ${agentId} threw: ${err.message}`);
+  }
+  return '';
+}
+
+/**
  * Resolve an LLM key for an agent:
  * - If it starts with 'org_', look up in clv_org_vault and decrypt
  * - If it contains ':' (vault-encrypted format), decrypt it
  * - Otherwise, use as-is (raw API key like Ollama Cloud keyId.secret)
  */
-async function resolveAgentLlmKey(agentId: string, orgId: string, storedKey: string | null): Promise<string> {
+async function resolveAgentLlmKeyLegacy(agentId: string, orgId: string, storedKey: string | null): Promise<string> {
   if (!storedKey) {
     console.log(`  🔑 No stored key for agent ${agentId}, using config fallback`);
     return '';
@@ -858,34 +934,24 @@ export class OpinionRouter {
         }
 
         const agent = agents[0];
-        
+
         // 1. Get model and LLM URL from agent (or fallback to config)
         const model = agent.model || this.config.model;
         const llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
-        
-        // 2. Resolve the agent's LLM key using its provider
-        //    Look up org_<provider> in the vault to get the actual API key
-        let llmKey = this.config.llmKey;
-        if (agent.provider) {
-          const vaultRef = `org_${agent.provider}`;
-          console.log(`  🔑 Looking up vault key '${vaultRef}' for agent ${agent.id} (provider: ${agent.provider})`);
-          const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
-          if (resolvedKey && resolvedKey !== vaultRef) {
-            llmKey = resolvedKey;
-          }
-        }
-        
-        // Fallback to config key if resolution returned empty
-        if (!llmKey) {
-          llmKey = this.config.llmKey;
-        }
-        
-        // Debug: log what key we're using (masked)
-        const maskedKey = llmKey.length > 8 
-          ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
+
+        // 2. Resolve the agent's LLM key from vault (provider-specific → org_ollama_cloud → env)
+        const llmKey = await resolveAgentLlmKey(this.sql, agent, this.config.llmKey);
+        const maskedKey = llmKey.length > 8
+          ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}`
           : (llmKey ? `Length ${llmKey.length}` : 'NONE');
         console.log(`  🔑 Resolved LLM Key: ${maskedKey}`);
         console.log(`  🤖 Critic ${agent.name || agent.id} (${model}) for ${sub.principal_id}`);
+
+        // Ensure the agent has a usable clv_ token before calling the API
+        let authToken = agent.token || '';
+        if (!authToken.startsWith('clv_')) {
+          authToken = await refreshAgentToken(agent.id, serverUrl, token);
+        }
 
         // Call LLM
         const result = await callOpinionCritiqueLLM(model, systemPrompt, llmUrl, llmKey);
@@ -902,12 +968,10 @@ export class OpinionRouter {
             concerns: result.concerns,
             suggestions: result.suggestions,
             confidence: result.confidence,
+            reasoning: result.reasoning,
           },
           ...(rootNodeId ? { parent_node_id: rootNodeId, parent_edge_kind: 'critiques' } : {}),
         });
-        
-        // Use the agent's token for auth so the API knows who is calling
-        const authToken = agent.token || token;
         const critiqueResp = await fetch(`${serverUrl}/v1/opinions/${opinion.id}/nodes`, {
           method: 'POST',
           headers: {
@@ -1065,17 +1129,10 @@ Respond in JSON format:
 }
 \`\`\``;
 
-      // Get LLM key for this critic
-      let llmKey = this.config.llmKey;
-      if (critic.provider) {
-        const vaultRef = `org_${critic.provider}`;
-        const resolved = await resolveVaultKey(this.sql, vaultRef, critic.org_id);
-        if (resolved && resolved !== vaultRef) llmKey = resolved;
-      }
-      if (!llmKey) llmKey = this.config.llmKey;
-
+      // Get LLM key for this critic (vault → org_ollama_cloud → env)
       const model = critic.model || this.config.model;
       const llmUrl = normalizeLlmUrl(critic.llm_url || this.config.llmUrl);
+      const llmKey = await resolveAgentLlmKey(this.sql, critic as CriticAgent, this.config.llmKey);
 
       try {
         const result = await callOpinionCritiqueLLM(model, prompt, llmUrl, llmKey);
@@ -1092,6 +1149,7 @@ Respond in JSON format:
             concerns: result.concerns,
             suggestions: result.suggestions,
             confidence: result.confidence,
+            reasoning: result.reasoning,
             is_follow_up: true,
             addresses_synthesis: result.confidence >= 5,
           },
@@ -1099,7 +1157,12 @@ Respond in JSON format:
           parent_edge_kind: 'addresses',
         });
 
-        const authToken = critic.token || token;
+        // Ensure a fresh clv_ token for the follow-up critic
+        let authToken = critic.token || '';
+        if (!authToken.startsWith('clv_')) {
+          authToken = await refreshAgentToken(critic.id, serverUrl, token);
+        }
+
         const followResp = await fetch(`${serverUrl}/v1/opinions/${opinionId}/nodes`, {
           method: 'POST',
           headers: {
@@ -1228,20 +1291,15 @@ Respond in JSON format:
 
       const votePrompt = buildVotePrompt(opinion.question, opinion.context, critiqueTexts, synthesisText, priorVotes);
       const model = agent.model || this.config.model;
-      
-      // Normalize URL and resolve key
-      let llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
-      // Resolve the agent's LLM key using its provider
-      let llmKey = this.config.llmKey;
-      if (agent.provider) {
-        const vaultRef = `org_${agent.provider}`;
-        const resolvedKey = await resolveVaultKey(this.sql, vaultRef, agent.org_id);
-        if (resolvedKey && resolvedKey !== vaultRef) {
-          llmKey = resolvedKey;
-        }
-      }
-      if (!llmKey) {
-        llmKey = this.config.llmKey;
+
+      // Normalize URL and resolve key (vault → org_ollama_cloud → env)
+      const llmUrl = normalizeLlmUrl(agent.llm_url || this.config.llmUrl);
+      const llmKey = await resolveAgentLlmKey(this.sql, agent, this.config.llmKey);
+
+      // Ensure a fresh agent token for auth
+      let authToken = agent.token || '';
+      if (!authToken.startsWith('clv_')) {
+        authToken = await refreshAgentToken(agent.id, this.config.serverUrl, this.config.token);
       }
 
       console.log(`  🗳️ Voter ${agent.name || agent.id} (${model}) — sequential vote`);
@@ -1280,7 +1338,7 @@ Respond in JSON format:
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}),
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
             body: voteBody,
           });
@@ -1300,6 +1358,7 @@ Respond in JSON format:
               concerns: [result.reasoning],
               suggestions: result.conditions.length > 0 ? result.conditions : undefined,
               confidence: result.agreement_level,
+              reasoning: result.reasoning,
             },
             ...(latestSynthId ? { parent_node_id: latestSynthId, parent_edge_kind: 'critiques' } : {}),
           });
@@ -1307,7 +1366,7 @@ Respond in JSON format:
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}),
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
             body: followBody,
           });
