@@ -1416,7 +1416,30 @@ Respond in JSON format:
     `;
 
     for (const opinion of opinions) {
-      await this.checkAndFinalizeConsensus(opinion.id);
+      // If not all critics have cast a consensus vote yet, re-run the vote round
+      const critics = await this.sql`
+        SELECT DISTINCT n.principal_id
+        FROM clv_blackboard_nodes n
+        JOIN clv_blackboard_edges e ON e.source_node_id = n.id
+        WHERE n.opinion_id = ${opinion.id}
+          AND n.kind = 'critique'
+          AND e.kind = 'critiques'
+      `;
+      const voters = await this.sql`
+        SELECT DISTINCT n.principal_id
+        FROM clv_blackboard_nodes n
+        JOIN clv_blackboard_edges e ON e.source_node_id = n.id
+        WHERE n.opinion_id = ${opinion.id}
+          AND n.kind = 'consensus'
+          AND e.kind = 'votes_on'
+      `;
+
+      if (voters.length < critics.length) {
+        console.log(`  🗳️ Opinion ${opinion.id}: ${voters.length}/${critics.length} voted — triggering vote round`);
+        await this.triggerVoteRound(opinion.id);
+      } else {
+        await this.checkAndFinalizeConsensus(opinion.id);
+      }
     }
   }
 
@@ -1461,13 +1484,6 @@ Respond in JSON format:
       SELECT COUNT(*) as cnt FROM clv_blackboard_nodes WHERE opinion_id = ${opinionId}
     `;
     const total = parseInt(nodeCount[0]?.cnt || '0', 10);
-
-    // If any follow-up critique exists → loop back to synthesizing
-    if (followUpEdges.length > 0) {
-      console.log(`  🔄 Opinion ${opinionId}: ${followUpEdges.length} follow-up critiques — back to synthesizing`);
-      await this.sql`UPDATE clv_opinions SET status = 'synthesizing' WHERE id = ${opinionId}`;
-      return;
-    }
 
     // Check if all critics have voted
     const critics = await this.sql`
