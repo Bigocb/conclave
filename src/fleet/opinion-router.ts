@@ -644,6 +644,10 @@ export class OpinionRouter {
       ssl: this.config.databaseUrl.includes('localhost') ? false : 'require',
       max: 5,
       idle_timeout: 30,
+      connection: {
+        // Ensure LISTEN/NOTIFY works across deploys by explicitly connecting to the same DB
+        application_name: 'conclave-opinion-router',
+      },
     });
 
     await this.sql`SELECT 1 as ok`;
