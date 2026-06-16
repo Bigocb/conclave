@@ -181,6 +181,7 @@ async function refreshAgentToken(agentId: string, serverUrl: string, fleetToken:
         ...(fleetToken ? { Authorization: `Bearer ${fleetToken}` } : {}),
       },
       body: JSON.stringify({}),
+      signal: AbortSignal.timeout(30000),
     });
     if (resp.ok) {
       const data = (await resp.json()) as any;
@@ -490,6 +491,7 @@ async function callOpinionCritiqueLLM(
       ...buildAuthHeaders(provider, llmKey),
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(120000),
   });
 
   if (!resp.ok) {
@@ -565,6 +567,7 @@ async function callVoteLLM(
       ...buildAuthHeaders(provider, llmKey),
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(120000),
   });
 
   if (!resp.ok) {
@@ -833,6 +836,7 @@ export class OpinionRouter {
     try {
       const graphResp = await fetch(`${serverUrl}/v1/opinions/${opinion.id}/graph`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal: AbortSignal.timeout(30000),
       });
       if (graphResp.ok) {
         const graphData = (await graphResp.json()) as any;
@@ -861,6 +865,7 @@ export class OpinionRouter {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: proposalBody,
+        signal: AbortSignal.timeout(30000),
       });
 
       if (nodeResp.ok) {
@@ -979,6 +984,7 @@ export class OpinionRouter {
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: critiqueBody,
+          signal: AbortSignal.timeout(30000),
         });
 
         if (!critiqueResp.ok) {
@@ -1170,6 +1176,7 @@ Respond in JSON format:
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: followBody,
+          signal: AbortSignal.timeout(30000),
         });
 
         if (followResp.ok) {
@@ -1316,6 +1323,7 @@ Respond in JSON format:
         // Create ConsensusNode or follow-up CritiqueNode via REST API
         const synthNodeResp = await fetch(`${this.config.serverUrl}/v1/opinions/${opinionId}/graph`, {
           headers: { ...(this.config.token ? { Authorization: `Bearer ${this.config.token}` } : {}) },
+          signal: AbortSignal.timeout(30000),
         });
         let latestSynthId: string | null = null;
         if (synthNodeResp.ok) {
@@ -1341,6 +1349,7 @@ Respond in JSON format:
               ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
             body: voteBody,
+            signal: AbortSignal.timeout(30000),
           });
 
           if (voteResp.ok) {
@@ -1369,6 +1378,7 @@ Respond in JSON format:
               ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
             body: followBody,
+            signal: AbortSignal.timeout(30000),
           });
 
           if (followUpResp.ok) {

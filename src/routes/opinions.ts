@@ -233,6 +233,16 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
 
     reply.code(201).send(success(node));
 
+    // ─── Notify worker ───────────────────────────────────────
+    try {
+      const pgClient = (fastify as any).pg;
+      if (pgClient) {
+        await pgClient.query(`SELECT pg_notify('opinion_node_submitted', $1)`, [opinionId]);
+      }
+    } catch (notifyErr: any) {
+      console.warn(`[opinions] pg_notify failed (non-fatal): ${notifyErr.message}`);
+    }
+
     // ─── Budget hooks ────────────────────────────────────────
     // ProposalNode costs -3 (already spent at opinion creation)
     // First CritiqueNode earns +2 per critic
