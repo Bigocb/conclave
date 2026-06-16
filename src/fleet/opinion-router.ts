@@ -1237,10 +1237,8 @@ Respond in JSON format:
     const criticPrincipals = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'critique'
-        AND e.kind = 'critiques'
     `;
 
     if (criticPrincipals.length === 0) {
@@ -1420,18 +1418,14 @@ Respond in JSON format:
       const critics = await this.sql`
         SELECT DISTINCT n.principal_id
         FROM clv_blackboard_nodes n
-        JOIN clv_blackboard_edges e ON e.source_node_id = n.id
         WHERE n.opinion_id = ${opinion.id}
           AND n.kind = 'critique'
-          AND e.kind = 'critiques'
       `;
       const voters = await this.sql`
         SELECT DISTINCT n.principal_id
         FROM clv_blackboard_nodes n
-        JOIN clv_blackboard_edges e ON e.source_node_id = n.id
         WHERE n.opinion_id = ${opinion.id}
           AND n.kind = 'consensus'
-          AND e.kind = 'votes_on'
       `;
 
       if (voters.length < critics.length) {
@@ -1489,19 +1483,15 @@ Respond in JSON format:
     const critics = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'critique'
-        AND e.kind = 'critiques'
     `;
 
     const voters = await this.sql`
       SELECT DISTINCT n.principal_id
       FROM clv_blackboard_nodes n
-      JOIN clv_blackboard_edges e ON e.source_node_id = n.id
       WHERE n.opinion_id = ${opinionId}
         AND n.kind = 'consensus'
-        AND e.kind = 'votes_on'
     `;
 
     // Not all critics have voted yet
