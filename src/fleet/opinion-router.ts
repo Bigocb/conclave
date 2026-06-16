@@ -1034,7 +1034,6 @@ export class OpinionRouter {
       FROM clv_opinions o
       WHERE o.status = 'synthesizing'
       ORDER BY o.created_at ASC
-      LIMIT 5
     `;
 
     for (const opinion of opinions) {
@@ -1407,7 +1406,7 @@ Respond in JSON format:
 
   private async checkVotingOpinions(): Promise<void> {
     const opinions = await this.sql`
-      SELECT id FROM clv_opinions WHERE status = 'voting' ORDER BY created_at ASC LIMIT 5
+      SELECT id FROM clv_opinions WHERE status = 'voting' ORDER BY created_at ASC
     `;
 
     for (const opinion of opinions) {
