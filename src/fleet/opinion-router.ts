@@ -348,7 +348,7 @@ const DEFAULT_ROUTER_CONFIG: RouterConfig = {
   maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '3', 10),
 };
 
-const HARD_NODE_LIMIT = 10;
+const HARD_NODE_LIMIT = 25;
 
 // ─── Prompt Builder ────────────────────────────────────────────
 
