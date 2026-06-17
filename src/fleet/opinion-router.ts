@@ -1453,11 +1453,11 @@ Respond in JSON format:
 
     // Find all ConsensusNodes that vote_on the synthesis
     const voteEdges = await this.sql`
-      SELECT e.source_node_id, n.payload
+      SELECT e.target_node_id as source_node_id, n.payload
       FROM clv_blackboard_edges e
-      JOIN clv_blackboard_nodes n ON n.id = e.source_node_id
+      JOIN clv_blackboard_nodes n ON n.id = e.target_node_id
       WHERE e.opinion_id = ${opinionId}
-        AND e.target_node_id = ${synthId}
+        AND e.source_node_id = ${synthId}
         AND e.kind = 'votes_on'
         AND n.kind = 'consensus'
     `;
