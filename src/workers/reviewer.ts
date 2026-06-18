@@ -554,7 +554,12 @@ export class ReviewerWorker {
       }
     }
     const model = agent.model || this.config.model;
-    const systemPrompt = agent.instructions || this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
+
+    // Build system prompt: base guidance + agent instructions as primary lens
+    let systemPrompt = this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
+    if (agent.instructions) {
+      systemPrompt = `${systemPrompt}\n\n## Your Reviewer Instructions\n\n${agent.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    }
 
     // Build LLM prompt
     const dims = Array.isArray(task.dimensions)
