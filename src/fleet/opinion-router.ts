@@ -489,10 +489,11 @@ async function callOpinionCritiqueLLM(
         stream: false,
       };
 
-  const maskedKey = llmKey.length > 8 
-    ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}` 
+  const maskedKey = llmKey.length > 8
+    ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}`
     : '***';
   console.log(`  [OpinionRouter] LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
+  console.log(`  [OpinionRouter] system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
 
   const resp = await fetch(endpoint, {
     method: 'POST',
@@ -565,10 +566,11 @@ async function callVoteLLM(
         stream: false,
       };
 
-  const maskedKey = llmKey.length > 8 
-    ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}` 
+  const maskedKey = llmKey.length > 8
+    ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}`
     : '***';
   console.log(`  [OpinionRouter] Vote LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
+  console.log(`  [OpinionRouter] vote system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
 
   const resp = await fetch(endpoint, {
     method: 'POST',
