@@ -318,9 +318,9 @@ Do NOT change dimension names or add new ones. If a dimension is missing from yo
 
   if (input.instructions) {
     prompt += '\n\n## Your Reviewer Instructions\n\n' + input.instructions + '\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.';
-    console.log(`[DBG-instructions] Agent instructions FOUND and injected: ${JSON.stringify(input.instructions)}`);
+    console.log(`[DBG-instructions] Agent instructions FOUND and injected (${input.instructions.length} chars): ${input.instructions.slice(0, 500)}${input.instructions.length > 500 ? '...' : ''}`);
   } else {
-    console.log(`[DBG-instructions] No agent instructions — using default prompt only`);
+
   }
 
   if (input.skills && input.skills.length > 0) {
