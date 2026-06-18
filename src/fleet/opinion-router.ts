@@ -313,6 +313,7 @@ interface CriticAgent {
   provider: string | null;
   llm_url: string | null;
   token: string | null;
+  instructions: string | null;
   llm_key?: string | null;  // Optional — not present in agents table, may come from fleet_reviewers join
 }
 
@@ -352,12 +353,14 @@ const HARD_NODE_LIMIT = 25;
 
 // ─── Prompt Builder ────────────────────────────────────────────
 
-function buildOpinionCritiquePrompt(question: string, context: string | null, channel: string): string {
-  let prompt = `You are a thoughtful consultant providing critical analysis of a question posed by another agent.
+function buildOpinionCritiquePrompt(question: string, context: string | null, channel: string, instructions: string | null): string {
+  let prompt = `You are a thoughtful consultant providing critical analysis of a question posed by another agent.`;
 
-## Question
+  if (instructions) {
+    prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+  }
 
-${question}
+  prompt += `\n\n## Question\n\n${question}
 
 ## Channel
 
@@ -400,8 +403,15 @@ function buildVotePrompt(
   critiques: string[],
   synthesis: string | null,
   priorVotes: string[],
+  instructions: string | null,
 ): string {
-  let prompt = `You are evaluating a synthesis produced by the asker in response to your critiques.
+  let prompt = `You are evaluating a synthesis produced by the asker in response to your critiques.`;
+
+  if (instructions) {
+    prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis.`;
+  }
+
+  prompt += `
 
 ## Original Question
 
@@ -918,14 +928,12 @@ export class OpinionRouter {
     console.log(`  👥 Selected ${selected.length} critics (${selected.map((s) => s.principal_id).join(', ')})`);
 
     // 4. For each critic, find one of their agents and call LLM
-    const systemPrompt = buildOpinionCritiquePrompt(opinion.question, opinion.context, opinion.channel);
-
     const critiquePromises = selected.map(async (sub) => {
       try {
         // Find an eligible agent for this principal
         // Note: fleet_reviewers and agents tables don't have llm_key columns
         const agents = await this.sql<CriticAgent[]>`
-          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
+          SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token, a.instructions
           FROM clv_agents a
           WHERE a.principal_id = ${sub.principal_id}
             AND a.status = 'active'
@@ -939,6 +947,7 @@ export class OpinionRouter {
         }
 
         const agent = agents[0];
+        const systemPrompt = buildOpinionCritiquePrompt(opinion.question, opinion.context, opinion.channel, agent.instructions);
 
         // 1. Get model and LLM URL from agent (or fallback to config)
         const model = agent.model || this.config.model;
@@ -1055,7 +1064,7 @@ export class OpinionRouter {
   private async triggerDiscussionRound(opinionId: string): Promise<void> {
     // Get existing critique nodes and their critics
     const critiqueNodes = await this.sql`
-      SELECT n.id, n.agent_id, n.principal_id, a.name as agent_name, a.model, a.provider, a.llm_url, a.token, a.org_id
+      SELECT n.id, n.agent_id, n.principal_id, a.name as agent_name, a.model, a.provider, a.llm_url, a.token, a.org_id, a.instructions
       FROM clv_blackboard_nodes n
       LEFT JOIN clv_agents a ON a.id = n.agent_id
       WHERE n.opinion_id = ${opinionId} AND n.kind = 'critique'
@@ -1115,9 +1124,14 @@ export class OpinionRouter {
         ? (typeof critiqueResult[0].payload === 'string' ? JSON.parse(critiqueResult[0].payload) : critiqueResult[0].payload) 
         : {};
 
-      const prompt = `You submitted a critique for this question:
+      const instructions = critic.instructions;
+      let prompt = `You submitted a critique for this question:`;
 
-"${opinion.question}"
+      if (instructions) {
+        prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis.`;
+      }
+
+      prompt += `\n\n"${opinion.question}"
 
 Your original critique:
 - Concerns: ${critiquePayload.concerns?.join(', ') || 'None'}
@@ -1287,7 +1301,7 @@ Respond in JSON format:
 
       // Find critic's agent
       const agents = await this.sql<CriticAgent[]>`
-        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token
+        SELECT a.id, a.name, a.principal_id, a.org_id, a.model, a.provider, a.llm_url, a.token, a.instructions
         FROM clv_agents a
         WHERE a.principal_id = ${cp.principal_id}
           AND a.status = 'active'
@@ -1303,7 +1317,7 @@ Respond in JSON format:
         .filter((r): r is NonNullable<typeof r> => r !== null)
         .map((r) => `approval=${r.approved} level=${r.agreement_level} reasoning=${r.reasoning}`);
 
-      const votePrompt = buildVotePrompt(opinion.question, opinion.context, critiqueTexts, synthesisText, priorVotes);
+      const votePrompt = buildVotePrompt(opinion.question, opinion.context, critiqueTexts, synthesisText, priorVotes, agent.instructions);
       const model = agent.model || this.config.model;
 
       // Normalize URL and resolve key (vault → org_ollama_cloud → env)
