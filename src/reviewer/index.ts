@@ -178,7 +178,7 @@ function parseReviewResponse(text: string, dimensions: string[]): LLMResponse {
 
 // ─── Build review prompt ───────────────────────────────────
 
-function buildReviewPrompt(task: FeedTask): LLMMessage[] {
+function buildReviewPrompt(task: FeedTask, instructions?: string | null): LLMMessage[] {
   const desc = task.task_description ?? task.description ?? 'No description';
   const dimensions = (task.dimensions ?? ['correctness']).join(', ');
   const output = task.output ?? 'No output provided';
@@ -189,7 +189,11 @@ function buildReviewPrompt(task: FeedTask): LLMMessage[] {
     ? loadPromptTemplate(channelPromptPath(task.channel))
     : null;
 
-  const systemPrompt = channelPrompt ?? DEFAULT_REVIEW_PROMPT;
+  let systemPrompt = channelPrompt ?? DEFAULT_REVIEW_PROMPT;
+
+  if (instructions) {
+    systemPrompt = `${systemPrompt}\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+  }
 
   const userMessage = [
     `## Task for Review`,
@@ -215,12 +219,12 @@ function buildReviewPrompt(task: FeedTask): LLMMessage[] {
 
 // ─── Review one task ───────────────────────────────────────
 
-async function reviewTask(config: ReviewerConfig, client: ConclaveApiClient, task: FeedTask): Promise<boolean> {
+async function reviewTask(config: ReviewerConfig, client: ConclaveApiClient, task: FeedTask, instructions?: string | null): Promise<boolean> {
   const label = `[${task.channel}] ${task.id}: "${(task.task_description ?? task.description ?? '').slice(0, 60)}"`;
 
   try {
     // 1. Build prompt
-    const messages = buildReviewPrompt(task);
+    const messages = buildReviewPrompt(task, instructions);
 
     // 2. Call LLM
     const llmOutput = await callLLM(config, messages);
@@ -248,7 +252,7 @@ async function reviewTask(config: ReviewerConfig, client: ConclaveApiClient, tas
 
 // ─── Poll and review loop ──────────────────────────────────
 
-async function pollAndReview(config: ReviewerConfig, client: ConclaveApiClient): Promise<number> {
+async function pollAndReview(config: ReviewerConfig, client: ConclaveApiClient, instructions?: string | null): Promise<number> {
   let reviewed = 0;
 
   for (const channel of config.channels) {
@@ -283,7 +287,7 @@ async function pollAndReview(config: ReviewerConfig, client: ConclaveApiClient):
         }
 
         // Review it
-        const ok = await reviewTask(config, client, task);
+        const ok = await reviewTask(config, client, task, instructions);
         config.reviewedTaskIds.add(item.id);
         if (ok) reviewed++;
 
@@ -328,8 +332,8 @@ async function main() {
     token: config.token,
   });
 
-  // Ensure the reviewer principal and agent exist
-  await ensureReviewerExists(client, config);
+  // Ensure the reviewer principal and agent exist, and load agent instructions
+  const agentInstructions = await ensureReviewerExists(client, config);
 
   // Subscribe to channels
   for (const channel of config.channels) {
@@ -352,7 +356,7 @@ async function main() {
   const loop = async () => {
     round++;
     try {
-      const count = await pollAndReview(config, client);
+      const count = await pollAndReview(config, client, agentInstructions);
       const ts = new Date().toISOString().slice(11, 19);
       if (count > 0) {
         console.log(`[${ts}] Round ${round}: reviewed ${count} task(s)`);
@@ -374,7 +378,7 @@ async function main() {
   setInterval(loop, config.intervalSec * 1000);
 }
 
-async function ensureReviewerExists(client: ConclaveApiClient, config: ReviewerConfig) {
+async function ensureReviewerExists(client: ConclaveApiClient, config: ReviewerConfig): Promise<string | null> {
   // Try to get the principal
   try {
     await client.getPrincipal(config.principalId);
@@ -394,8 +398,11 @@ async function ensureReviewerExists(client: ConclaveApiClient, config: ReviewerC
   }
 
   // Try to get the agent
+  let instructions: string | null = null;
   try {
-    await client.getAgent(config.agentId);
+    const agentData = await client.getAgent(config.agentId);
+    instructions = agentData?.data?.instructions ?? null;
+    console.log(`  Loaded agent ${config.agentId} instructions: ${instructions ? 'yes' : 'none'}`);
   } catch {
     // Register it
     try {
@@ -408,6 +415,7 @@ async function ensureReviewerExists(client: ConclaveApiClient, config: ReviewerC
       console.error(`  Could not register agent: ${err.message}`);
     }
   }
+  return instructions;
 }
 
 main().catch((err) => {
