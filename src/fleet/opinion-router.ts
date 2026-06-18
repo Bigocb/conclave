@@ -26,6 +26,7 @@
  *   OPINION_MODEL   — Model for opinion critique
  *   POLL_INTERVAL   — Seconds between opinion polls (default: 15)
  *   MAX_CONCURRENT  — Max opinion critiques at once (default: 3)
+ *   LOG_PROMPTS     — Set to 'true' to log full system/user prompts (default: false)
  */
 
 import { randomUUID, createDecipheriv } from 'crypto';
@@ -42,6 +43,16 @@ const crypto = { createDecipheriv };
  * Decrypt a vault-encrypted value using AES-256-CBC.
  * Used by resolveVaultKey when direct DB access is available.
  */
+const LOG_PROMPTS = process.env.LOG_PROMPTS === 'true';
+
+function logPrompt(label: string, systemPrompt: string, userMessage?: string) {
+  if (!LOG_PROMPTS) return;
+  console.log(`  [OpinionRouter] ${label} system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
+  if (userMessage) {
+    console.log(`  [OpinionRouter] ${label} user_message (${userMessage.length} chars): ${userMessage.slice(0, 2000)}${userMessage.length > 2000 ? '...' : ''}`);
+  }
+}
+
 function decryptVaultValue(encryptedData: string): string {
   const ENCRYPTION_KEY = process.env.VAULT_MASTER_KEY || 'dev-master-key-32-chars-long-!!!';
   // Format is ivHex:encryptedHex (separated by colon!)
@@ -493,7 +504,7 @@ async function callOpinionCritiqueLLM(
     ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}`
     : '***';
   console.log(`  [OpinionRouter] LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
-  console.log(`  [OpinionRouter] system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
+  logPrompt('critique', systemPrompt, 'Please provide your critical analysis of this question.');
 
   const resp = await fetch(endpoint, {
     method: 'POST',
@@ -570,7 +581,7 @@ async function callVoteLLM(
     ? `${llmKey.slice(0, 6)}...${llmKey.slice(-4)}`
     : '***';
   console.log(`  [OpinionRouter] Vote LLM call: model=${model} url=${endpoint} key=${maskedKey}`);
-  console.log(`  [OpinionRouter] vote system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
+  logPrompt('vote', systemPrompt, 'Please evaluate the synthesis and cast your vote.');
 
   const resp = await fetch(endpoint, {
     method: 'POST',
