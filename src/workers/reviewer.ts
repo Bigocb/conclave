@@ -108,6 +108,8 @@ interface ReviewResult {
 
 // ─── LLM Call ────────────────────────────────────────────────
 
+const LOG_PROMPTS = process.env.LOG_PROMPTS === 'true';
+
 async function callLLM(opts: {
   url: string;
   key: string;
@@ -116,8 +118,10 @@ async function callLLM(opts: {
   userMessage: string;
 }): Promise<string> {
   console.log(`  [ReviewerWorker] LLM call: model=${opts.model} url=${opts.url.replace(/\/+$/, '')}`);
-  console.log(`  [ReviewerWorker] system_prompt (${opts.systemPrompt.length} chars): ${opts.systemPrompt.slice(0, 2000)}${opts.systemPrompt.length > 2000 ? '...' : ''}`);
-  console.log(`  [ReviewerWorker] user_message (${opts.userMessage.length} chars): ${opts.userMessage.slice(0, 2000)}${opts.userMessage.length > 2000 ? '...' : ''}`);
+  if (LOG_PROMPTS) {
+    console.log(`  [ReviewerWorker] system_prompt (${opts.systemPrompt.length} chars): ${opts.systemPrompt.slice(0, 2000)}${opts.systemPrompt.length > 2000 ? '...' : ''}`);
+    console.log(`  [ReviewerWorker] user_message (${opts.userMessage.length} chars): ${opts.userMessage.slice(0, 2000)}${opts.userMessage.length > 2000 ? '...' : ''}`);
+  }
 
   const res = await fetch(`${opts.url.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',

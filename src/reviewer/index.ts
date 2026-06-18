@@ -99,12 +99,16 @@ function getConfig(): ReviewerConfig {
 
 // ─── LLM Call ──────────────────────────────────────────────
 
+const LOG_PROMPTS = process.env.LOG_PROMPTS === 'true';
+
 async function callLLM(config: ReviewerConfig, messages: LLMMessage[]): Promise<string> {
   const systemPrompt = messages.find(m => m.role === 'system')?.content ?? '';
   const userMessage = messages.find(m => m.role === 'user')?.content ?? '';
   console.log(`  [ReviewerDaemon] LLM call: model=${config.model} url=${config.llmUrl.replace(/\/+$/, '')}`);
-  console.log(`  [ReviewerDaemon] system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
-  console.log(`  [ReviewerDaemon] user_message (${userMessage.length} chars): ${userMessage.slice(0, 2000)}${userMessage.length > 2000 ? '...' : ''}`);
+  if (LOG_PROMPTS) {
+    console.log(`  [ReviewerDaemon] system_prompt (${systemPrompt.length} chars): ${systemPrompt.slice(0, 2000)}${systemPrompt.length > 2000 ? '...' : ''}`);
+    console.log(`  [ReviewerDaemon] user_message (${userMessage.length} chars): ${userMessage.slice(0, 2000)}${userMessage.length > 2000 ? '...' : ''}`);
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

@@ -193,11 +193,14 @@ async function callLLM(opts: {
           stream: false,
         };
 
+    const logPrompts = process.env.LOG_PROMPTS === 'true';
     console.log(`[LLM-DEBUG] Requesting review for ${opts.model}`);
     console.log(`  URL: ${endpoint}`);
     console.log(`  Key (full): ${opts.key || 'NONE'}`);
-    console.log(`  system_prompt (${opts.systemPrompt.length} chars): ${opts.systemPrompt.slice(0, 2000)}${opts.systemPrompt.length > 2000 ? '...' : ''}`);
-    console.log(`  user_message (${opts.userMessage.length} chars): ${opts.userMessage.slice(0, 2000)}${opts.userMessage.length > 2000 ? '...' : ''}`);
+    if (logPrompts) {
+      console.log(`  system_prompt (${opts.systemPrompt.length} chars): ${opts.systemPrompt.slice(0, 2000)}${opts.systemPrompt.length > 2000 ? '...' : ''}`);
+      console.log(`  user_message (${opts.userMessage.length} chars): ${opts.userMessage.slice(0, 2000)}${opts.userMessage.length > 2000 ? '...' : ''}`);
+    }
 
     const resp = await fetch(endpoint, {
       method: 'POST',
