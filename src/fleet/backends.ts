@@ -94,7 +94,7 @@ export async function runLlmReview(
   console.log(`  Provider: ${provider}`);
   console.log(`  URL: ${endpoint}`);
   console.log(`  Model: ${agent.model || 'gpt-4o-mini'}`);
-  console.log(`  Key (full): ${llmKey || 'NONE'}`);
+  console.log(`  Key: ${llmKey ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}` : 'NONE'}`);
   console.log(`[DBG-payload] FULL system_prompt (first 3000 chars):`, systemPrompt.slice(0, 3000));
   console.log(`[DBG-payload] system_prompt length: ${systemPrompt.length}`);
   console.log(`[DBG-payload] Contains instructions: ${systemPrompt.includes('## Your Reviewer Instructions')}`);
