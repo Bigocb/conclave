@@ -35,9 +35,22 @@ export const opinionRoutes: FastifyPluginCallback = (fastify: FastifyInstance, _
     // Use provided principal_id from request body, or fall back to agent's principal, or auth principal, or dev
     const principalId = data.principal_id ?? agent?.principal_id ?? (request as any).principalId ?? 'prn_dev';
 
-    // Verify principal is subscribed to the target channel
+    // Verify target channel exists and has subscribers
     const channel = await channelSvc.getByName(data.channel);
-    if (channel && principalId && principalId !== 'prn_dev') {
+    if (!channel) {
+      return reply.code(400).send(error('CHANNEL_NOT_FOUND', `Channel '${data.channel}' does not exist`, {
+        channel: data.channel,
+      }));
+    }
+    const subscriberCount = await channelSvc.getSubscriberCount(channel.id);
+    if (subscriberCount === 0) {
+      return reply.code(400).send(error('CHANNEL_NO_SUBSCRIBERS', `Channel '${data.channel}' has no subscribers — opinions cannot be routed`, {
+        channel: data.channel,
+      }));
+    }
+
+    // Verify principal is subscribed to the target channel
+    if (principalId && principalId !== 'prn_dev') {
       const subscribed = await channelSvc.isSubscribed(principalId, channel.id);
       if (!subscribed) {
         return reply.code(403).send(error(ERROR_CODES.NOT_SUBSCRIBED.code, 'Principal is not subscribed to this channel', {

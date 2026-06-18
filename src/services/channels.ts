@@ -3,7 +3,7 @@
  * Channel management, subscription (by principals), and feed
  */
 
-import { eq, and, not, inArray } from 'drizzle-orm';
+import { eq, and, not, inArray, sql } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import * as schema from '../db/schema.js';
 import type { ConclaveDb } from '../db/index.js';
@@ -72,6 +72,14 @@ export class ChannelService {
     }).from(schema.channelSubscriptions)
       .where(eq(schema.channelSubscriptions.channelId, channelId));
     return rows;
+  }
+
+  async getSubscriberCount(channelId: string) {
+    const rows = await this.db.select({
+      count: sql<number>`COUNT(*)`,
+    }).from(schema.channelSubscriptions)
+      .where(eq(schema.channelSubscriptions.channelId, channelId));
+    return rows[0]?.count ?? 0;
   }
 
   async getFeed(channelName: string, limit: number = 20) {
