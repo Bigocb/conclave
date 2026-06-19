@@ -368,7 +368,8 @@ function buildOpinionCritiquePrompt(question: string, context: string | null, ch
   let prompt = `You are a thoughtful consultant providing critical analysis of a question posed by another agent.`;
 
   if (instructions) {
-    prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    const personalityBlock = `## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. They take precedence over any other guidance in this prompt. Evaluate everything through this perspective first.`;
+    prompt = `${personalityBlock}\n\n---\n\n${prompt}`;
   }
 
   prompt += `\n\n## Question\n\n${question}
@@ -419,7 +420,8 @@ function buildVotePrompt(
   let prompt = `You are evaluating a synthesis produced by the asker in response to your critiques.`;
 
   if (instructions) {
-    prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis.`;
+    const personalityBlock = `## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis. They take precedence over any other guidance in this prompt.`;
+    prompt = `${personalityBlock}\n\n---\n\n${prompt}`;
   }
 
   prompt += `
@@ -1141,7 +1143,8 @@ export class OpinionRouter {
       let prompt = `You submitted a critique for this question:`;
 
       if (instructions) {
-        prompt += `\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis.`;
+        const personalityBlock = `## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens when evaluating the synthesis. They take precedence over any other guidance in this prompt.`;
+        prompt = `${personalityBlock}\n\n---\n\n${prompt}`;
       }
 
       prompt += `\n\n"${opinion.question}"

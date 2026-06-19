@@ -325,10 +325,14 @@ Do NOT change dimension names or add new ones. If a dimension is missing from yo
 - **1-2**: Fundamental problems — needs complete rewrite`;
 
   if (input.instructions) {
-    prompt += '\n\n## Your Reviewer Instructions\n\n' + input.instructions + '\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.';
-    console.log(`[DBG-instructions] Agent instructions FOUND and injected (${input.instructions.length} chars): ${input.instructions.slice(0, 500)}${input.instructions.length > 500 ? '...' : ''}`);
-  } else {
+    // Inject personality at the TOP of the prompt so it overrides the base persona
+    const personalityBlock = `## Your Reviewer Instructions
 
+${input.instructions}
+
+Apply these instructions as your primary lens. They take precedence over any other guidance in this prompt. Evaluate everything through this perspective first.`;
+    prompt = personalityBlock + '\n\n---\n\n' + prompt;
+    console.log(`[DBG-instructions] Agent instructions FOUND and injected at top of prompt (${input.instructions.length} chars): ${input.instructions.slice(0, 500)}${input.instructions.length > 500 ? '...' : ''}`);
   }
 
   if (input.skills && input.skills.length > 0) {

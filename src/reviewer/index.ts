@@ -202,7 +202,8 @@ function buildReviewPrompt(task: FeedTask, instructions?: string | null): LLMMes
   let systemPrompt = channelPrompt ?? DEFAULT_REVIEW_PROMPT;
 
   if (instructions) {
-    systemPrompt = `${systemPrompt}\n\n## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+    const personalityBlock = `## Your Reviewer Instructions\n\n${instructions}\n\nApply these instructions as your primary lens. They take precedence over any other guidance in this prompt. Evaluate everything through this perspective first.`;
+    systemPrompt = `${personalityBlock}\n\n---\n\n${systemPrompt}`;
   }
 
   const userMessage = [

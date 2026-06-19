@@ -563,10 +563,11 @@ export class ReviewerWorker {
     }
     const model = agent.model || this.config.model;
 
-    // Build system prompt: base guidance + agent instructions as primary lens
+    // Build system prompt: inject agent instructions at the top so they override the base persona
     let systemPrompt = this.config.systemPrompt || DEFAULT_REVIEW_PROMPT;
     if (agent.instructions) {
-      systemPrompt = `${systemPrompt}\n\n## Your Reviewer Instructions\n\n${agent.instructions}\n\nApply these instructions as your primary lens. Everything you evaluate should be filtered through this perspective.`;
+      const personalityBlock = `## Your Reviewer Instructions\n\n${agent.instructions}\n\nApply these instructions as your primary lens. They take precedence over any other guidance in this prompt. Evaluate everything through this perspective first.`;
+      systemPrompt = `${personalityBlock}\n\n---\n\n${systemPrompt}`;
     }
 
     // Build LLM prompt
