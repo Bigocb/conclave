@@ -100,10 +100,9 @@ export async function runLlmReview(
   const instructionsIdx = systemPrompt.indexOf('## Your Reviewer Instructions');
   if (instructionsIdx >= 0) {
     const section = systemPrompt.slice(instructionsIdx);
-    // Show the heading + next 8 lines so we can see the actual injected text
-    const snippet = section.split('\n').slice(0, 10).join(' | ');
+    const snippet = section.slice(0, 700);
     console.log(`[DBG-instructions-section] offset=${instructionsIdx} len=${section.length}`);
-    console.log(`[DBG-instructions-section] snippet: ${snippet}`);
+    console.log(`[DBG-instructions-section] snippet:\n${snippet}`);
   } else {
     console.log(`[DBG-payload] Contains instructions: false`);
   }
