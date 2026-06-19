@@ -97,7 +97,16 @@ export async function runLlmReview(
   console.log(`  Key: ${llmKey ? `${llmKey.slice(0, 4)}...${llmKey.slice(-4)}` : 'NONE'}`);
   console.log(`[DBG-payload] FULL system_prompt (first 3000 chars):`, systemPrompt.slice(0, 3000));
   console.log(`[DBG-payload] system_prompt length: ${systemPrompt.length}`);
-  console.log(`[DBG-payload] Contains instructions: ${systemPrompt.includes('## Your Reviewer Instructions')}`);
+  const instructionsIdx = systemPrompt.indexOf('## Your Reviewer Instructions');
+  if (instructionsIdx >= 0) {
+    const section = systemPrompt.slice(instructionsIdx);
+    const endIdx = section.indexOf('\n\n', 2);
+    const snippet = endIdx > 0 ? section.slice(0, endIdx + 2) : section.slice(0, 500);
+    console.log(`[DBG-instructions-section] offset=${instructionsIdx} len=${section.length}`);
+    console.log(`[DBG-instructions-section] snippet: ${snippet.replace(/\n/g, ' \\ ')}`);
+  } else {
+    console.log(`[DBG-payload] Contains instructions: false`);
+  }
   console.log(`[DBG-payload] Full payload model: ${payload.model}`);
   console.log(`[DBG-payload] messages[0] role: ${payload.messages[0].role} content_length: ${payload.messages[0].content.length}`);
   console.log(`[DBG-payload] messages[1] role: ${payload.messages[1].role} content_length: ${payload.messages[1].content.length}`);
