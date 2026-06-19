@@ -23,6 +23,22 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { ConclaveApiClient } from './api-client.js';
+import { resolveGitHubUrl, parseGitHubPrForComment } from '../utils/github.js';
+
+// ─── GitHub review helpers ───────────────────────────────────
+
+function buildGitHubTaskDescription(resolution: Awaited<ReturnType<typeof resolveGitHubUrl>>): string {
+  const lines = [
+    `GitHub ${resolution.type === 'pr' ? 'PR' : 'file'} review request`,
+    `URL: ${resolution.type === 'pr'
+      ? `https://github.com/${resolution.owner}/${resolution.repo}/pull/${resolution.prNumber}`
+      : `https://github.com/${resolution.owner}/${resolution.repo}/blob/${resolution.ref}/${resolution.path}`}`,
+  ];
+  if (resolution.title) lines.push(`Title: ${resolution.title}`);
+  if (resolution.body) lines.push(`\n${resolution.body.slice(0, 2000)}`);
+  if (resolution.truncated) lines.push('\n_Note: content was truncated to fit review context._');
+  return lines.join('\n');
+}
 
 // ─── Parse CLI args ─────────────────────────────────────────
 
@@ -151,6 +167,61 @@ server.tool(
           `Other agents will review your work and provide structured scores + actionable comments.`,
           `Use \`get_feedback\` with task ID \`${task.id}\` to retrieve reviews.`,
           `For immediate feedback: \`get_feedback\` with \`${task.id}\` and \`wait=true\` to block until reviews arrive (up to 30s).`,
+        ].filter(Boolean).join('\n'),
+      }],
+    };
+  }
+);
+
+// ─── Tool: submit_github_review_task ──────────────────────
+
+server.tool(
+  'submit_github_review_task',
+  'Submit a GitHub PR or file for peer review in Conclave. Fetches the PR diff or file content from GitHub, creates a Conclave review task, and optionally posts a summary comment back to the PR once reviews are complete (requires a GitHub PAT stored in the org vault under provider "github").',
+  {
+    github_url: z.string().describe('GitHub URL to review. Supported: https://github.com/owner/repo/pull/N and https://github.com/owner/repo/blob/branch/path/to/file or raw.githubusercontent.com URLs.'),
+    dimensions: z.array(z.string()).optional().describe('Scoring dimensions — e.g. ["correctness", "security", "maintainability"]. Defaults to ["correctness", "security", "maintainability"].'),
+    channel: z.string().optional().describe('Channel to post to — e.g. "code-review" or "security-review". Defaults to "code-review".'),
+    requested_reviews: z.number().optional().describe('Number of reviews wanted. Defaults to 3.'),
+    post_pr_comment: z.boolean().optional().describe('If true, post a summary comment to the PR after enough reviews are received. Requires a GitHub PAT in the org vault.'),
+  },
+  async (params) => {
+    const token = process.env.GITHUB_TOKEN;
+    const resolution = await resolveGitHubUrl(params.github_url, token);
+
+    const result = await client.submitTask({
+      task_description: buildGitHubTaskDescription(resolution),
+      dimensions: params.dimensions ?? ['correctness', 'security', 'maintainability'],
+      output: resolution.diffOrContent,
+      output_format: resolution.type === 'pr' ? 'diff' : 'code',
+      channel: params.channel ?? 'code-review',
+      requested_reviews: params.requested_reviews,
+      metadata: {
+        github_url: params.github_url,
+        github_type: resolution.type,
+        github_owner: resolution.owner,
+        github_repo: resolution.repo,
+        github_ref: resolution.ref,
+        github_path: resolution.path,
+        github_pr_number: resolution.prNumber,
+        post_pr_comment: params.post_pr_comment ?? false,
+      },
+    });
+
+    const task = result.data;
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          `✅ GitHub ${resolution.type === 'pr' ? 'PR' : 'file'} submitted for review`,
+          ``,
+          `**Task ID:** ${task.id}`,
+          `**Channel:** ${task.channel}`,
+          `**Dimensions:** ${task.dimensions?.join(', ') ?? params.dimensions?.join(', ') ?? 'correctness, security, maintainability'}`,
+          resolution.truncated ? `**Content:** truncated to fit review context` : '',
+          params.post_pr_comment ? `**PR comment:** will be posted once enough reviews are in` : '',
+          ``,
+          `Use \`get_feedback\` with task ID \`${task.id}\` to retrieve reviews when ready.`,
         ].filter(Boolean).join('\n'),
       }],
     };

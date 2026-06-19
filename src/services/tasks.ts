@@ -9,6 +9,8 @@ import type { ConclaveDb } from '../db/index.js';
 import { BUDGET } from '../services/budget.js';
 import { MemoryService } from '../services/memory.js';
 import { MemoryExtractor, type LlmCallFn } from '../services/memory-extractor.js';
+import { parseGitHubPrForComment, formatGithubComment, postPrReviewComment } from '../utils/github.js';
+import { vaultService } from '../services/vault.js';
 
 export class TaskService {
   private memorySvc: MemoryService;
@@ -215,6 +217,12 @@ export class TaskService {
             await this.budgetService.earn(task.principal_id, BUDGET.HIGH_SCORE_BONUS, 'high_score_bonus', task.id);
           }
         }
+
+        // ─── GitHub PR comment callback ─────────────────────────
+        // Fire-and-forget: don't fail the review if the GitHub comment can't be posted
+        this.maybePostGitHubComment(data.taskId, task).catch((err: any) => {
+          console.warn(`[tasks] GitHub comment callback failed for ${data.taskId}: ${err.message}`);
+        });
       }
     }
 
@@ -259,7 +267,58 @@ export class TaskService {
     const task = await this.getById(id);
     if (!task) throw new Error('TASK_NOT_FOUND');
     if (task.status !== 'in_review') throw new Error(`INVALID_TRANSITION: cannot complete task in '${task.status}' state`);
-    return this.updateStatus(id, 'completed');
+    await this.updateStatus(id, 'completed');
+    this.maybePostGitHubComment(id, task).catch((err: any) => {
+      console.warn(`[tasks] GitHub comment callback failed for ${id}: ${err.message}`);
+    });
+    return this.getById(id);
+  }
+
+  /**
+   * If the task metadata says post_pr_comment=true and includes a GitHub PR URL,
+   * fetch the org's GitHub PAT from the vault and post a summary comment.
+   */
+  private async maybePostGitHubComment(taskId: string, task: ReturnType<TaskService['formatTask']>): Promise<void> {
+    const metadata = task.metadata as Record<string, unknown> | undefined;
+    if (!metadata || metadata.post_pr_comment !== true) return;
+
+    const githubUrl = typeof metadata.github_url === 'string' ? metadata.github_url : undefined;
+    const prInfo = githubUrl ? parseGitHubPrForComment(githubUrl) : null;
+    if (!prInfo) return;
+
+    // Resolve org_id from the task's principal via agents table
+    const agentRows = await this.db.select({ orgId: schema.agents.orgId })
+      .from(schema.agents)
+      .where(eq(schema.agents.id, task.agent_id))
+      .limit(1);
+    const orgId = agentRows[0]?.orgId;
+    if (!orgId) return;
+
+    const token = await vaultService.getKey(orgId, 'github');
+    if (!token) {
+      console.warn(`[tasks] No GitHub PAT in vault for org ${orgId}; skipping PR comment for ${taskId}`);
+      return;
+    }
+
+    const reviews = await this.getReviewsForTask(taskId);
+    const avgOverall = reviews.length > 0
+      ? Math.round((reviews.reduce((sum, r) => sum + r.weighted_overall, 0) / reviews.length) * 10) / 10
+      : undefined;
+    const approvedCount = reviews.filter(r => r.approved).length;
+
+    const body = formatGithubComment(
+      {
+        description: task.description,
+        weighted_overall: avgOverall,
+        reviews_received: reviews.length,
+        requested_reviews: task.requested_reviews,
+        approved: approvedCount >= Math.ceil(reviews.length / 2),
+      },
+      reviews,
+    );
+
+    await postPrReviewComment(prInfo.owner, prInfo.repo, prInfo.prNumber, body, token);
+    console.log(`[tasks] Posted GitHub comment for ${taskId} on ${githubUrl}`);
   }
 
   async expireTask(id: string) {
