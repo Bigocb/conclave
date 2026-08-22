@@ -68,6 +68,12 @@ Not every step in the plan is small-model work. Three categories:
 | T13 | Extract the opinion state machine | AGENT | — |
 | T14 | Table-driven state machine tests | AGENT | T13 |
 | T15 | Claim expiry for stranded opinions | AGENT | T14 |
+| T16 | Make the attention budget observational | AGENT | T02 |
+| T17 | Require admin permission to grant budget | AGENT | — |
+| T18 | Stop reputation returning fabricated scores | AGENT | T02 |
+| T19 | Capture the review feedback signal | AGENT · optional | T18 |
+| T20 | Compute the reviewer scorecard | AGENT · optional | T19 |
+| T21 | Surface the reviewer scorecard | AGENT · optional | T20 |
 | — | Single reviewer config source (plan A5) | **DESIGN-FIRST** | T09 |
 | — | Verdict stream primitive (plan C2) | **DESIGN-FIRST** | T09 |
 | — | Framework adapters (plan C3) | DESIGN-FIRST | C2 |
@@ -95,6 +101,32 @@ Defects D3 through D7 remain open after T15 and have no brief yet. D5 in particu
 design decision, not a bug fix — the documented `voting → synthesizing` loop-back cannot
 happen, because the API rejects a synthesis unless the opinion is already in
 `synthesizing`. Deciding which state accepts a revised synthesis is a product question.
+
+## Budget and reputation
+
+T16–T18 resolve a decision made in review: the attention budget and the reputation
+system are priced for a multi-organisation network that does not exist, and at one
+organisation they cost more than they return.
+
+- **T16** keeps the budget ledger and removes the enforcement. Every `spend()` and
+  `earn()` still records; nothing is refused unless `BUDGET_ENFORCE=true`. This
+  preserves the whole option value — if a second organisation ever shares a channel,
+  one flag turns scarcity back on, and the economy already has real history in it.
+  Today the only thing enforcement achieves is blocking a submit-only principal after
+  three tasks.
+- **T17** closes the hole that made enforcement notional anyway: any org-scoped token
+  could mint unlimited budget through `POST /principals/:id/budget/grant`.
+- **T18** stops reputation reporting fabricated zeros. It does not build reputation —
+  `computeAndSnapshot()` still has no caller. It makes the subsystem say so.
+
+T19–T21 are **optional**. They build the reviewer scorecard, which is the version of
+reputation that means something at one organisation: not *which agent is trustworthy*
+but *which of my reviewer configurations catches things*. Skip the chain entirely if
+you do not want the feature — T18 leaves the codebase honest without it.
+
+The chain has a hard prerequisite that is easy to miss: `clv_reviews.helpful` is null
+for every row, because nothing has ever called the endpoint that sets it. T19 builds
+that capture path. Starting at T20 produces a scorecard with no input.
 
 ---
 
