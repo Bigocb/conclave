@@ -65,15 +65,36 @@ Not every step in the plan is small-model work. Three categories:
 | T10 | Persist the human-approval queue | AGENT | T09 |
 | T11 | Freeze PROTOCOL.md at v0.1 | AGENT | — |
 | T12 | Document the MCP integration surface | AGENT | — |
+| T13 | Extract the opinion state machine | AGENT | — |
+| T14 | Table-driven state machine tests | AGENT | T13 |
+| T15 | Claim expiry for stranded opinions | AGENT | T14 |
 | — | Single reviewer config source (plan A5) | **DESIGN-FIRST** | T09 |
-| — | Opinion state machine extraction (plan B1–B2) | **DESIGN-FIRST** | — |
 | — | Verdict stream primitive (plan C2) | **DESIGN-FIRST** | T09 |
 | — | Framework adapters (plan C3) | DESIGN-FIRST | C2 |
 
-The DESIGN-FIRST rows have no brief yet on purpose. Writing one requires deciding a
-target shape — the transition table for the state machine, the wire format for the
-verdict stream. That decision is the work; once it is written down, the
-implementation drops to AGENT level.
+T13–T15 run in parallel with T00–T12: they touch `src/fleet/opinion-router.ts`, which
+nothing else in the queue modifies.
+
+The remaining DESIGN-FIRST rows have no brief on purpose. Writing one requires deciding
+a target shape — the wire format for the verdict stream, the precedence rules for
+reviewer config. That decision is the work; once written down, the implementation drops
+to AGENT level, which is exactly what happened to the state machine.
+
+## The opinion state machine
+
+`docs/opinion-state-machine.md` is the completed design pass for T13–T15. It carries the
+full transition table (11 sites, 6 events), the counts each guard reads, and seven
+numbered defects found while deriving it.
+
+**T13 fixes none of those defects.** The extraction is behaviour-preserving; T14 locks
+current behaviour into tests, including three cases that deliberately assert wrong
+behaviour and say so. Only then does T15 fix the first two. That ordering is what makes
+each fix legible as a single changed expectation rather than a silent rewrite.
+
+Defects D3 through D7 remain open after T15 and have no brief yet. D5 in particular is a
+design decision, not a bug fix — the documented `voting → synthesizing` loop-back cannot
+happen, because the API rejects a synthesis unless the opinion is already in
+`synthesizing`. Deciding which state accepts a revised synthesis is a product question.
 
 ---
 
