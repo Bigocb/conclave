@@ -2,9 +2,8 @@
 import postgres from "postgres";
 
 // Connection string comes from the environment — never commit credentials.
-const sql = postgres(process.env.DATABASE_URL, { ssl: "require" });
-
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+const sql = postgres(process.env.DATABASE_URL, { ssl: "require" });
 
 async function run() {
   try {
