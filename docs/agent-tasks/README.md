@@ -77,17 +77,29 @@ Not every step in the plan is small-model work. Three categories:
 | T19 | Capture the review feedback signal | AGENT · optional | T18 |
 | T20 | Compute the reviewer scorecard | AGENT · optional | T19 |
 | T21 | Surface the reviewer scorecard | AGENT · optional | T20 |
-| — | Single reviewer config source (plan A5) | **DESIGN-FIRST** | T09 |
-| — | Verdict stream primitive (plan C2) | **DESIGN-FIRST** | T09 |
-| — | Framework adapters (plan C3) | DESIGN-FIRST | C2 |
+| T25 | Make reviewer config database authoritative (plan A5) | AGENT | T09 |
+| T26 | The verdict primitive (plan C2) | AGENT | T09 |
+| T27 | Framework adapters (plan C3) | AGENT | T26 |
 
 T13–T15 run in parallel with T00–T12: they touch `src/fleet/opinion-router.ts`, which
 nothing else in the queue modifies.
 
-The remaining DESIGN-FIRST rows have no brief on purpose. Writing one requires deciding
-a target shape — the wire format for the verdict stream, the precedence rules for
-reviewer config. That decision is the work; once written down, the implementation drops
-to AGENT level, which is exactly what happened to the state machine.
+Every DESIGN-FIRST row from the original plan now has a brief — A5, C2, and C3 all
+turned into AGENT work once their target shape was decided (T25–T27). That decision is
+always the real work; once it's written down, delegating the implementation is
+mechanical, which is exactly what happened with the opinion state machine first, then
+these three.
+
+- **T25** settled the DB-vs-YAML precedence question, and along the way found that
+  `POST /v1/fleet/reload` writes a flag nothing reads — the same "producer never built"
+  pattern as D8, just in the fleet manager instead of the opinion router.
+- **T26** builds the integration primitive the product direction depends on: one call
+  that submits work and returns a decision. It reuses the majority-approval rule
+  `GET /v1/tasks/:id` already computes rather than inventing a new one, and adds the
+  one thing that computation was missing — dissent, always shown, never averaged away.
+- **T27** is genuinely thin once T26 exists: two adapters that call one endpoint and
+  do nothing else. If either grows real logic, that logic was supposed to live in the
+  server.
 
 ## The opinion state machine
 
