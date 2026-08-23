@@ -80,6 +80,13 @@ Not every step in the plan is small-model work. Three categories:
 | T25 | Make reviewer config database authoritative (plan A5) | AGENT | T09 |
 | T26 | The verdict primitive (plan C2) | AGENT | T09 |
 | T27 | Framework adapters (plan C3) | AGENT | T26 |
+| T28 | Add the opinion ballot table (v2 engine) | AGENT | — |
+| T29 | The v2 pure state machine | AGENT | — |
+| T30 | Table-driven tests for the v2 state machine | AGENT | T29 |
+| T31 | v2 router: critique phase | AGENT | T28, T29 |
+| T32 | v2 router: simultaneous vote phase | AGENT | T28, T29, T31 |
+| T33 | Wire v2 in behind a flag | AGENT | T31, T32 |
+| T34 | Retire the v1 opinion engine | AGENT · gated | T33 + human sign-off |
 
 T13–T15 run in parallel with T00–T12: they touch `src/fleet/opinion-router.ts`, which
 nothing else in the queue modifies.
@@ -124,8 +131,17 @@ Two defects have no brief, and won't get one from a bug-fix task:
 
 D8 is the fact that should decide D5, and it's bigger than a state-machine bug: it means
 the three-role pipeline (critique → synthesize → vote) the feature was designed around
-has only ever run its first and third steps. See the discussion thread for where this
-is headed before treating T22–T24 as the end of opinion-router work.
+has only ever run its first and third steps. `docs/opinion-engine-v2.md` is that
+decision, made: drop the unbuilt synthesizer rather than build it, and remove
+sequential voting's anchoring bias along the way. T28–T34 build it.
+
+**T22–T24 are not superseded by this — they're bridge work, and the queue treats them
+that way.** v1 keeps running, bugs fixed, until T33 makes v2 available behind
+`OPINION_ENGINE=v2` and T34 — gated on it actually being validated, not just built —
+retires v1's code. If v2 is never flipped on, T22–T24 remain what's live and their
+fixes remain correct. Do not start T34 as "next in the queue"; it deletes code T15 and
+T22–T24 were keeping correct, and its own brief refuses to proceed without a human
+confirming v2 has actually run, not just that it compiles.
 
 ## Budget and reputation
 
