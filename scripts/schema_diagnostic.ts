@@ -1,7 +1,10 @@
 
 import postgres from "postgres";
 
-const sql = postgres("postgresql://promptoria_db_user:VMsV40FYzcy1BmbWnqCWwiPrmGXuoh0k@dpg-d79au56dqaus739isukg-a.oregon-postgres.render.com/promptoria_db", { ssl: "require" });
+// Connection string comes from the environment — never commit credentials.
+const sql = postgres(process.env.DATABASE_URL, { ssl: "require" });
+
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
 
 async function run() {
   try {

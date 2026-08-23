@@ -8,9 +8,12 @@ import { resolve } from 'path';
 import { eq } from 'drizzle-orm';
 
 async function runMigration() {
-  const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://promptoria_db_user:VMsV40FYzcy1BmbWnqCWwiPrmGXuoh0k@dpg-d79au56dqaus739isukg-a.oregon-postgres.render.com/promptoria_db';
-  
-  const pool = new Pool({ 
+  // Connection string comes from the environment — never commit credentials.
+  const DATABASE_URL = process.env.DATABASE_URL;
+
+  if (!DATABASE_URL) throw new Error('DATABASE_URL is not set');
+
+  const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false }
   });
