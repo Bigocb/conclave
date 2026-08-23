@@ -4,7 +4,7 @@ Derived by reading every status write in `src/fleet/opinion-router.ts`. This doc
 **observed behaviour**, not intended behaviour. Where the two differ, the difference is
 recorded under [Defects](#defects) rather than silently corrected.
 
-This document is the input to tasks T13–T15.
+This document is the input to tasks T13–T15 and to the D3/D6/D7 fixes in T22–T24.
 
 ---
 
@@ -142,6 +142,31 @@ opinion that has a synthesis node, on every poll, with no record of having alrea
 one. It self-limits only because the round ends by calling `triggerVoteRound`, which
 moves the state away. Any path that returns to `synthesizing` re-runs the full round —
 one LLM call per critic, each time.
+
+### D8 — nothing ever produces a synthesis, automatically
+
+The PRD (`docs/opinion-fleet-prd.md:155`) describes the router's full lifecycle as
+*"post ProposalNode → trigger critics → all respond → trigger synthesis → synthesizer
+responds → trigger vote"* — synthesis generation was meant to be automated the same way
+critique and voting are, via `callOpinionCritiqueLLM`-style LLM calls.
+
+**No such call exists.** `checkSynthesizingOpinions` only polls for opinions that
+*already have* a synthesis node (`src/fleet/opinion-router.ts:1050`) and reacts once one
+appears. Nothing in the router ever `POST`s `kind: 'synthesis'` to
+`/v1/opinions/:id/nodes`. `AGENTS.md`'s transitional-state table confirms this
+obliquely — *"Opinions have no fleet automation (manual answer only) — conclave#57"* —
+but understates it: critique and voting **are** automated; only the middle step, the
+one the PRD calls the synthesizer, was never built.
+
+Consequence: in an unattended deployment, every opinion that reaches `synthesizing`
+sits there permanently unless a human or some other agent manually submits a synthesis
+node through the API. This is not a bug in the state machine — `nextState` handles the
+transition correctly once a synthesis exists — it is a missing producer. No amount of
+fixing D1–D7 addresses it.
+
+This is the fact that should drive any decision about rebuilding the opinion feature,
+including D5: a synthesis step that nothing generates is not a step worth preserving
+without first deciding whether to automate it or remove it.
 
 ---
 

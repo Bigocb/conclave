@@ -68,6 +68,9 @@ Not every step in the plan is small-model work. Three categories:
 | T13 | Extract the opinion state machine | AGENT | — |
 | T14 | Table-driven state machine tests | AGENT | T13 |
 | T15 | Claim expiry for stranded opinions | AGENT | T14 |
+| T22 | Fix consensus declared on a partial vote count (D6) | AGENT | T14 |
+| T23 | Fix vote round stranding (D3) | AGENT | T14 |
+| T24 | Guard the discussion round against re-entry (D7) | AGENT | T14 |
 | T16 | Make the attention budget observational | AGENT | T02 |
 | T17 | Require admin permission to grant budget | AGENT | — |
 | T18 | Stop reputation returning fabricated scores | AGENT | T02 |
@@ -89,18 +92,28 @@ to AGENT level, which is exactly what happened to the state machine.
 ## The opinion state machine
 
 `docs/opinion-state-machine.md` is the completed design pass for T13–T15. It carries the
-full transition table (11 sites, 6 events), the counts each guard reads, and seven
+full transition table (11 sites, 6 events), the counts each guard reads, and eight
 numbered defects found while deriving it.
 
 **T13 fixes none of those defects.** The extraction is behaviour-preserving; T14 locks
 current behaviour into tests, including three cases that deliberately assert wrong
-behaviour and say so. Only then does T15 fix the first two. That ordering is what makes
-each fix legible as a single changed expectation rather than a silent rewrite.
+behaviour and say so. T15 then fixes D1 and D2; T22–T24 fix D6, D3, and D7. Each is one
+changed expectation against T14's baseline, not a silent rewrite.
 
-Defects D3 through D7 remain open after T15 and have no brief yet. D5 in particular is a
-design decision, not a bug fix — the documented `voting → synthesizing` loop-back cannot
-happen, because the API rejects a synthesis unless the opinion is already in
-`synthesizing`. Deciding which state accepts a revised synthesis is a product question.
+Two defects have no brief, and won't get one from a bug-fix task:
+
+- **D5** — the documented `voting → synthesizing` loop-back cannot happen; the API
+  rejects a synthesis unless the opinion is already in `synthesizing`, and nothing ever
+  moves it back. Not a bug fix — a decision about whether opinions revise at all.
+- **D8** — nothing has ever automated synthesis generation. The PRD describes a
+  synthesizer LLM call alongside the critique and vote calls; it was never built.
+  Every opinion that reaches `synthesizing` unattended stalls forever, and no fix to
+  the state machine touches this — it's a missing producer, not a bad transition.
+
+D8 is the fact that should decide D5, and it's bigger than a state-machine bug: it means
+the three-role pipeline (critique → synthesize → vote) the feature was designed around
+has only ever run its first and third steps. See the discussion thread for where this
+is headed before treating T22–T24 as the end of opinion-router work.
 
 ## Budget and reputation
 
